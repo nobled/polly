@@ -8,6 +8,6 @@ LEVEL=..
 #
 # List all of the subdirectories that we will compile.
 #
-DIRS=popt
+DIRS=
 
 include $(LEVEL)/Makefile.common
