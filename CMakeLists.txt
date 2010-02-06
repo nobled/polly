@@ -10,6 +10,12 @@ if (CMAKE_COMPILER_IS_GNUCXX)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-common -Woverloaded-virtual -pedantic -Wno-long-long -Wall -W -Wno-unused-parameter -Wwrite-strings")
 endif ()
 
+# Add path for custom modules
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${POLLY_SOURCE_DIR}/cmake")
+
+FIND_PACKAGE(Cloog REQUIRED)
+FIND_PACKAGE(Isl REQUIRED)
+
 macro(add_polly_library name)
   set(srcs ${ARGN})
   if(MSVC_IDE OR XCODE)
