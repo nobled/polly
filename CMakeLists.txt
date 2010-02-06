@@ -95,3 +95,4 @@ add_subdirectory(tools)
 
 # TODO: docs.
 
+add_subdirectory(test)
