@@ -15,9 +15,11 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${POLLY_SOURCE_DIR}/cmake")
 
 FIND_PACKAGE(Cloog REQUIRED)
 FIND_PACKAGE(Isl REQUIRED)
+FIND_PACKAGE(Gmp REQUIRED)
 
 INCLUDE_DIRECTORIES( ${CLOOG_INCLUDE_DIR} )
 INCLUDE_DIRECTORIES( ${ISL_INCLUDE_DIR} )
+INCLUDE_DIRECTORIES( ${GMP_INCLUDE_DIR} )
 
 macro(add_polly_library name)
   set(srcs ${ARGN})
@@ -45,7 +47,7 @@ macro(add_polly_library name)
     endforeach(lib)
   endif( LLVM_USED_LIBS )
 
-  target_link_libraries( ${name} ${CLOOG_LIBRARY} ${ISL_LIBRARY})
+  target_link_libraries( ${name} ${CLOOG_LIBRARY} ${ISL_LIBRARY} ${GMP_LIBRARY})
 
   if( LLVM_LINK_COMPONENTS )
     llvm_config(${name} ${LLVM_LINK_COMPONENTS})
