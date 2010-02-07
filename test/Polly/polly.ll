@@ -1,4 +1,4 @@
-; RUN: opt -polly -S < %s | FileCheck %s
+; RUN: opt -polly-codegen -S < %s | FileCheck %s
 define void @foo() nounwind {
 start:
   br label %end
