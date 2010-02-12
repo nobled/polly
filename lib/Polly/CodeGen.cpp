@@ -70,18 +70,21 @@ public:
   // TODO: use raw_ostream as parameter.
   void dump() {
     cloog_program_dump_cloog(stdout, Program);
+    fflush(stdout);
   }
 
   /// Print a source code representation of the program.
   // TODO: use raw_ostream as parameter.
   void pprint() {
     cloog_program_pprint(stdout, Program, Options);
+    fflush(stdout);
   }
 
   /// Print the content of the Program data structure.
   // TODO: use raw_ostream as parameter.
   void print() {
     cloog_program_print(stdout, Program);
+    fflush(stdout);
   }
 
   void buildCloogOptions() {
