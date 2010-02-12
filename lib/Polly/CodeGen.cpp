@@ -118,7 +118,7 @@ public:
   /// scattering polyhedron of all statements in the SCoP. Ordered as they
   /// appear in the SCoP statement iterator.
   CloogScatteringList *buildScatteringList() {
-    CloogScatteringList *ScatteringList;
+    CloogScatteringList *ScatteringList = 0;
 
     for (SCoP::StmtSet::iterator SI = S->Statements.begin(), SE =
          S->Statements.end(); SI != SE; ++SI) {
@@ -225,7 +225,7 @@ public:
 
     // TODO: * Replace constants.
     //       * Support parameters.
-    Program->names = buildCloogNames(0, 5, 2, 0);
+    Program->names = buildCloogNames(5, 5, 2, 0);
 
     // XXX: Not sure if the next two stmts are necessary.  Check with CLooG
     // guys.
