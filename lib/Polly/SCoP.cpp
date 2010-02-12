@@ -124,9 +124,9 @@ void Statement::AllocateScattering(unsigned *value) {
     isl_int v;
     isl_int_init(v);
     struct isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
-    isl_int_set_si(v, 1);
+    isl_int_set_si(v, -1);
     isl_constraint_set_coefficient(c, isl_dim_in, 2 * i, v);
-    isl_int_set_si(v, -value[i]);
+    isl_int_set_si(v, value[i]);
     isl_constraint_set_constant(c, v);
 
     bmap = isl_basic_map_add_constraint(bmap, c);
@@ -272,8 +272,8 @@ raw_ostream& operator<<(raw_ostream &O, const Statement *S) {
 void SCoP::findBlackBoxes() {
   unsigned constc = getMaxLoopDepth(this) + 1;
 
-  unsigned *value = new unsigned[constc];
-  for (unsigned i = 0; i < constc; ++i)
+  unsigned *value = (unsigned *) malloc (sizeof (unsigned) * (constc + 1));
+  for (unsigned i = 0; i < constc + 1; ++i)
     value[i] = 0;
 
   Loop *last = 0;

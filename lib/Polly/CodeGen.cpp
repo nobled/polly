@@ -39,6 +39,10 @@ public:
     buildCloogProgram();
     ScatterProgram();
 
+    // XXX: Necessary as otherwise cloog would free the blocks twice.
+    // TODO: Free the blocklist ourselves.
+    Program->blocklist = 0;
+
     Program = cloog_program_generate(Program, Options);
   }
 
@@ -180,6 +184,7 @@ public:
     Names->nb_scattering = nb_scattering;
     Names->nb_iterators = nb_iterators;
     Names->nb_parameters = nb_parameters;
+    Names->references = 1;
 
     Names->scalars = scalars;
     Names->scattering = scattering;
@@ -225,7 +230,7 @@ public:
 
     // TODO: * Replace constants.
     //       * Support parameters.
-    Program->names = buildCloogNames(5, 5, 2, 0);
+    Program->names = buildCloogNames(0, S->NbScatteringDimensions, 2, 0);
 
     // XXX: Not sure if the next two stmts are necessary.  Check with CLooG
     // guys.
