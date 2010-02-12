@@ -18,13 +18,13 @@ void foo () {
   return;
 }
 ; CHECK: for (s1=0;s1<=199;s1++) {
-; CHECK:   S0();
+; CHECK:   S0(s1);
 ; CHECK: }
 ; CHECK: for (s1=0;s1<=49;s1++) {
-; CHECK:       S0(s1);
-; CHECK:         for (s3=0;s3<=199;s3++) {
-; CHECK:                 S1(s1,s3);
-; CHECK:                   }
-; CHECK:           S2(s1);
+; CHECK:   S0(s1);
+; CHECK:   for (s3=0;s3<=199;s3++) {
+; CHECK:     S1(s1,s3);
+; CHECK:   }
+; CHECK:   S2(s1);
 ; CHECK: }
 
