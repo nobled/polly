@@ -89,6 +89,7 @@ public:
 
   void buildCloogOptions() {
     Options = cloog_options_malloc(State);
+    Options->quiet = 1;
   }
 
   /// Allocate a CloogLoop data structure containing information about stmt.
