@@ -87,6 +87,11 @@ public:
     fflush(stdout);
   }
 
+  /// Create the CLooG AST from this program.
+  struct clast_stmt *getClast() {
+    return cloog_clast_create (Program, Options);
+  }
+
   void buildCloogOptions() {
     Options = cloog_options_malloc(State);
     Options->quiet = 1;
@@ -262,6 +267,8 @@ public:
 
   void print(raw_ostream &OS, const Module *) const {
     CLooG C = CLooG(S);
+    struct clast_stmt *clast = C.getClast();
+    OS << "Generated CLAST '" << clast << "'\n";
     C.pprint();
   }
 
