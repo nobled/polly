@@ -103,7 +103,7 @@ Loop* findCommonLoop(Loop* A, Loop* B) {
 void Statement::AllocateScattering(unsigned *value) {
   unsigned iterators = getLoopDepth(Scop, BB);
   unsigned scat_dims = getMaxLoopDepth(Scop) * 2 + 1;
-  struct isl_dim *dim = isl_dim_alloc(Scop->isl_ctx, 0, scat_dims, iterators);
+  struct isl_dim *dim = isl_dim_alloc(Scop->isl_ctx, 0, iterators, scat_dims);
   struct isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
 
   // Loop dimensions.
@@ -112,9 +112,9 @@ void Statement::AllocateScattering(unsigned *value) {
     isl_int_init(v);
     struct isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, 1);
-    isl_constraint_set_coefficient(c, isl_dim_in, 2 * i + 1, v);
+    isl_constraint_set_coefficient(c, isl_dim_out, 2 * i + 1, v);
     isl_int_set_si(v, -1);
-    isl_constraint_set_coefficient(c, isl_dim_out, i, v);
+    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
 
     bmap = isl_basic_map_add_constraint(bmap, c);
   }
@@ -125,7 +125,7 @@ void Statement::AllocateScattering(unsigned *value) {
     isl_int_init(v);
     struct isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, -1);
-    isl_constraint_set_coefficient(c, isl_dim_in, 2 * i, v);
+    isl_constraint_set_coefficient(c, isl_dim_out, 2 * i, v);
     isl_int_set_si(v, value[i]);
     isl_constraint_set_constant(c, v);
 
@@ -138,7 +138,7 @@ void Statement::AllocateScattering(unsigned *value) {
     isl_int_init(v);
     struct isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, 1);
-    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
+    isl_constraint_set_coefficient(c, isl_dim_out, i, v);
     isl_int_set_si(v, -1);
     isl_constraint_set_constant(c, v);
 
