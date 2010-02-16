@@ -87,7 +87,7 @@ unsigned getMaxLoopDepth(SCoP *S) {
 
   for (Region::block_iterator BI = R->block_begin(), BE = R->block_end();
        BI != BE; ++BI)
-    max = std::max(max, getLoopDepth(S, *BI));
+    max = std::max(max, getLoopDepth(S, (*BI)->getBB()));
 
   return max;
 }
@@ -279,7 +279,7 @@ void SCoP::findBlackBoxes() {
   Loop *last = 0;
   for (Region::block_iterator BI = region->block_begin(), BE = region->block_end();
        BI != BE; ++BI) {
-    Loop *L = LI->getLoopFor(*BI);
+    Loop *L = LI->getLoopFor((*BI)->getBB());
 
     int a;
     if (last) {
@@ -290,7 +290,7 @@ void SCoP::findBlackBoxes() {
 
     ++value[a];
 
-    Statement *stmt = new Statement(this, *BI, value);
+    Statement *stmt = new Statement(this, (*BI)->getBB(), value);
     Statements.insert(stmt);
 
     last = L;
