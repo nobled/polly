@@ -18,6 +18,10 @@
 #include "cloog/cloog.h"
 #include "cloog/isl/domain.h"
 
+#ifdef _WINDOWS
+#define snprintf _snprintf
+#endif
+
 using namespace polly;
 
 namespace {

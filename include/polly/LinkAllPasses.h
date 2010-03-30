@@ -17,7 +17,10 @@
 
 #include <cstdlib>
 
-class llvm::RegionPass;
+namespace llvm {
+class RegionPass;
+}
+
 namespace polly {
   llvm::RegionPass* createSCoPPass();
   llvm::RegionPass* createScopPrinterPass();

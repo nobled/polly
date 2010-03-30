@@ -348,7 +348,7 @@ void SCoP::printContext(raw_ostream &OS) const {
 }
 
 void SCoP::printStatements(raw_ostream &OS) const {
-  for (StmtSet::iterator SI = Statements.begin(), SE = Statements.end();
+  for (StmtSet::const_iterator SI = Statements.begin(), SE = Statements.end();
        SI != SE; ++SI)
     OS << (*SI) << "\n";
 }
