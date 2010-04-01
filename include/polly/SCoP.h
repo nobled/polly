@@ -40,6 +40,7 @@ class Statement {
   /// TODO: Extend to arbitrary regions.
   BasicBlock *BB;
 
+  /// The parent of this Statment.
   SCoP *Scop;
 
   /// The iteration domain describes the set of iterations for which this
@@ -68,6 +69,8 @@ public:
   Statement(SCoP *SCoP, BasicBlock *BB, unsigned *value);
   ~Statement();
 
+  /// FIXME: This is only a dirty hack. If a statement can hold a BB or Region,
+  /// maybe we can use a RegionNode to hold it.
   BasicBlock *getBasicBlock() {
     return BB;
   }
@@ -80,15 +83,19 @@ public:
     return Domain;
   }
 
+  /// @brief Print the Statement to OS.
+  ///
+  /// @param OS The output stream to print this Statememt
   void print(raw_ostream &OS) const;
 };
 
+/// @brief Print Statment S to raw_ostream O.
 static inline raw_ostream& operator<<(raw_ostream &O, const Statement *S) {
     S->print(O);
     return O;
 }
 
-
+/// @brief Static Control Part in program tree.
 class SCoP: public RegionPass {
   unsigned numberParameters;
   Region *region;
