@@ -15,16 +15,10 @@
 #ifndef POLLY_LINKALLPASSES_H
 #define POLLY_LINKALLPASSES_H
 
+#include "polly/SCoP.h"
+
 #include <cstdlib>
 
-namespace llvm {
-class RegionPass;
-}
-
-namespace polly {
-  llvm::RegionPass* createSCoPPass();
-  llvm::RegionPass* createScopPrinterPass();
-}
 
 namespace {
   struct PollyForcePassLinking {
@@ -36,8 +30,8 @@ namespace {
       if (std::getenv("bar") != (char*) -1)
         return;
 
-      polly::createSCoPPass();
-      polly::createScopPrinterPass();
+      (void) polly::createSCoPPass();
+      (void) polly::createScopPrinterPass();
     }
   } PollyForcePassLinking; // Force link by creating a global definition.
 }
