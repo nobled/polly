@@ -83,41 +83,55 @@ public:
   void print(raw_ostream &OS) const;
 };
 
-raw_ostream& operator<<(raw_ostream &O, const Statement *S);
-
-  class SCoP: public RegionPass {
-    unsigned numberParameters;
-    Region *region;
-
-    void findBlackBoxes();
-
-  public:
-    typedef std::set<Statement*> StmtSet;
-    StmtSet Statements;
-    struct isl_set *Context;
-    struct isl_ctx *isl_ctx;
-    static char ID;
-    unsigned NbScatteringDimensions;
-    ScalarEvolution *SE;
-    LoopInfo *LI;
-
-    SCoP();
-    ~SCoP();
-
-    unsigned getNumberParameters();
-
-    Region *getRegion() {
-      return region;
-    }
-
-    bool runOnRegion(Region *R, RGPassManager &RGM);
-
-    virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-    void printContext(raw_ostream &OS) const;
-    void printStatements(raw_ostream &OS) const;
-    virtual void print(raw_ostream &OS, const Module *) const;
-  };
+static inline raw_ostream& operator<<(raw_ostream &O, const Statement *S) {
+    S->print(O);
+    return O;
 }
 
-#endif /* POLLY_SCOP_H */
 
+class SCoP: public RegionPass {
+  unsigned numberParameters;
+  Region *region;
+
+  void findBlackBoxes();
+
+
+public:
+  typedef std::set<Statement*> StmtSet;
+  StmtSet Statements;
+  struct isl_set *Context;
+  struct isl_ctx *isl_ctx;
+  static char ID;
+  unsigned NbScatteringDimensions;
+  ScalarEvolution *SE;
+  LoopInfo *LI;
+
+  SCoP();
+  ~SCoP();
+
+  unsigned getNumberParameters();
+
+  Region *getRegion() const {
+    return region;
+  }
+
+  bool runOnRegion(Region *R, RGPassManager &RGM);
+
+  virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+  void printContext(raw_ostream &OS) const;
+  void printStatements(raw_ostream &OS) const;
+  virtual void print(raw_ostream &OS, const Module *) const;
+
+  ///
+  unsigned getLoopDepth(BasicBlock *BB) const;
+  unsigned getLoopDepth(Loop *L) const;
+  unsigned getMaxLoopDepth() const;
+};
+
+/// Function for force linking.
+llvm::RegionPass* createSCoPPass();
+llvm::RegionPass* createScopPrinterPass();
+
+} //end polly namespace.
+
+#endif /* POLLY_SCOP_H */

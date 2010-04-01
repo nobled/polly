@@ -13,6 +13,8 @@
 
 #include "polly/SCoP.h"
 #include "polly/LinkAllPasses.h"
+#include "polly/Support/GmpConv.h"
+
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolution.h"
@@ -27,18 +29,19 @@ using namespace polly;
 #include <algorithm>
 
 namespace polly {
+//===----------------------------------------------------------------------===//
+/// Helper functions.
+// TODO: Helper function. Needs to be moved to the right place.
+// TODO: May be this function should place in "LoopInfo.h"
+static Loop* findCommonLoop(Loop* A, Loop* B) {
+    while (A && !A->contains(B))
+      A = A->getParentLoop();
 
-/// TODO: Helper function. Needs to be moved to the right place.
-void MPZ_from_APInt (mpz_t v, const APInt apint) {
-    const uint64_t *rawdata = apint.getRawData();
-    unsigned numWords = apint.getNumWords();
-
-    // TODO: Check if this is true for all platforms.
-    mpz_import(v, numWords, 1, sizeof (uint64_t), 0, 0, rawdata);
+    return A;
 }
 
 /// TODO: Helper function. Needs to be moved to the right place.
-Loop *getSurroundingLoop(LoopInfo *LI, Region *R) {
+static Loop *getSurroundingLoop(const LoopInfo *LI, const Region *R) {
   Loop *loop = LI->getLoopFor(R->getEntry());
   while (loop && loop->getHeader() && R->contains(loop->getHeader())) {
     SmallVector<BasicBlock*, 8> ExitingBlocks;
@@ -55,54 +58,12 @@ Loop *getSurroundingLoop(LoopInfo *LI, Region *R) {
 
   return loop;
 }
-/// TODO: Helper function. Needs to be moved to the right place.
-unsigned getLoopDepth(SCoP *S, BasicBlock *BB) {
-    Loop *surroundingL = getSurroundingLoop(S->LI, S->getRegion());
-    unsigned BBLD = S->LI->getLoopDepth(BB);
-    unsigned SLD = 0;
 
-    if (surroundingL)
-      SLD = surroundingL->getLoopDepth();
-
-    return BBLD - SLD;
-}
-
-/// TODO: Helper function. Needs to be moved to the right place.
-unsigned getLoopDepth(SCoP *S, Loop *L) {
-    assert(L);
-    Loop *surroundingL = getSurroundingLoop(S->LI, S->getRegion());
-    unsigned BBLD = L->getLoopDepth();
-    unsigned SLD = 0;
-
-    if (surroundingL)
-      SLD = surroundingL->getLoopDepth();
-
-    return BBLD - SLD;
-}
-
-/// TODO: Helper function. Needs to be moved to the right place.
-unsigned getMaxLoopDepth(SCoP *S) {
-  unsigned max = 0;
-  Region *R = S->getRegion();
-
-  for (Region::block_iterator BI = R->block_begin(), BE = R->block_end();
-       BI != BE; ++BI)
-    max = std::max(max, getLoopDepth(S, (*BI)->getEntry()));
-
-  return max;
-}
-
-// TODO: Helper function. Needs to be moved to the right place.
-Loop* findCommonLoop(Loop* A, Loop* B) {
-    while (A && !A->contains(B))
-      A = A->getParentLoop();
-
-    return A;
-}
-
+//===----------------------------------------------------------------------===//
+/// Statment implement.
 void Statement::AllocateScattering(unsigned *value) {
-  unsigned iterators = getLoopDepth(Scop, BB);
-  unsigned scat_dims = getMaxLoopDepth(Scop) * 2 + 1;
+  unsigned iterators = Scop->getLoopDepth(BB);
+  unsigned scat_dims = Scop->getMaxLoopDepth() * 2 + 1;
   struct isl_dim *dim = isl_dim_alloc(Scop->isl_ctx, 0, iterators, scat_dims);
   struct isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
 
@@ -157,10 +118,10 @@ struct isl_constraint *Statement::createLBConstraintForLoop(Loop *L) {
   isl_int v;
   isl_int_init(v);
 
-  if (getLoopDepth(Scop, L) == 0)
+  if (Scop->getLoopDepth(L) == 0)
     return c;
 
-  unsigned iterator = getLoopDepth(Scop, L) - 1;
+  unsigned iterator = Scop->getLoopDepth(L) - 1;
 
   // i >= 0
   isl_int_set_si(v, 0);
@@ -191,10 +152,10 @@ struct isl_constraint *Statement::createUBConstraintForLoop(Loop *L) {
     MPZ_from_APInt (ub, apint);
   }
 
-  if (getLoopDepth(Scop, L) == 0)
+  if (Scop->getLoopDepth(L) == 0)
     return c;
 
-  unsigned iterator = getLoopDepth(Scop, L) - 1;
+  unsigned iterator = Scop->getLoopDepth(L) - 1;
 
   // i <= # of loop iterations
   c = isl_inequality_alloc(isl_dim_copy(dim));
@@ -233,7 +194,7 @@ void Statement::AllocateDomain() {
 Statement::Statement(SCoP *SCoP, BasicBlock *BasicBlock, unsigned *value) {
   BB = BasicBlock;
   Scop = SCoP;
-  NbIterators = getLoopDepth(SCoP, BB);
+  NbIterators = SCoP->getLoopDepth(BB);
   AllocateScattering(value);
   AllocateDomain();
 }
@@ -264,13 +225,47 @@ void Statement::print(raw_ostream &OS) const {
     OS << "\t\t\tn/a\n";
 }
 
-raw_ostream& operator<<(raw_ostream &O, const Statement *S) {
-    S->print(O);
-    return O;
+//===----------------------------------------------------------------------===//
+/// SCoP implement.
+unsigned SCoP::getLoopDepth(BasicBlock *BB) const {
+    Loop *surroundingL = getSurroundingLoop(LI, getRegion());
+    unsigned BBLD = LI->getLoopDepth(BB);
+    unsigned SLD = 0;
+
+    if (surroundingL)
+      SLD = surroundingL->getLoopDepth();
+
+    return BBLD - SLD;
 }
 
+/// TODO: Helper function. Needs to be moved to the right place.
+unsigned SCoP::getLoopDepth(Loop *L) const {
+    assert(L && "L cant be null!");
+    Loop *surroundingL = getSurroundingLoop(LI, getRegion());
+    unsigned BBLD = L->getLoopDepth();
+    unsigned SLD = 0;
+
+    if (surroundingL)
+      SLD = surroundingL->getLoopDepth();
+
+    return BBLD - SLD;
+}
+
+/// TODO: Helper function. Needs to be moved to the right place.
+unsigned SCoP::getMaxLoopDepth() const {
+  unsigned max = 0;
+  Region *R = getRegion();
+
+  for (Region::block_iterator BI = R->block_begin(), BE = R->block_end();
+       BI != BE; ++BI)
+    max = std::max(max, getLoopDepth((*BI)->getEntry()));
+
+  return max;
+}
+
+
 void SCoP::findBlackBoxes() {
-  unsigned constc = getMaxLoopDepth(this) + 1;
+  unsigned constc = getMaxLoopDepth() + 1;
 
   unsigned *value = (unsigned *) malloc (sizeof (unsigned) * (constc + 1));
   for (unsigned i = 0; i < constc + 1; ++i)
@@ -284,7 +279,7 @@ void SCoP::findBlackBoxes() {
     int a;
     if (last) {
       Loop *CL = findCommonLoop(last, L);
-      a = getLoopDepth(this, CL);
+      a = getLoopDepth(CL);
     } else
       a = 0;
 
@@ -321,7 +316,7 @@ bool SCoP::runOnRegion(Region *R, RGPassManager &RGM) {
     Statements.clear();
     SE = &getAnalysis<ScalarEvolution>();
     LI = &getAnalysis<LoopInfo>();
-    NbScatteringDimensions = getMaxLoopDepth(this) * 2 + 1;
+    NbScatteringDimensions = getMaxLoopDepth() * 2 + 1;
 
     findBlackBoxes();
     return false;
