@@ -116,10 +116,20 @@ class SCoP: public RegionPass {
       return LD;
   }
 
-public:
   typedef std::set<Statement*> StmtSet;
   /// The Statments in this SCoP.
   StmtSet Stmts;
+public:
+
+  /// iterator/begin/end
+  typedef StmtSet::iterator iterator;
+  typedef StmtSet::const_iterator const_iterator;
+
+  iterator begin() { return Stmts.begin(); }
+  iterator end()   { return Stmts.end(); }
+  
+  const_iterator begin() const { return Stmts.begin(); }
+  const_iterator end()   const { return Stmts.end(); }
 
   /// The context of this SCoP.
   struct isl_set *Context;

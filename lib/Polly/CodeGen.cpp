@@ -121,8 +121,8 @@ public:
   CloogLoop *buildCloogLoopList() {
     CloogLoop *Loop = 0;
 
-    for (SCoP::StmtSet::iterator SI = S->Stmts.begin(), SE =
-         S->Stmts.end(); SI != SE; ++SI) {
+    for (SCoP::iterator SI = S->begin(), SE =
+         S->end(); SI != SE; ++SI) {
       CloogLoop *NextLoop = buildCloogLoop(*SI);
       NextLoop->next = Loop;
       Loop = NextLoop;
@@ -137,8 +137,8 @@ public:
   CloogScatteringList *buildScatteringList() {
     CloogScatteringList *ScatteringList = 0;
 
-    for (SCoP::StmtSet::iterator SI = S->Stmts.begin(), SE =
-         S->Stmts.end(); SI != SE; ++SI) {
+    for (SCoP::iterator SI = S->begin(), SE =
+         S->end(); SI != SE; ++SI) {
       // XXX: cloog_domain_list_alloc() not implemented in CLooG.
       CloogScatteringList *NewScatteringList
         = (CloogScatteringList *) malloc (sizeof (CloogScatteringList));
