@@ -22,41 +22,25 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallVector.h"
 
+#define DEBUG_TYPE "polly-scop"
+#include "llvm/Support/Debug.h"
+
+
 using namespace llvm;
 using namespace polly;
 
 #include "isl_constraint.h"
 #include <algorithm>
 
-namespace polly {
 //===----------------------------------------------------------------------===//
 /// Helper functions.
 // TODO: Helper function. Needs to be moved to the right place.
 // TODO: May be this function should place in "LoopInfo.h"
 static Loop* findCommonLoop(Loop* A, Loop* B) {
-    while (A && !A->contains(B))
-      A = A->getParentLoop();
+  while (A && !A->contains(B))
+    A = A->getParentLoop();
 
-    return A;
-}
-
-/// TODO: Helper function. Needs to be moved to the right place.
-static Loop *getSurroundingLoop(const LoopInfo *LI, const Region *R) {
-  Loop *loop = LI->getLoopFor(R->getEntry());
-  while (loop && loop->getHeader() && R->contains(loop->getHeader())) {
-    SmallVector<BasicBlock*, 8> ExitingBlocks;
-    loop->getExitingBlocks(ExitingBlocks);
-
-    for (unsigned i = 0, e = ExitingBlocks.size(); i != e; ++i) {
-      BasicBlock *ExitingBlock = ExitingBlocks[i];
-      if (!R->contains(ExitingBlock))
-        break;
-    }
-
-    loop = loop->getParentLoop();
-  }
-
-  return loop;
+  return A;
 }
 
 //===----------------------------------------------------------------------===//
@@ -112,7 +96,7 @@ void Statement::AllocateScattering(unsigned *value) {
 
 /// Create a constraint describing the lower bound of the Loop L.
 struct isl_constraint *Statement::createLBConstraintForLoop(Loop *L) {
-  struct isl_dim *dim = isl_dim_set_alloc(Scop->isl_ctx, 0, NbIterators);
+  struct isl_dim *dim = isl_dim_set_alloc(Scop->isl_ctx, 0, NumIts);
   struct isl_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
 
   isl_int v;
@@ -134,7 +118,7 @@ struct isl_constraint *Statement::createLBConstraintForLoop(Loop *L) {
 
 /// Create a constraint describing the upper bound of the Loop L.
 struct isl_constraint *Statement::createUBConstraintForLoop(Loop *L) {
-  struct isl_dim *dim = isl_dim_set_alloc(Scop->isl_ctx, 0, NbIterators);
+  struct isl_dim *dim = isl_dim_set_alloc(Scop->isl_ctx, 0, NumIts);
   struct isl_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
 
   isl_int v;
@@ -142,7 +126,7 @@ struct isl_constraint *Statement::createUBConstraintForLoop(Loop *L) {
   isl_int ub;
   isl_int_init(ub);
 
-  if (NbIterators == 0)
+  if (NumIts == 0)
     return c;
 
   const SCEV *scev = Scop->SE->getBackedgeTakenCount(L);
@@ -169,12 +153,12 @@ struct isl_constraint *Statement::createUBConstraintForLoop(Loop *L) {
 }
 
 void Statement::AllocateDomain() {
-  struct isl_dim *dim = isl_dim_set_alloc(Scop->isl_ctx, 0, NbIterators);
+  struct isl_dim *dim = isl_dim_set_alloc(Scop->isl_ctx, 0, NumIts);
   struct isl_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
 
   Loop *Lo = Scop->LI->getLoopFor(BB);
 
-  while (Lo && NbIterators && getSurroundingLoop(Scop->LI, Scop->getRegion())->contains(Lo)) {
+  while (Lo && NumIts && Scop->getSurroundingLoop()->contains(Lo)) {
     isl_constraint *C;
 
     C = createLBConstraintForLoop(Lo);
@@ -194,7 +178,7 @@ void Statement::AllocateDomain() {
 Statement::Statement(SCoP *SCoP, BasicBlock *BasicBlock, unsigned *value) {
   BB = BasicBlock;
   Scop = SCoP;
-  NbIterators = SCoP->getLoopDepth(BB);
+  NumIts = SCoP->getLoopDepth(BB);
   AllocateScattering(value);
   AllocateDomain();
 }
@@ -227,31 +211,6 @@ void Statement::print(raw_ostream &OS) const {
 
 //===----------------------------------------------------------------------===//
 /// SCoP implement.
-unsigned SCoP::getLoopDepth(BasicBlock *BB) const {
-    Loop *surroundingL = getSurroundingLoop(LI, getRegion());
-    unsigned BBLD = LI->getLoopDepth(BB);
-    unsigned SLD = 0;
-
-    if (surroundingL)
-      SLD = surroundingL->getLoopDepth();
-
-    return BBLD - SLD;
-}
-
-/// TODO: Helper function. Needs to be moved to the right place.
-unsigned SCoP::getLoopDepth(Loop *L) const {
-    assert(L && "L cant be null!");
-    Loop *surroundingL = getSurroundingLoop(LI, getRegion());
-    unsigned BBLD = L->getLoopDepth();
-    unsigned SLD = 0;
-
-    if (surroundingL)
-      SLD = surroundingL->getLoopDepth();
-
-    return BBLD - SLD;
-}
-
-/// TODO: Helper function. Needs to be moved to the right place.
 unsigned SCoP::getMaxLoopDepth() const {
   unsigned max = 0;
   Region *R = getRegion();
@@ -265,20 +224,21 @@ unsigned SCoP::getMaxLoopDepth() const {
 
 
 void SCoP::findBlackBoxes() {
+  // Is this the Dimension of scattering function?
   unsigned constc = getMaxLoopDepth() + 1;
 
+  // The scattering function?
   unsigned *value = (unsigned *) malloc (sizeof (unsigned) * (constc + 1));
   for (unsigned i = 0; i < constc + 1; ++i)
     value[i] = 0;
 
   Loop *last = 0;
-  for (Region::block_iterator BI = region->block_begin(), BE = region->block_end();
+  for (Region::block_iterator BI = R->block_begin(), BE = R->block_end();
        BI != BE; ++BI) {
     Loop *L = LI->getLoopFor((*BI)->getEntry());
 
     int a;
-    if (last) {
-      Loop *CL = findCommonLoop(last, L);
+    if (Loop *CL = findCommonLoop(last, L)) {
       a = getLoopDepth(CL);
     } else
       a = 0;
@@ -286,7 +246,7 @@ void SCoP::findBlackBoxes() {
     ++value[a];
 
     Statement *stmt = new Statement(this, (*BI)->getEntry(), value);
-    Statements.insert(stmt);
+    Stmts.insert(stmt);
 
     last = L;
   }
@@ -300,7 +260,7 @@ SCoP::SCoP() : RegionPass(&ID) {
 }
 
 SCoP::~SCoP() {
-  for (StmtSet::iterator SI = Statements.begin(), SE = Statements.end();
+  for (StmtSet::iterator SI = Stmts.begin(), SE = Stmts.end();
        SI != SE; ++SI)
     delete(*SI);
 
@@ -312,8 +272,8 @@ SCoP::~SCoP() {
 }
 
 bool SCoP::runOnRegion(Region *R, RGPassManager &RGM) {
-    region = R;
-    Statements.clear();
+    this->R = R;
+    Stmts.clear();
     SE = &getAnalysis<ScalarEvolution>();
     LI = &getAnalysis<LoopInfo>();
     NbScatteringDimensions = getMaxLoopDepth() * 2 + 1;
@@ -328,7 +288,7 @@ void SCoP::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<LoopInfo>();
 }
 
-unsigned SCoP::getNumberParameters() {
+unsigned SCoP::getNumParams() const {
   return isl_set_n_param(Context);
 }
 
@@ -343,7 +303,7 @@ void SCoP::printContext(raw_ostream &OS) const {
 }
 
 void SCoP::printStatements(raw_ostream &OS) const {
-  for (StmtSet::const_iterator SI = Statements.begin(), SE = Statements.end();
+  for (StmtSet::const_iterator SI = Stmts.begin(), SE = Stmts.end();
        SI != SE; ++SI)
     OS << (*SI) << "\n";
 }
@@ -352,7 +312,24 @@ void SCoP::print(raw_ostream &OS, const Module *) const {
   printContext(OS);
   printStatements(OS);
 }
-} //end polly namespace
+
+Loop *SCoP::getSurroundingLoop() const {
+  Loop *loop = LI->getLoopFor(R->getEntry());
+  while (loop && loop->getHeader() && R->contains(loop->getHeader())) {
+    SmallVector<BasicBlock*, 8> ExitingBlocks;
+    loop->getExitingBlocks(ExitingBlocks);
+
+    for (unsigned i = 0, e = ExitingBlocks.size(); i != e; ++i) {
+      BasicBlock *ExitingBlock = ExitingBlocks[i];
+      if (!R->contains(ExitingBlock))
+        break;
+    }
+
+    loop = loop->getParentLoop();
+  }
+
+  return loop;
+}
 
 char polly::SCoP::ID = 0;
 

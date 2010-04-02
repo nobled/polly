@@ -57,11 +57,17 @@ class Statement {
   /// executed. The scattering is closely related to the one of CLooG. So have
   /// a look at cloog.org to find a complete description.
   struct isl_map *Scattering;
-  unsigned NbIterators;
+
+  /// Number iterators in SCoP.
+  unsigned NumIts;
 
   void AllocateScattering(unsigned *value);
   void AllocateDomain();
+
+  /// Create Lower bound constraint for loop.
   struct isl_constraint *createLBConstraintForLoop(Loop *L);
+
+  /// Create Upper bound constraint for loop.
   struct isl_constraint *createUBConstraintForLoop(Loop *L);
 
 public:
@@ -97,15 +103,25 @@ static inline raw_ostream& operator<<(raw_ostream &O, const Statement *S) {
 
 /// @brief Static Control Part in program tree.
 class SCoP: public RegionPass {
-  unsigned numberParameters;
-  Region *region;
+  /// The underlying Region.
+  Region *R;
 
   void findBlackBoxes();
 
+  ///
+  unsigned getLoopDepthImp(unsigned LD) const {
+    if (Loop *SL = getSurroundingLoop())
+      return LD - SL->getLoopDepth();
+    else
+      return LD;
+  }
 
 public:
   typedef std::set<Statement*> StmtSet;
-  StmtSet Statements;
+  /// The Statments in this SCoP.
+  StmtSet Stmts;
+
+  /// The context of this SCoP.
   struct isl_set *Context;
   struct isl_ctx *isl_ctx;
   static char ID;
@@ -116,23 +132,32 @@ public:
   SCoP();
   ~SCoP();
 
-  unsigned getNumberParameters();
+  /// @brief Get the Number of cloog params.
+  unsigned getNumParams() const;
 
-  Region *getRegion() const {
-    return region;
-  }
+  /// @brief Get the underlying Region of this SCoP.
+  Region *getRegion() const { return R; }
 
   bool runOnRegion(Region *R, RGPassManager &RGM);
-
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+
   void printContext(raw_ostream &OS) const;
   void printStatements(raw_ostream &OS) const;
   virtual void print(raw_ostream &OS, const Module *) const;
 
   ///
-  unsigned getLoopDepth(BasicBlock *BB) const;
-  unsigned getLoopDepth(Loop *L) const;
+  unsigned getLoopDepth(BasicBlock *BB) const {
+    unsigned BBLD = LI->getLoopDepth(BB);
+    return getLoopDepthImp(BBLD);
+  }
+
+  unsigned getLoopDepth(Loop *L) const {
+    unsigned LLD = L->getLoopDepth();
+    return getLoopDepthImp(LLD);
+  }
+
   unsigned getMaxLoopDepth() const;
+  Loop *getSurroundingLoop() const;
 };
 
 /// Function for force linking.
