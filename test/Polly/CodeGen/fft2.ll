@@ -25,8 +25,8 @@ for.end:                                          ; preds = %for.body
 ; CHECK:  for (s1=0;s1<=63;s1++) {
 ; CHECK:    S0(s1);
 ; CHECK:  }
-; CHECK:  S2();
+; CHECK:  S{{[0-2]}}();
 ; CHECK:  for (s1=0;s1<=63;s1++) {
-; CHECK:    S0(s1);
+; CHECK:    S{{[0-2]}}(s1);
 ; CHECK:  }
-; CHECK:  S1();
+; CHECK:  S{{[0-2]}}();

@@ -64,10 +64,10 @@ class Statement {
   void AllocateScattering(unsigned *value);
   void AllocateDomain();
 
-  /// Create Lower bound constraint for loop.
+  /// Create lower bound constraint for loop.
   struct isl_constraint *createLBConstraintForLoop(Loop *L);
 
-  /// Create Upper bound constraint for loop.
+  /// Create upper bound constraint for loop.
   struct isl_constraint *createUBConstraintForLoop(Loop *L);
 
 public:
@@ -106,7 +106,8 @@ class SCoP: public RegionPass {
   /// The underlying Region.
   Region *R;
 
-  void findBlackBoxes();
+  /// Create statements in current SCoP.
+  void createStmts();
 
   ///
   unsigned getLoopDepthImp(unsigned LD) const {
@@ -162,6 +163,9 @@ public:
   }
 
   unsigned getLoopDepth(Loop *L) const {
+    // According to LoopInfo.h, "null" loop is in level 0.
+    if (!L) return 0;
+
     unsigned LLD = L->getLoopDepth();
     return getLoopDepthImp(LLD);
   }

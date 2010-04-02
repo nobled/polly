@@ -135,6 +135,7 @@ struct isl_constraint *Statement::createUBConstraintForLoop(Loop *L) {
     const APInt apint = cscev->getValue()->getValue();
     MPZ_from_APInt (ub, apint);
   }
+  // if backedge taken count is scCouldNotCompute?
 
   if (Scop->getLoopDepth(L) == 0)
     return c;
@@ -223,7 +224,7 @@ unsigned SCoP::getMaxLoopDepth() const {
 }
 
 
-void SCoP::findBlackBoxes() {
+void SCoP::createStmts() {
   // Is this the Dimension of scattering function?
   unsigned constc = getMaxLoopDepth() + 1;
 
@@ -233,17 +234,18 @@ void SCoP::findBlackBoxes() {
     value[i] = 0;
 
   Loop *last = 0;
+  // Use the element iterator.
+  // Are we iterating the statments in a right order?
   for (Region::block_iterator BI = R->block_begin(), BE = R->block_end();
        BI != BE; ++BI) {
     Loop *L = LI->getLoopFor((*BI)->getEntry());
 
-    int a;
-    if (Loop *CL = findCommonLoop(last, L)) {
-      a = getLoopDepth(CL);
-    } else
-      a = 0;
+    // BI may not in any loop.
+    Loop *CL = findCommonLoop(last, L);
+    // Get the scatter position?
+    int LD = getLoopDepth(CL);
 
-    ++value[a];
+    ++value[LD];
 
     Statement *stmt = new Statement(this, (*BI)->getEntry(), value);
     Stmts.insert(stmt);
@@ -278,7 +280,7 @@ bool SCoP::runOnRegion(Region *R, RGPassManager &RGM) {
     LI = &getAnalysis<LoopInfo>();
     NbScatteringDimensions = getMaxLoopDepth() * 2 + 1;
 
-    findBlackBoxes();
+    createStmts();
     return false;
 }
 
