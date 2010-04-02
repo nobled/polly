@@ -196,17 +196,20 @@ void Statement::print(raw_ostream &OS) const {
   OS << "\tStatement " << BB->getNameStr() << ":\n";
 
   OS << "\t\tDomain:\n";
-  if (Domain)
-    isl_set_dump(Domain, stderr, 20);
+  if (Domain) {
+    isl_set_print(Domain, stderr, 20, ISL_FORMAT_ISL);
+    DEBUG(isl_set_dump(Domain, stderr, 20));
+  }
   else
     OS << "\t\t\tn/a\n";
 
   OS << "\n";
 
   OS << "\t\t Scattering:\n";
-  if (Scattering)
-    isl_map_dump(Scattering, stderr, 20);
-  else
+  if (Scattering) {
+    isl_map_print(Scattering, stderr, 20, ISL_FORMAT_ISL);
+    DEBUG(isl_map_dump(Scattering, stderr, 20));
+  } else
     OS << "\t\t\tn/a\n";
 }
 
@@ -257,6 +260,8 @@ void SCoP::createStmts() {
 SCoP::SCoP() : RegionPass(&ID) {
   isl_ctx = isl_ctx_alloc();
   // TODO: Support parameters.
+  // Setup the dim of context with number of param and
+  // constrain number of parameter?
   struct isl_dim *dim = isl_dim_set_alloc(isl_ctx, 0, 0);
   Context = isl_set_universe (dim);
 }
@@ -278,7 +283,7 @@ bool SCoP::runOnRegion(Region *R, RGPassManager &RGM) {
     Stmts.clear();
     SE = &getAnalysis<ScalarEvolution>();
     LI = &getAnalysis<LoopInfo>();
-    NbScatteringDimensions = getMaxLoopDepth() * 2 + 1;
+    NumScatterDim = getMaxLoopDepth() * 2 + 1;
 
     createStmts();
     return false;
@@ -296,8 +301,10 @@ unsigned SCoP::getNumParams() const {
 
 void SCoP::printContext(raw_ostream &OS) const {
   OS << "\tContext:\n";
-  if (Context)
-    isl_set_dump(Context, stderr, 12);
+  if (Context) {
+    isl_set_print(Context, stderr, 12, ISL_FORMAT_ISL);
+    DEBUG(isl_set_dump(Context, stderr, 12));
+  }
   else
     OS << "\t\tn/a\n";
 

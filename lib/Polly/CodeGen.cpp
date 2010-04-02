@@ -243,11 +243,11 @@ public:
 
     // TODO: * Replace constants.
     //       * Support parameters.
-    Program->names = buildCloogNames(0, S->NbScatteringDimensions, 2, 0);
+    Program->names = buildCloogNames(0, S->NumScatterDim, 2, 0);
 
     // XXX: Not sure if the next two stmts are necessary.  Check with CLooG
     // guys.
-    Program->nb_scattdims = S->NbScatteringDimensions;
+    Program->nb_scattdims = S->NumScatterDim;
     Program->scaldims = buildScaldims(Program);
   }
 };

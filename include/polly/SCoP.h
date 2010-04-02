@@ -58,8 +58,10 @@ class Statement {
   /// a look at cloog.org to find a complete description.
   struct isl_map *Scattering;
 
-  /// Number iterators in SCoP.
+  /// Number iterators in Statment.
   unsigned NumIts;
+
+  /// Iterator names(values)?
 
   void AllocateScattering(unsigned *value);
   void AllocateDomain();
@@ -120,6 +122,8 @@ class SCoP: public RegionPass {
   typedef std::set<Statement*> StmtSet;
   /// The Statments in this SCoP.
   StmtSet Stmts;
+
+  ///
 public:
 
   /// iterator/begin/end
@@ -133,15 +137,23 @@ public:
   const_iterator end()   const { return Stmts.end(); }
 
   /// The context of this SCoP.
-  struct isl_set *Context;
-  struct isl_ctx *isl_ctx;
+
   static char ID;
-  unsigned NbScatteringDimensions;
   ScalarEvolution *SE;
   LoopInfo *LI;
 
   SCoP();
   ~SCoP();
+
+  /// Context for ISL library?
+  struct isl_ctx *isl_ctx;
+  /// Scattering dimension number
+  unsigned NumScatterDim;
+  /// CloogNames
+  /// Mapping LLVM value to parameter?
+  /// Context
+  struct isl_set *Context;
+  /// Loops and block list
 
   /// @brief Get the Number of cloog params.
   unsigned getNumParams() const;
