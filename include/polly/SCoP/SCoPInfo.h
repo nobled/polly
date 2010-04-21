@@ -77,6 +77,7 @@ public:
   /// Pass interface
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<LoopInfo>();
+    // Make loop only have 1 back-edge?
     //AU.addPreservedID(LoopSimplifyID);
     AU.addRequired<RegionInfo>();
     AU.addRequired<ScalarEvolution>();
