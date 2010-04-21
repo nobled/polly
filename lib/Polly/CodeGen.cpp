@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/SCoP.h"
-#include "polly/LinkAllPasses.h"
 
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"

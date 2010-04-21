@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/SCoP.h"
-#include "polly/LinkAllPasses.h"
 #include "polly/Support/GmpConv.h"
 
 #include "llvm/Analysis/RegionInfo.h"

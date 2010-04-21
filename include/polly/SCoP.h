@@ -132,7 +132,7 @@ public:
 
   iterator begin() { return Stmts.begin(); }
   iterator end()   { return Stmts.end(); }
-  
+
   const_iterator begin() const { return Stmts.begin(); }
   const_iterator end()   const { return Stmts.end(); }
 

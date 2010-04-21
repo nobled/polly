@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This header file pulls in all transformation and analysis passes for tools 
+// This header file pulls in all transformation and analysis passes for tools
 // like opt and bugpoint that need this functionality.
 //
 //===----------------------------------------------------------------------===//
@@ -16,6 +16,7 @@
 #define POLLY_LINKALLPASSES_H
 
 #include "polly/SCoP.h"
+#include "polly/SCoP/SCoPInfo.h"
 /// TODO: Place the headers that containing pass you want to force link here.
 
 #include <cstdlib>
@@ -31,6 +32,7 @@ namespace {
         return;
 
       (void) polly::createSCoPPass();
+      (void) polly::createSCoPInfoPass();
       (void) polly::createScopPrinterPass();
     }
   } PollyForcePassLinking; // Force link by creating a global definition.
