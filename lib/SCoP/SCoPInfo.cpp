@@ -46,6 +46,9 @@ static inline LoopBounds getLoopBounds(const Loop* L, ScalarEvolution* SE) {
   DEBUG(errs() << "Lower bound:" << *LB << "\n");
 
   const SCEV *UB = SE->getBackedgeTakenCount(L);
+
+  DEBUG(errs() << "Backedge taken count: "<< *UB <<"\n");
+
   if (!isa<SCEVCouldNotCompute>(UB))
     UB = SE->getAddExpr(LB, UB);
 
@@ -85,9 +88,13 @@ bool SCoPInfo::extractParam(const SCEV *S, const Loop *Scope) {
                    << Scope->getHeader()->getName() << "\n");
       return false;
     }
+
+    if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var))
+      assert(AddRec->getLoop()->contains(Scope) && "Where comes the indvar?");
+    else
     // TODO: handle the paramer0 * parameter1 case.
     // A dirty hack
-    assert(isa<SCEVUnknown>(Var) && "Can only process unknow right now.");
+      assert(isa<SCEVUnknown>(Var) && "Can only process unknow right now.");
     // Add the loop invariants to parameter lists.
     Params.insert(Var);
   }
