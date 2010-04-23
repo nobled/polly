@@ -51,4 +51,4 @@ return:                                           ; preds = %bb.nph8, %bb3, %ent
   ret void
 }
 
-; CHECK: entry => <Function Return>        Parameters: {%N, %M, }
+; CHECK: entry => <Function Return>        Parameters: (%N, %M, )

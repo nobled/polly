@@ -25,4 +25,4 @@ return:                                           ; preds = %bb, %entry
   ret void
 }
 
-; CHECK: SCoP: entry => <Function Return>        Parameters: {%N, }
+; CHECK: SCoP: entry => <Function Return>        Parameters: (%N, )

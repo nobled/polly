@@ -2,8 +2,8 @@
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;
-;  for (j = 0; j < (4*N + 7*M +3); ++j)
-;    for (i = (7*j + 6*M -9); i < (3*j + 5*N + 2) ; ++i)
+;  for (j = 0; j < (4*N + 7*M +3); ++j) 
+;    for (i = (7*j + 6*M -9); i < (3*j + 5*N + 2) ; ++i) 
 ;        a[i][j] = 0;
 ;}
 
@@ -61,4 +61,4 @@ return:                                           ; preds = %bb3, %entry
   ret void
 }
 
-; CHECK: entry => <Function Return>        Parameters: {%N, %M, }
+; CHECK: SCoP: entry => <Function Return> Parameters: (%M, %N, )

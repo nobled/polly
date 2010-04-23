@@ -4,7 +4,7 @@
 ;  long i, j;
 ;  for (j = 0; j < rnd(); ++j)
 ;    for (i = 0; i < N; ++i)
-;        ...
+;        a[i][j] = 0;
 ;}
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128"
@@ -51,4 +51,4 @@ return:                                           ; preds = %bb2.preheader, %bb2
 
 declare i64 @rnd(...)
 
-; CHECK: SCoP: bb1.us => bb2.bb3_crit_edge.us    Parameters: {%N, }
+; CHECK: SCoP: bb1.us => bb2.bb3_crit_edge.us    Parameters: ({0,+,1}<%bb2.preheader.us>, %N, )

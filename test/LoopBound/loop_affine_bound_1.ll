@@ -50,4 +50,4 @@ return:                                           ; preds = %bb3, %entry
   ret void
 }
 
-; CHECK: entry => <Function Return>        Parameters: {%N, %M, }
+; CHECK: entry => <Function Return>        Parameters: (%N, %M, )
