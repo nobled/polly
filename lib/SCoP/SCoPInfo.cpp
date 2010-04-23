@@ -15,7 +15,9 @@
 
 
 #include "llvm/Analysis/AffineSCEVIterator.h"
+#include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
+#include "llvm/Assembly/Writer.h"
 #include "llvm/Support/CommandLine.h"
 
 #define DEBUG_TYPE "polly-scop-info"
@@ -25,14 +27,14 @@ using namespace llvm;
 using namespace polly;
 
 static cl::opt<bool>
-PrintLoopParam("print-loop-params", cl::Hidden,
-            cl::desc("Print the params used in loops."));
+PrintLoopBound("print-loop-bounds", cl::Hidden,
+            cl::desc("Print the bounds of loops."));
 
 // The pair of (lower_bound, upper_bound),
 // where lower_bound <= indVar <= upper_bound
-typedef std::pair<const SCEV*, const SCEV*> LoopBounds;
+typedef std::pair<const SCEV*, const SCEV*> SCEVBoundsType;
 
-static inline LoopBounds getLoopBounds(const Loop* L, ScalarEvolution* SE) {
+static inline SCEVBoundsType getLoopBounds(const Loop* L, ScalarEvolution* SE) {
 
   DEBUG(errs() << "Loop: " << L->getHeader()->getName() << "\n");
   const SCEVAddRecExpr *IndVar =
@@ -41,6 +43,7 @@ static inline LoopBounds getLoopBounds(const Loop* L, ScalarEvolution* SE) {
   assert(IndVar && "Expect IndVar a SECVAddRecExpr");
   DEBUG(errs() << *IndVar << "\n");
 
+  // The loop will aways start with 0?
   const SCEV *LB = IndVar->getStart();
 
   DEBUG(errs() << "Lower bound:" << *LB << "\n");
@@ -57,20 +60,27 @@ static inline LoopBounds getLoopBounds(const Loop* L, ScalarEvolution* SE) {
   return std::make_pair(LB, UB);
 }
 
-bool SCoPInfo::extractParam(const SCEV *S, const Loop *Scope) {
-  assert(Scope && "Scope can not be null!");
+bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
+                            AffFuncType &FuncToBuild) {
+  assert(SCoP && "Scope can not be null!");
+
+  Region *R = SCoP->R;
 
   if (isa<SCEVCouldNotCompute>(S))
     return false;
 
-  // Compute S at scope first.
-  S = SE->getSCEVAtScope(S, Scope);
+  Loop *Scope = getScopeLoop(R);
 
-  ParamSet &Params = ParamsAtScope[Scope];
+  // Compute S at scope first.
+  //if (ScopeL)
+  S = SE->getSCEVAtScope(S, Scope);
 
   // FIXME: Simplify these code.
   for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
       I != E; ++I){
+    // Build the affine function.
+    FuncToBuild.insert(*I);
+
     const SCEV *Var = I->first;
 
     // Ignore the constant offest.
@@ -96,99 +106,156 @@ bool SCoPInfo::extractParam(const SCEV *S, const Loop *Scope) {
     // A dirty hack
       assert(isa<SCEVUnknown>(Var) && "Can only process unknow right now.");
     // Add the loop invariants to parameter lists.
-    Params.insert(Var);
+    SCoP->Params.insert(Var);
   }
 
   return true;
 }
 
-void SCoPInfo::visitLoopsInFunction(Function &F, LoopInfo &LI) {
-  for (LoopInfo::iterator I = LI.begin(), E = LI.end(); I != E; ++I)
-      if (!visitLoop(*I))
-        AddBadLoop(*I);
+SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, SCoPSetType &SCoPs) {
+  bool isGoodRegion = true;
+  SCoPSetType SubSCoPs;
 
-  // TODO: Find Bad Blocks.
-}
+  LLVMSCoP *SCoP = new LLVMSCoP(R);
 
-bool SCoPInfo::visitLoop(const Loop* L) {
-  bool isGoodLoop = true;
+  // Visit all sub region node.
+  for (Region::element_iterator I = R->element_begin(), E = R->element_end();
+      I != E; ++I){
 
-  // Visit sub loop first
-  for (Loop::iterator I = L->begin(), E = L->end(); I != E; ++I) {
-    if (!visitLoop(*I)) {
-      DEBUG(errs() << "Adding Bad loop: "
-                   << (*I)->getHeader()->getName() <<"\n");
-      AddBadLoop(*I);
-      isGoodLoop = false;
+    if (I->isSubRegion()) {
+      Region *SubR = I->getNodeAs<Region>();
+      if (LLVMSCoP *SubSCoP = findSCoPs(SubR, SCoPs))
+        SubSCoPs.push_back(SubSCoP);
+      else
+        isGoodRegion = false;
     }
+    else {
+      // Find the parameters used in conditions
+      // TODO: Write the code.
+      // Find the parameters used in load/store
+      // TODO: Write the code.
+    }
+
   }
 
-  if (!isGoodLoop)
-    return false;
+  //// Find the parameters used in loop bounds
+  Loop *L = castToLoop(R);
+  if (L) {
+    SCEVBoundsType bounds = getLoopBounds(L, SE);
 
-  // Find the parameters used in loop bounds
-  LoopBounds bounds = getLoopBounds(L, SE);
-  if (!extractParam(bounds.first, L))
-    return false;
-  if (!extractParam(bounds.second, L))
-    return false;
+    AffBoundType &affbounds = LoopBounds[L];
 
-  // Find the parameters used in conditions
-  // TODO: Write the code.
-  // Find the parameters used in load/store
-  // TODO: Write the code.
-
-  // Merge parameters
-  // Create the Parameter set for this loop.
-  ParamSet &ParamAtLoop = ParamsAtScope[L];
-  for (Loop::iterator I = L->begin(), E = L->end(); I != E; ++I) {
-    ParamMap::iterator At = ParamsAtScope.find(*I);
-    if (At == ParamsAtScope.end())
-      continue;
-    // Merge the parameters.
-    ParamAtLoop.insert(At->second.begin(), At->second.end());
-    // Remove the parameters of sub loop.
-    ParamsAtScope.erase(At);
+    // Build the lower bound.
+    if (!buildAffineFunc(bounds.first, SCoP, affbounds.first) ||
+        !buildAffineFunc(bounds.second, SCoP, affbounds.second))
+        isGoodRegion = false;
   }
 
-  // Remove the induction variable of this loop,
-  // clean up the parameter set first.
-  ParamAtLoop.erase(SE->getSCEV(L->getCanonicalInductionVariable()));
-  return true;
+  if (!isGoodRegion) {
+    // If this Region is not a part of SCoP,
+    // add the sub scops to the SCoP vector.
+    SCoPs.insert(SCoPs.begin(), SubSCoPs.begin(), SubSCoPs.end());
+    // TODO: other finalization.
+    return 0;
+  }
+
+  mergeSubSCoPs(SCoP, SubSCoPs);
+
+  return SCoP;
 }
 
 bool SCoPInfo::runOnFunction(llvm::Function &F) {
   SE = &getAnalysis<ScalarEvolution>();
-  LoopInfo &LI = getAnalysis<LoopInfo>();
+  LI = &getAnalysis<LoopInfo>();
 
-  visitLoopsInFunction(F, LI);
+  RI = &getAnalysis<RegionInfo>();
+
+  Region *TopRegion = RI->getTopLevelRegion();
+
+  if(LLVMSCoP *SCoP = findSCoPs(TopRegion, SCoPs))
+    SCoPs.push_back(SCoP);
+
+
   return false;
 }
 
-void SCoPInfo::printParams(raw_ostream &OS) const {
-  if (ParamsAtScope.empty()) {
+/// Debug/Testing function
+static void printAffineFunction(const std::map<const SCEV*, const SCEV*> &F,
+                                raw_ostream &OS, ScalarEvolution *SE) {
+  size_t size = F.size();
+
+  for (std::map<const SCEV*, const SCEV*>::const_iterator I = F.begin(),
+      E = F.end(); I != E; ++I){
+    // Print the coefficient (constant part)
+    I->second->print(OS);
+
+    OS << " * ";
+
+    // Print the variable
+    const SCEV* S = I->first;
+
+    if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(S))
+      WriteAsOperand(OS, U->getValue(), false);
+    else if(const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(S)) {
+      PHINode *V = AddRec->getLoop()->getCanonicalInductionVariable();
+      // Get the induction variable of the loop.
+      const SCEV *IndVar = SE->getSCEV(V);
+
+      if (IndVar == AddRec)
+        // Print out the llvm value if AddRec is the induction variable.
+        WriteAsOperand(OS, V, false);
+      else
+        S->print(OS);
+    }
+    else
+      S->print(OS);
+
+
+    if (--size)
+      OS << " + ";
+  }
+}
+
+void SCoPInfo::printBounds(raw_ostream &OS) const {
+  if (LoopBounds.empty()) {
     OS << "No good loops found!\n";
     return;
   }
-  for (ParamMap::const_iterator I = ParamsAtScope.begin(),
-      E = ParamsAtScope.end(); I != E; ++I){
-    OS << "Parameters used in Loop: " << I->first->getHeader()->getName()
-       << ":\t";
-    if (I->second.empty())
-      OS << "< none >";
-    else {
-      for (ParamSet::const_iterator PI = I->second.begin(), PE = I->second.end();
-          PI != PE; ++PI)
-        OS << **PI << ", ";
-    }
-    OS << "\n";
+  for (BoundMapType::const_iterator I = LoopBounds.begin(),
+      E = LoopBounds.end(); I != E; ++I){
+    OS << "Bounds of Loop: " << I->first->getHeader()->getName()
+      << ":\t{ ";
+    printAffineFunction(I->second.first, OS, SE);
+    OS << ", ";
+    printAffineFunction(I->second.second, OS, SE);
+    OS << "}\n";
   }
+}
 
+void SCoPInfo::LLVMSCoP::print(raw_ostream &OS) const {
+  OS << "SCoP: " << R->getNameStr() << "\tParameters: {";
+  // Print Parameters.
+  for (ParamSetType::const_iterator PI = Params.begin(), PE = Params.end();
+      PI != PE; ++PI)
+    OS << **PI << ", ";
+
+  OS << "}\n";
 }
 
 void SCoPInfo::print(raw_ostream &OS, const Module *) const {
-  if (PrintLoopParam)
-    printParams(OS);
+  if (SCoPs.empty())
+    OS << "No SCoP found!\n";
+  else
+    // Print all SCoPs.
+    for (SCoPSetType::const_iterator I = SCoPs.begin(), E = SCoPs.end();
+        I != E; ++I){
+      (*I)->print(OS);
+    }
+
+  if (PrintLoopBound)
+    printBounds(OS);
+
+  OS << "\n";
 }
 
 SCoPInfo::~SCoPInfo() {
