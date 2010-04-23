@@ -1,4 +1,4 @@
-; RUN: opt -polly-scop-info -print-loop-params -analyze %s | FileCheck %s
+; RUN: opt -polly-scop-info  -analyze %s | FileCheck %s
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;
@@ -51,4 +51,4 @@ return:                                           ; preds = %bb2.preheader, %bb2
 
 declare i64 @rnd(...)
 
-; CHECK: Parameters used in Loop: bb1.us:        %N,
+; CHECK: SCoP: bb1.us => bb2.bb3_crit_edge.us    Parameters: {%N, }

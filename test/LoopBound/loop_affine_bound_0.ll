@@ -1,4 +1,4 @@
-; RUN: opt -polly-scop-info -print-loop-params -analyze %s | FileCheck %s
+; RUN: opt -polly-scop-info  -analyze %s | FileCheck %s
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;
@@ -51,4 +51,4 @@ return:                                           ; preds = %bb.nph8, %bb3, %ent
   ret void
 }
 
-; CHECK: Parameters used in Loop: bb2.preheader: %N, %M,
+; CHECK: entry => <Function Return>        Parameters: {%N, %M, }

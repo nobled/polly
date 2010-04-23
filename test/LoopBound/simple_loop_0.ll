@@ -1,4 +1,4 @@
-; RUN: opt -polly-scop-info -print-loop-params -analyze %s | FileCheck %s
+; RUN: opt -polly-scop-info  -analyze %s | FileCheck %s
 
 ;void f(int a[], int N) {
 ;  int i;
@@ -23,4 +23,4 @@ return:                                           ; preds = %bb
   ret void
 }
 
-; CHECK: Parameters used in Loop: bb:    < none >
+; CHECK: SCoP: entry => <Function Return>        Parameters: {}
