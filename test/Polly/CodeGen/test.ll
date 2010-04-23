@@ -1,59 +1,43 @@
 ; RUN: opt -O3 -polly-print-scop -S -analyze < %s | FileCheck %s
 ; ModuleID = 'test.c'
-target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-a0:0:64-f80:32:32-n8:16:32"
-target triple = "i386-portbld-freebsd8.0"
+target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
+target triple = "x86_64-unknown-linux-gnu"
 
+@A = common global [100 x i32] zeroinitializer, align 4 ; <[100 x i32]*> [#uses=2]
 @k = common global i32 0, align 4                 ; <i32*> [#uses=0]
 
-define void @foo() nounwind {
-entry:
-  %i = alloca i32, align 4                        ; <i32*> [#uses=4]
-  %j = alloca i32, align 4                        ; <i32*> [#uses=4]
-  store i32 0, i32* %i
-  br label %for.cond
+define i32 @foo(i32 %z) nounwind {
+bb.nph31.split.us:
+  br label %bb.nph.us
 
-for.cond:                                         ; preds = %for.inc6, %entry
-  %tmp = load i32* %i                             ; <i32> [#uses=1]
-  %cmp = icmp slt i32 %tmp, 50                    ; <i1> [#uses=1]
-  br i1 %cmp, label %for.body, label %for.end9
+for.inc16.us:                                     ; preds = %for.body6.us
+  store i32 %mul.us, i32* %arrayidx.us
+  %indvar.next = add i64 %indvar, 1               ; <i64> [#uses=2]
+  %exitcond32 = icmp eq i64 %indvar.next, 100     ; <i1> [#uses=1]
+  br i1 %exitcond32, label %for.end19, label %bb.nph.us
 
-for.body:                                         ; preds = %for.cond
-  store i32 0, i32* %j
-  br label %for.cond1
+for.body6.us:                                     ; preds = %for.body6.us, %bb.nph.us
+  %arrayidx10.tmp.0.us = phi i32 [ %i.027.us, %bb.nph.us ], [ %mul.us, %for.body6.us ] ; <i32> [#uses=1]
+  %0 = phi i32 [ 0, %bb.nph.us ], [ %inc.us, %for.body6.us ] ; <i32> [#uses=2]
+  %mul.us = mul i32 %arrayidx10.tmp.0.us, %0      ; <i32> [#uses=2]
+  %inc.us = add nsw i32 %0, 1                     ; <i32> [#uses=2]
+  %exitcond = icmp eq i32 %inc.us, 200            ; <i1> [#uses=1]
+  br i1 %exitcond, label %for.inc16.us, label %for.body6.us
 
-for.cond1:                                        ; preds = %for.inc, %for.body
-  %tmp2 = load i32* %j                            ; <i32> [#uses=1]
-  %cmp3 = icmp slt i32 %tmp2, 200                 ; <i1> [#uses=1]
-  br i1 %cmp3, label %for.body4, label %for.end
+bb.nph.us:                                        ; preds = %bb.nph31.split.us, %for.inc16.us
+  %indvar = phi i64 [ %indvar.next, %for.inc16.us ], [ 0, %bb.nph31.split.us ] ; <i64> [#uses=3]
+  %arrayidx.us = getelementptr [100 x i32]* @A, i64 0, i64 %indvar ; <i32*> [#uses=2]
+  %i.027.us = trunc i64 %indvar to i32            ; <i32> [#uses=2]
+  store i32 %i.027.us, i32* %arrayidx.us
+  br label %for.body6.us
 
-for.body4:                                        ; preds = %for.cond1
-  %call = call i32 (...)* @bar3()                 ; <i32> [#uses=0]
-  br label %for.inc
-
-for.inc:                                          ; preds = %for.body4
-  %tmp5 = load i32* %j                            ; <i32> [#uses=1]
-  %inc = add nsw i32 %tmp5, 1                     ; <i32> [#uses=1]
-  store i32 %inc, i32* %j
-  br label %for.cond1
-
-for.end:                                          ; preds = %for.cond1
-  br label %for.inc6
-
-for.inc6:                                         ; preds = %for.end
-  %tmp7 = load i32* %i                            ; <i32> [#uses=1]
-  %inc8 = add nsw i32 %tmp7, 1                    ; <i32> [#uses=1]
-  store i32 %inc8, i32* %i
-  br label %for.cond
-
-for.end9:                                         ; preds = %for.cond
-  ret void
+for.end19:                                        ; preds = %for.inc16.us
+  %idxprom21 = sext i32 %z to i64                 ; <i64> [#uses=1]
+  %arrayidx22 = getelementptr inbounds [100 x i32]* @A, i64 0, i64 %idxprom21 ; <i32*> [#uses=1]
+  %tmp23 = load i32* %arrayidx22                  ; <i32> [#uses=1]
+  ret i32 %tmp23
 }
-
-declare i32 @bar3(...)
-; CHECK: for (s1=0;s1<=199;s1++) {
-; CHECK:   S0(s1);
-; CHECK: }
-; CHECK: for (s1=0;s1<=49;s1++) {
+; CHECK: for (s1=0;s1<=99;s1++) {
 ; CHECK:   S{{[0-3]}}(s1);
 ; CHECK:   for (s3=0;s3<=199;s3++) {
 ; CHECK:     S{{[[0-3]}}(s1,s3);

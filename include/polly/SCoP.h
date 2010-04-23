@@ -19,6 +19,7 @@
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Support/raw_ostream.h"
+#include "polly/SCoPDetection.h"
 
 struct isl_set;
 struct isl_map;
@@ -107,6 +108,7 @@ static inline raw_ostream& operator<<(raw_ostream &O, const Statement *S) {
 class SCoP: public RegionPass {
   /// The underlying Region.
   Region *R;
+  bool valid;
 
   /// Create statements in current SCoP.
   void createStmts();
@@ -141,6 +143,7 @@ public:
   static char ID;
   ScalarEvolution *SE;
   LoopInfo *LI;
+  SCoPDetection *SD;
 
   SCoP();
   ~SCoP();
@@ -160,6 +163,7 @@ public:
 
   /// @brief Get the underlying Region of this SCoP.
   Region *getRegion() const { return R; }
+  bool isValid();
 
   bool runOnRegion(Region *R, RGPassManager &RGM);
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;

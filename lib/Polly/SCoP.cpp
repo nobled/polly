@@ -256,6 +256,10 @@ void SCoP::createStmts() {
   }
 }
 
+bool SCoP::isValid() {
+  return valid;
+}
+
 SCoP::SCoP() : RegionPass(&ID) {
   isl_ctx = isl_ctx_alloc();
   // TODO: Support parameters.
@@ -263,6 +267,7 @@ SCoP::SCoP() : RegionPass(&ID) {
   // constrain number of parameter?
   struct isl_dim *dim = isl_dim_set_alloc(isl_ctx, 0, 0);
   Context = isl_set_universe (dim);
+  valid = true;
 }
 
 SCoP::~SCoP() {
@@ -282,6 +287,13 @@ bool SCoP::runOnRegion(Region *R, RGPassManager &RGM) {
     Stmts.clear();
     SE = &getAnalysis<ScalarEvolution>();
     LI = &getAnalysis<LoopInfo>();
+    SD = &getAnalysis<SCoPDetection>();
+
+    valid = SD->isMaxValid(R);
+
+    if (!valid)
+      return false;
+
     NumScatterDim = getMaxLoopDepth() * 2 + 1;
 
     createStmts();
@@ -292,6 +304,7 @@ void SCoP::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.setPreservesAll();
     AU.addRequired<ScalarEvolution>();
     AU.addRequired<LoopInfo>();
+    AU.addRequired<SCoPDetection>();
 }
 
 unsigned SCoP::getNumParams() const {
@@ -317,6 +330,11 @@ void SCoP::printStatements(raw_ostream &OS) const {
 }
 
 void SCoP::print(raw_ostream &OS, const Module *) const {
+  if (!valid) {
+    OS << "Invalid region\n";
+    return;
+  }
+
   printContext(OS);
   printStatements(OS);
 }

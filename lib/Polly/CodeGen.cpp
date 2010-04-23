@@ -242,7 +242,8 @@ public:
 
     // TODO: * Replace constants.
     //       * Support parameters.
-    Program->names = buildCloogNames(0, S->NumScatterDim, 2, 0);
+    Program->names = buildCloogNames(0, S->NumScatterDim, S->getMaxLoopDepth(),
+                                     0);
 
     // XXX: Not sure if the next two stmts are necessary.  Check with CLooG
     // guys.
@@ -269,6 +270,12 @@ public:
   }
 
   void print(raw_ostream &OS, const Module *) const {
+
+    if (!S->isValid()) {
+      OS << "Invalid SCoP\n";
+      return;
+    }
+
     CLooG C = CLooG(S);
     struct clast_stmt *clast = C.getClast();
     OS << "Generated CLAST '" << clast << "'\n";

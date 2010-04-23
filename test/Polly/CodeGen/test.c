@@ -1,30 +1,19 @@
-; RUN: opt -O3 -polly-print-scop -S -analyze < %s | FileCheck %s
 int bar1();
 int bar2();
 int bar3();
 int k;
+#define N 100
+int A[N];
 
-void foo () {
+int foo (int z) {
   int i, j;
 
-  for (i = 0; i < 50; i++) {
+  for (i = 0; i < N; i++) {
+    A[i] = i;
 
-      bar2();
-
-      for (j = 0; j < 200; j++)
-        bar3();
+      for (j = 0; j < N * 2; j++)
+        A[i] = j * A[i];
   }
 
-  return;
+  return A[z];
 }
-; CHECK: for (s1=0;s1<=199;s1++) {
-; CHECK:   S0(s1);
-; CHECK: }
-; CHECK: for (s1=0;s1<=49;s1++) {
-; CHECK:   S0(s1);
-; CHECK:   for (s3=0;s3<=199;s3++) {
-; CHECK:     S1(s1,s3);
-; CHECK:   }
-; CHECK:   S2(s1);
-; CHECK: }
-
