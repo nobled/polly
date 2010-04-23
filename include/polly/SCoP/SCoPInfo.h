@@ -14,7 +14,7 @@
 #ifndef POLLY_SCOP_INFO_H
 #define POLLY_SCOP_INFO_H
 
-#include "llvm/Analysis/RegionPass.h"
+#include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/LoopInfo.h"
@@ -44,11 +44,15 @@ class SCoPInfo : public FunctionPass {
   // do that.
   typedef std::map<const Loop*, AffBoundType> BoundMapType;
 
-
+  // The access function of basic block (or region)
+  // { address, isRead }
+  typedef std::pair<AffFuncType, bool> AccessFuncType;
+  typedef std::vector<AccessFuncType> AccFuncSetType;
+  typedef std::map<const BasicBlock*, AccFuncSetType> AccFuncMapType;
 
   //===-------------------------------------------------------------------===//
   // SCoP represent with llvm objects.
-  // A help class for finding SCoP,
+  // A helper class for finding SCoP,
   struct LLVMSCoP {
     // The Region.
     Region *R;
@@ -68,14 +72,22 @@ class SCoPInfo : public FunctionPass {
 
   // The ScalarEvolution to help building SCoP.
   ScalarEvolution* SE;
-
+  // LoopInfo for information about loops
   LoopInfo *LI;
-
+  // RegionInfo for regiontrees
   RegionInfo *RI;
-
+  // Remember the bounds of loops, to help us build iterate domain of BBs.
   BoundMapType LoopBounds;
-
+  // Access function of bbs.
+  AccFuncMapType AccFuncMap;
+  // found SCoPs.
   SCoPSetType SCoPs;
+
+  void clear() {
+    AccFuncMap.clear();
+    LoopBounds.clear();
+    SCoPs.clear();
+  }
 
   // Temporary Hack for extended regiontree.
   // Cast the region to loop if there is a loop have the same header and exit.
@@ -113,17 +125,20 @@ class SCoPInfo : public FunctionPass {
     return 0;
   }
 
+  // Build affine function from SCEV expression.
+  // Return true is S is affine, false otherwise.
   bool buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP, AffFuncType &FuncToBuild);
 
-  void clear() {
-    LoopBounds.clear();
-    SCoPs.clear();
-  }
 
-  // If the Region not a valid part of a SCoP, return false, otherwise return true.
+  // If the Region not a valid part of a SCoP,
+  // return false, otherwise return true.
   LLVMSCoP *findSCoPs(Region* R, SCoPSetType &SCoPs);
 
+  // Check if the BB is a valid part of SCoP, return true and extract the
+  // corresponding information, return false otherwise.
+  bool checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP);
 
+  // Merge the SCoP information of sub regions into MergeTo.
   void mergeSubSCoPs(LLVMSCoP *MergeTo, SCoPSetType &SubSCoPs) {
     while (!SubSCoPs.empty()) {
       LLVMSCoP *SubSCoP = SubSCoPs.back();
@@ -134,7 +149,7 @@ class SCoPInfo : public FunctionPass {
       SubSCoPs.pop_back();
       delete SubSCoP;
     }
-
+    // The induction variable is not parameter at this scope.
     if (Loop *L = castToLoop(MergeTo->R))
       MergeTo->Params.erase(
         SE->getSCEV(L->getCanonicalInductionVariable()));
@@ -142,7 +157,7 @@ class SCoPInfo : public FunctionPass {
 
   //
   void printBounds(raw_ostream &OS) const;
-
+  void printAccFunc(raw_ostream &OS) const;
 public:
   static char ID;
   explicit SCoPInfo() : FunctionPass(&ID) {}

@@ -26,6 +26,11 @@
 using namespace llvm;
 using namespace polly;
 
+
+static cl::opt<bool>
+PrintAccessFunctions("print-access-functions", cl::Hidden,
+               cl::desc("Print the access functions of BBs."));
+
 static cl::opt<bool>
 PrintLoopBound("print-loop-bounds", cl::Hidden,
             cl::desc("Print the bounds of loops."));
@@ -87,6 +92,10 @@ bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
     if(isa<SCEVConstant>(Var))
       continue;
 
+    // Ignore the pointer.
+    if (Var->getType()->isPointerTy())
+      continue;
+
     if (!Var->isLoopInvariant(Scope)) {
       // If var the induction variable of the loop?
       if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)){
@@ -94,8 +103,9 @@ bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
         continue;
       }
       // A bad SCEV found.
-      DEBUG(errs() << "Bad SCEV: " << *S << " in "
-                   << Scope->getHeader()->getName() << "\n");
+      DEBUG(errs() << "Bad SCEV: " << *Var << " in " << *S << " at "
+                   << (Scope?Scope->getHeader()->getName():"Top Level")
+                   << "\n");
       return false;
     }
 
@@ -105,6 +115,7 @@ bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
     // TODO: handle the paramer0 * parameter1 case.
     // A dirty hack
       assert(isa<SCEVUnknown>(Var) && "Can only process unknow right now.");
+
     // Add the loop invariants to parameter lists.
     SCoP->Params.insert(Var);
   }
@@ -112,8 +123,62 @@ bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
   return true;
 }
 
+bool SCoPInfo::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
+  // Iterate over the BB to check its instructions, dont visit terminator
+  for (BasicBlock::iterator I = BB->begin(), E = --BB->end(); I != E; ++I){
+    // Find the parameters used in load/store
+    // TODO: Write the code.
+    Instruction &Inst = *I;
+    DEBUG(errs() << Inst <<"\n");
+    // Break the execute flow is not allow.
+    if (Inst.mayThrow())
+      return false;
+
+    if (!Inst.mayWriteToMemory() && !Inst.mayReadFromMemory()) {
+      // Unkonwn side dffects is not allow.
+      if (Inst.mayHaveSideEffects())
+        return false;
+      continue;
+    }
+
+    // Try to handle the load/store.
+    Value *Pointer = 0;
+    bool isStore = false;
+
+    if (LoadInst *load = dyn_cast<LoadInst>(&Inst)) {
+      Pointer = load->getPointerOperand();
+      DEBUG(errs() << "Read Addr " << *SE->getSCEV(Pointer) << "\n");
+    }
+    else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
+      Pointer = store->getPointerOperand();
+      DEBUG(errs() << "Write Addr " << *SE->getSCEV(Pointer) << "\n");
+      isStore = true;
+    }
+
+    // Can we get the pointer?
+    if (!Pointer)
+      return false;
+
+    // Get the function set
+    AccFuncSetType &AccFuncSet = AccFuncMap[BB];
+    // Make the access function.
+    AccFuncSet.push_back(std::make_pair(AffFuncType(), isStore));
+
+    // Is the access function affine?
+    if (!buildAffineFunc(SE->getSCEV(Pointer), SCoP, AccFuncSet.back().first)){
+      AccFuncMap.erase(BB);
+      return false;
+    }
+  }
+
+  // Find the parameters used in conditions
+  // TerminatorInst *TI = BB->getTerminator();
+
+  return true;
+}
+
 SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, SCoPSetType &SCoPs) {
-  bool isGoodRegion = true;
+  bool isValidRegion = true;
   SCoPSetType SubSCoPs;
 
   LLVMSCoP *SCoP = new LLVMSCoP(R);
@@ -127,20 +192,21 @@ SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, SCoPSetType &SCoPs) {
       if (LLVMSCoP *SubSCoP = findSCoPs(SubR, SCoPs))
         SubSCoPs.push_back(SubSCoP);
       else
-        isGoodRegion = false;
+        isValidRegion = false;
     }
-    else {
-      // Find the parameters used in conditions
-      // TODO: Write the code.
-      // Find the parameters used in load/store
-      // TODO: Write the code.
-    }
+    else if (isValidRegion) {
+      // We check the basic blocks only the region is valid.
+      BasicBlock *BB = I->getNodeAs<BasicBlock>();
 
+      if (!checkBasicBlock(BB, SCoP))
+        isValidRegion = false;
+    }
   }
 
   //// Find the parameters used in loop bounds
   Loop *L = castToLoop(R);
   if (L) {
+    // FIXME: Loop bounds may be not SCEVable.
     SCEVBoundsType bounds = getLoopBounds(L, SE);
 
     AffBoundType &affbounds = LoopBounds[L];
@@ -148,13 +214,17 @@ SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, SCoPSetType &SCoPs) {
     // Build the lower bound.
     if (!buildAffineFunc(bounds.first, SCoP, affbounds.first) ||
         !buildAffineFunc(bounds.second, SCoP, affbounds.second))
-        isGoodRegion = false;
+        isValidRegion = false;
   }
 
-  if (!isGoodRegion) {
+  if (!isValidRegion) {
     // If this Region is not a part of SCoP,
     // add the sub scops to the SCoP vector.
     SCoPs.insert(SCoPs.begin(), SubSCoPs.begin(), SubSCoPs.end());
+    // Erase the Loop bounds, so it looks better when we are dumping
+    // the loop bounds
+    if (L)
+      LoopBounds.erase(L);
     // TODO: other finalization.
     return 0;
   }
@@ -210,9 +280,22 @@ static void printAffineFunction(const std::map<const SCEV*, const SCEV*> &F,
     else
       S->print(OS);
 
-
     if (--size)
       OS << " + ";
+  }
+}
+
+void SCoPInfo::printAccFunc(llvm::raw_ostream &OS) const {
+  for (AccFuncMapType::const_iterator I = AccFuncMap.begin(),
+      E = AccFuncMap.end(); I != E; ++I) {
+    OS << "BB: " << I->first->getName() << "{\n";
+    for (AccFuncSetType::const_iterator FI = I->second.begin(),
+        FE = I->second.end(); FI != FE; ++FI) {
+      OS << (FI->second?"Writes":"Reads") << " addr: ";
+      printAffineFunction(FI->first, OS, SE);
+      OS << "\n";
+    }
+    OS << "}\n";
   }
 }
 
@@ -233,13 +316,13 @@ void SCoPInfo::printBounds(raw_ostream &OS) const {
 }
 
 void SCoPInfo::LLVMSCoP::print(raw_ostream &OS) const {
-  OS << "SCoP: " << R->getNameStr() << "\tParameters: {";
+  OS << "SCoP: " << R->getNameStr() << "\tParameters: (";
   // Print Parameters.
   for (ParamSetType::const_iterator PI = Params.begin(), PE = Params.end();
       PI != PE; ++PI)
     OS << **PI << ", ";
 
-  OS << "}\n";
+  OS << ")\n";
 }
 
 void SCoPInfo::print(raw_ostream &OS, const Module *) const {
@@ -254,6 +337,9 @@ void SCoPInfo::print(raw_ostream &OS, const Module *) const {
 
   if (PrintLoopBound)
     printBounds(OS);
+
+  if (PrintAccessFunctions)
+    printAccFunc(OS);
 
   OS << "\n";
 }
