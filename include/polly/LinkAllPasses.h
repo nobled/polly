@@ -36,6 +36,7 @@ namespace {
       (void) polly::createSCoPInfoPass();
       (void) polly::createScopPrinterPass();
       (void) polly::createSCoPDetectionPass();
+      (void) polly::createScopCodeGenPass();
     }
   } PollyForcePassLinking; // Force link by creating a global definition.
 }

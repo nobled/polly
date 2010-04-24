@@ -193,6 +193,7 @@ public:
 /// Function for force linking.
 llvm::RegionPass* createSCoPPass();
 llvm::RegionPass* createScopPrinterPass();
+llvm::RegionPass* createScopCodeGenPass();
 
 } //end polly namespace.
 

@@ -12,6 +12,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/SCoP.h"
+#include "llvm/Support/CFG.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"
@@ -22,8 +25,75 @@
 #endif
 
 using namespace polly;
+using namespace llvm;
 
 namespace {
+
+static void createSingleEntryEdge(Region *R) {
+  BasicBlock *BB = R->getEntry();
+
+  if (BB->getSinglePredecessor())
+    return;
+
+  BasicBlock::iterator SplitIt = BB->begin();
+
+  while (isa<PHINode>(SplitIt))
+    ++SplitIt;
+
+  BasicBlock *newBB = BB->splitBasicBlock(SplitIt, BB->getName()+".region");
+
+  for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI)
+    (*PI)->getTerminator()->replaceUsesOfWith(BB, newBB);
+
+  for (BasicBlock::iterator PI = BB->begin(); isa<PHINode>(PI); ++PI) {
+    PHINode *PN = cast<PHINode>(PI);
+    PHINode *NPN =
+        PHINode::Create(PN->getType(), PN->getName()+".ph", newBB->begin());
+
+    for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI) {
+      if (R->contains(*PI)) {
+        Value *V = PN->removeIncomingValue(*PI, false);
+        NPN->addIncoming(V, *PI);
+      }
+    }
+    PN->replaceAllUsesWith(NPN);
+    NPN->addIncoming(PN,BB);
+ }
+}
+
+static void createSingleExitEdge(Region *R, Pass *P) {
+  BasicBlock *BB = R->getExit();
+  int num = 0, i;
+
+  for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI)
+    if (R->contains(*PI))
+      ++num;
+
+  BasicBlock **Preds = new BasicBlock *[num];
+
+  for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI) {
+    if (R->contains(*PI))
+      Preds[i] = *PI;
+    ++i;
+  }
+
+  SplitBlockPredecessors(BB, Preds, num, ".region", P);
+
+  delete Preds;
+}
+
+/// SplitBlockPredecessors - This method transforms BB by introducing a new
+/// basic block into the function, and moving some of the predecessors of BB to
+/// be predecessors of the new block.  The new predecessors are indicated by the
+/// Preds array, which has NumPreds elements in it.  The new block is given a
+/// suffix of 'Suffix'.
+///
+/// This currently updates the LLVM IR, AliasAnalysis, DominatorTree,
+/// DominanceFrontier, LoopInfo, and LCCSA but no other analyses.
+/// In particular, it does not preserve LoopSimplify (because it's
+/// complicated to handle the case where one of the edges being split
+/// is an exit of a loop with other exits).
+///
 
 /// CLooG interface to convert from a SCoP back to LLVM-IR.
 class CLooG {
@@ -297,4 +367,51 @@ X("polly-print-scop", "Polly - Print SCoP as C code");
 
 RegionPass* polly::createScopPrinterPass() {
   return new ScopPrinter();
+}
+
+namespace {
+class ScopCodeGen : public RegionPass {
+
+  Region *region;
+  SCoP *S;
+
+public:
+  static char ID;
+
+  ScopCodeGen() : RegionPass(&ID) {}
+
+  void insertNewCodeBranch() {
+  }
+
+  bool runOnRegion(Region *R, RGPassManager &RGM) {
+    region = R;
+    S = &getAnalysis<SCoP>();
+
+    if (!S->isValid())
+      return false;
+
+    createSingleEntryEdge(R);
+    createSingleExitEdge(R, this);
+    insertNewCodeBranch();
+
+    return true;
+  }
+
+  void print(raw_ostream &OS, const Module *) const {
+  }
+
+  virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+    // XXX: Cannot be removed, as otherwise LLVM crashes.
+    AU.addRequired<SCoP>();
+  }
+};
+} //end anonymous namespace
+
+char ScopCodeGen::ID = 0;
+
+static RegisterPass<ScopCodeGen>
+Y("polly-codegen-scop", "Polly - Code generation");
+
+RegionPass* polly::createScopCodeGenPass() {
+  return new ScopCodeGen();
 }
