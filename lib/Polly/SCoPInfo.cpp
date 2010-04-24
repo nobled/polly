@@ -13,7 +13,6 @@
 
 #include "polly/SCoP/SCoPInfo.h"
 
-
 #include "llvm/Analysis/AffineSCEVIterator.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
@@ -34,36 +33,6 @@ PrintAccessFunctions("print-access-functions", cl::Hidden,
 static cl::opt<bool>
 PrintLoopBound("print-loop-bounds", cl::Hidden,
             cl::desc("Print the bounds of loops."));
-
-// The pair of (lower_bound, upper_bound),
-// where lower_bound <= indVar <= upper_bound
-typedef std::pair<const SCEV*, const SCEV*> SCEVBoundsType;
-
-static inline SCEVBoundsType getLoopBounds(const Loop* L, ScalarEvolution* SE) {
-
-  DEBUG(errs() << "Loop: " << L->getHeader()->getName() << "\n");
-  const SCEVAddRecExpr *IndVar =
-    dyn_cast<SCEVAddRecExpr>(SE->getSCEV(L->getCanonicalInductionVariable()));
-
-  assert(IndVar && "Expect IndVar a SECVAddRecExpr");
-  DEBUG(errs() << *IndVar << "\n");
-
-  // The loop will aways start with 0?
-  const SCEV *LB = IndVar->getStart();
-
-  DEBUG(errs() << "Lower bound:" << *LB << "\n");
-
-  const SCEV *UB = SE->getBackedgeTakenCount(L);
-
-  DEBUG(errs() << "Backedge taken count: "<< *UB <<"\n");
-
-  if (!isa<SCEVCouldNotCompute>(UB))
-    UB = SE->getAddExpr(LB, UB);
-
-  DEBUG(errs() << "Upper bound:" << *UB << "\n");
-
-  return std::make_pair(LB, UB);
-}
 
 bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
                             AffFuncType &FuncToBuild) {
@@ -103,7 +72,7 @@ bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
         continue;
       }
       // A bad SCEV found.
-      DEBUG(errs() << "Bad SCEV: " << *Var << " in " << *S << " at "
+      DEBUG(dbgs() << "Bad SCEV: " << *Var << " in " << *S << " at "
                    << (Scope?Scope->getHeader()->getName():"Top Level")
                    << "\n");
       return false;
@@ -129,7 +98,7 @@ bool SCoPInfo::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
     // Find the parameters used in load/store
     // TODO: Write the code.
     Instruction &Inst = *I;
-    DEBUG(errs() << Inst <<"\n");
+    DEBUG(dbgs() << Inst <<"\n");
     // Break the execute flow is not allow.
     if (Inst.mayThrow())
       return false;
@@ -147,11 +116,11 @@ bool SCoPInfo::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
 
     if (LoadInst *load = dyn_cast<LoadInst>(&Inst)) {
       Pointer = load->getPointerOperand();
-      DEBUG(errs() << "Read Addr " << *SE->getSCEV(Pointer) << "\n");
+      DEBUG(dbgs() << "Read Addr " << *SE->getSCEV(Pointer) << "\n");
     }
     else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
       Pointer = store->getPointerOperand();
-      DEBUG(errs() << "Write Addr " << *SE->getSCEV(Pointer) << "\n");
+      DEBUG(dbgs() << "Write Addr " << *SE->getSCEV(Pointer) << "\n");
       isStore = true;
     }
 
@@ -189,16 +158,18 @@ SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, SCoPSetType &SCoPs) {
 
     if (I->isSubRegion()) {
       Region *SubR = I->getNodeAs<Region>();
-      if (LLVMSCoP *SubSCoP = findSCoPs(SubR, SCoPs))
+      if (LLVMSCoP *SubSCoP = findSCoPs(SubR, SCoPs)) {
         SubSCoPs.push_back(SubSCoP);
+        // Update the loop depth.
+        if (SubSCoP->MaxLoopDepth > SCoP->MaxLoopDepth)
+          SCoP->MaxLoopDepth = SubSCoP->MaxLoopDepth;
+      }
       else
         isValidRegion = false;
     }
     else if (isValidRegion) {
       // We check the basic blocks only the region is valid.
-      BasicBlock *BB = I->getNodeAs<BasicBlock>();
-
-      if (!checkBasicBlock(BB, SCoP))
+      if (!checkBasicBlock(I->getNodeAs<BasicBlock>(), SCoP))
         isValidRegion = false;
     }
   }
@@ -206,15 +177,34 @@ SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, SCoPSetType &SCoPs) {
   //// Find the parameters used in loop bounds
   Loop *L = castToLoop(R);
   if (L) {
-    // FIXME: Loop bounds may be not SCEVable.
-    SCEVBoundsType bounds = getLoopBounds(L, SE);
+    // Increase the max loop depth
+    ++SCoP->MaxLoopDepth;
 
-    AffBoundType &affbounds = LoopBounds[L];
+    const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
 
-    // Build the lower bound.
-    if (!buildAffineFunc(bounds.first, SCoP, affbounds.first) ||
-        !buildAffineFunc(bounds.second, SCoP, affbounds.second))
-        isValidRegion = false;
+    DEBUG(dbgs() << "Backedge taken count: "<< *LoopCount <<"\n");
+
+    if (!isa<SCEVCouldNotCompute>(LoopCount)) {
+
+      const SCEVAddRecExpr *IndVar =
+        dyn_cast<SCEVAddRecExpr>(SE->getSCEV(L->getCanonicalInductionVariable()));
+
+      assert(IndVar && "Expect IndVar a SECVAddRecExpr");
+
+      // The loop will aways start with 0?
+      const SCEV *LB = IndVar->getStart();
+
+      const SCEV *UB = SE->getAddExpr(LB, LoopCount);
+
+      AffBoundType &affbounds = LoopBounds[L];
+
+      // Build the lower bound.
+      if (!buildAffineFunc(LB, SCoP, affbounds.first) ||
+          !buildAffineFunc(UB, SCoP, affbounds.second))
+          isValidRegion = false;
+    }
+    else // We can handle the loop if its loop bounds could not compute.
+      isValidRegion = false;
   }
 
   if (!isValidRegion) {
@@ -225,7 +215,9 @@ SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, SCoPSetType &SCoPs) {
     // the loop bounds
     if (L)
       LoopBounds.erase(L);
-    // TODO: other finalization.
+    // discard the SCoP
+    delete SCoP;
+
     return 0;
   }
 
@@ -322,7 +314,7 @@ void SCoPInfo::LLVMSCoP::print(raw_ostream &OS) const {
       PI != PE; ++PI)
     OS << **PI << ", ";
 
-  OS << ")\n";
+  OS << "), Max Loop Depth: "<< MaxLoopDepth <<"\n";
 }
 
 void SCoPInfo::print(raw_ostream &OS, const Module *) const {

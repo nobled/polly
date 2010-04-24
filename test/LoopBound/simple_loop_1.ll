@@ -1,4 +1,4 @@
-; RUN: opt -polly-scop-info  -analyze %s | FileCheck %s
+; RUN: opt -indvars -polly-scop-info  -analyze %s | FileCheck %s
 ;void f(int a[], int N) {
 ;  int i;
 ;  for (i = 0; i < N; ++i)

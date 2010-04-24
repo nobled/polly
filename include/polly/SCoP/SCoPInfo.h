@@ -45,11 +45,15 @@ class SCoPInfo : public FunctionPass {
   typedef std::map<const Loop*, AffBoundType> BoundMapType;
 
   // The access function of basic block (or region)
-  // { address, isRead }
+  // { address, isStore }
   typedef std::pair<AffFuncType, bool> AccessFuncType;
   typedef std::vector<AccessFuncType> AccFuncSetType;
   typedef std::map<const BasicBlock*, AccFuncSetType> AccFuncMapType;
 
+  // TODO: this use the isl object
+  typedef std::vector<AffFuncType> AffFuncStackType;
+  //
+  typedef std::vector<const SCEV*> IteratorVectorType;
   //===-------------------------------------------------------------------===//
   // SCoP represent with llvm objects.
   // A helper class for finding SCoP,
@@ -57,7 +61,9 @@ class SCoPInfo : public FunctionPass {
     // The Region.
     Region *R;
     ParamSetType Params;
-    LLVMSCoP(Region *r) : R(r) {
+    // TODO: Constraints on parameters?
+    unsigned MaxLoopDepth;
+    LLVMSCoP(Region *r) : R(r), MaxLoopDepth(0) {
       assert(R && "Region Cant be null!");
     }
     void print(raw_ostream &OS) const;
@@ -88,7 +94,7 @@ class SCoPInfo : public FunctionPass {
     LoopBounds.clear();
     SCoPs.clear();
   }
-
+  //===-------------------------------------------------------------------===//
   // Temporary Hack for extended regiontree.
   // Cast the region to loop if there is a loop have the same header and exit.
   Loop *castToLoop(const Region *R) const {
@@ -124,7 +130,7 @@ class SCoPInfo : public FunctionPass {
     }
     return 0;
   }
-
+  //===-------------------------------------------------------------------===//
   // Build affine function from SCEV expression.
   // Return true is S is affine, false otherwise.
   bool buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP, AffFuncType &FuncToBuild);
@@ -133,6 +139,13 @@ class SCoPInfo : public FunctionPass {
   // If the Region not a valid part of a SCoP,
   // return false, otherwise return true.
   LLVMSCoP *findSCoPs(Region* R, SCoPSetType &SCoPs);
+
+  // Build the SCoP.
+  //void buildSCoP(LLVMSCoP *SCoP, Region *CurScope,
+  //               // TODO: How to handle union of Domains?
+  //               AffFuncStackType &ItDomStack,
+  //               IteratorVectorType &Iterators,
+  //               );
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
@@ -166,8 +179,10 @@ public:
   /// Pass interface
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<LoopInfo>();
+    // Grr! These are looppasses!
+    //AU.addRequiredID(IndVarSimplifyID);
     // Make loop only have 1 back-edge?
-    //AU.addPreservedID(LoopSimplifyID);
+    //AU.addRequiredID(LoopSimplifyID);
     AU.addRequired<RegionInfo>();
     AU.addRequired<ScalarEvolution>();
     AU.setPreservesAll();

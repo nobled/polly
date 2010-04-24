@@ -70,4 +70,3 @@ public:
 FunctionPass* createSCoPDetectionPass();
 } // End polly namespace
 #endif
-
