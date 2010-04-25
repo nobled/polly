@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/SCoP.h"
+#include "polly/SCoPPass.h"
 #include "polly/Support/GmpConv.h"
 
 #include "llvm/Analysis/RegionInfo.h"
@@ -175,7 +175,7 @@ void Statement::AllocateDomain() {
   isl_dim_free(dim);
 }
 
-Statement::Statement(SCoP *SCoP, BasicBlock *BasicBlock, unsigned *value) {
+Statement::Statement(SCoPPass *SCoP, BasicBlock *BasicBlock, unsigned *value) {
   BB = BasicBlock;
   Scop = SCoP;
   NumIts = SCoP->getLoopDepth(BB);
@@ -213,8 +213,8 @@ void Statement::print(raw_ostream &OS) const {
 }
 
 //===----------------------------------------------------------------------===//
-/// SCoP implement.
-unsigned SCoP::getMaxLoopDepth() const {
+/// SCoPPass implement.
+unsigned SCoPPass::getMaxLoopDepth() const {
   unsigned max = 0;
   Region *R = getRegion();
 
@@ -226,7 +226,7 @@ unsigned SCoP::getMaxLoopDepth() const {
 }
 
 
-void SCoP::createStmts() {
+void SCoPPass::createStmts() {
   // Is this the Dimension of scattering function?
   unsigned constc = getMaxLoopDepth() + 1;
 
@@ -256,11 +256,11 @@ void SCoP::createStmts() {
   }
 }
 
-bool SCoP::isValid() {
+bool SCoPPass::isValid() {
   return valid;
 }
 
-SCoP::SCoP() : RegionPass(&ID) {
+SCoPPass::SCoPPass() : RegionPass(&ID) {
   isl_ctx = isl_ctx_alloc();
   // TODO: Support parameters.
   // Setup the dim of context with number of param and
@@ -270,7 +270,7 @@ SCoP::SCoP() : RegionPass(&ID) {
   valid = true;
 }
 
-SCoP::~SCoP() {
+SCoPPass::~SCoPPass() {
   for (StmtSet::iterator SI = Stmts.begin(), SE = Stmts.end();
        SI != SE; ++SI)
     delete(*SI);
@@ -282,7 +282,7 @@ SCoP::~SCoP() {
     isl_ctx_free(isl_ctx);
 }
 
-bool SCoP::runOnRegion(Region *R, RGPassManager &RGM) {
+bool SCoPPass::runOnRegion(Region *R, RGPassManager &RGM) {
     this->R = R;
     Stmts.clear();
     SE = &getAnalysis<ScalarEvolution>();
@@ -300,18 +300,18 @@ bool SCoP::runOnRegion(Region *R, RGPassManager &RGM) {
     return false;
 }
 
-void SCoP::getAnalysisUsage(AnalysisUsage &AU) const {
+void SCoPPass::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.setPreservesAll();
     AU.addRequired<ScalarEvolution>();
     AU.addRequired<LoopInfo>();
     AU.addRequired<SCoPDetection>();
 }
 
-unsigned SCoP::getNumParams() const {
+unsigned SCoPPass::getNumParams() const {
   return isl_set_n_param(Context);
 }
 
-void SCoP::printContext(raw_ostream &OS) const {
+void SCoPPass::printContext(raw_ostream &OS) const {
   OS << "\tContext:\n";
   if (Context) {
     isl_set_print(Context, stderr, 12, ISL_FORMAT_ISL);
@@ -323,13 +323,13 @@ void SCoP::printContext(raw_ostream &OS) const {
   OS << "\n";
 }
 
-void SCoP::printStatements(raw_ostream &OS) const {
+void SCoPPass::printStatements(raw_ostream &OS) const {
   for (StmtSet::const_iterator SI = Stmts.begin(), SE = Stmts.end();
        SI != SE; ++SI)
     OS << (*SI) << "\n";
 }
 
-void SCoP::print(raw_ostream &OS, const Module *) const {
+void SCoPPass::print(raw_ostream &OS, const Module *) const {
   if (!valid) {
     OS << "Invalid region\n";
     return;
@@ -339,7 +339,7 @@ void SCoP::print(raw_ostream &OS, const Module *) const {
   printStatements(OS);
 }
 
-Loop *SCoP::getSurroundingLoop() const {
+Loop *SCoPPass::getSurroundingLoop() const {
   Loop *loop = LI->getLoopFor(R->getEntry());
   while (loop && loop->getHeader() && R->contains(loop->getHeader())) {
     SmallVector<BasicBlock*, 8> ExitingBlocks;
@@ -357,11 +357,11 @@ Loop *SCoP::getSurroundingLoop() const {
   return loop;
 }
 
-char polly::SCoP::ID = 0;
+char polly::SCoPPass::ID = 0;
 
-static RegisterPass<SCoP>
+static RegisterPass<SCoPPass>
 X("polly-scop", "Polly - Create polyhedral SCoPs");
 
 RegionPass* polly::createSCoPPass() {
-  return new SCoP();
+  return new SCoPPass();
 }

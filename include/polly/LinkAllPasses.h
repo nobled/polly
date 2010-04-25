@@ -15,9 +15,9 @@
 #ifndef POLLY_LINKALLPASSES_H
 #define POLLY_LINKALLPASSES_H
 
-#include "polly/SCoP.h"
+#include "polly/SCoPPass.h"
 #include "polly/SCoPDetection.h"
-#include "polly/SCoP/SCoPInfo.h"
+#include "polly/SCoPInfo.h"
 /// TODO: Place the headers that containing pass you want to force link here.
 
 #include <cstdlib>

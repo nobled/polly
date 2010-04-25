@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/SCoP/SCoPInfo.h"
+#include "polly/SCoPInfo.h"
 
 #include "llvm/Analysis/AffineSCEVIterator.h"
 #include "llvm/Analysis/RegionIterator.h"

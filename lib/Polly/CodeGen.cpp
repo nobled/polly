@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/SCoP.h"
+#include "polly/SCoPPass.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -97,7 +97,7 @@ static void createSingleExitEdge(Region *R, Pass *P) {
 
 /// CLooG interface to convert from a SCoP back to LLVM-IR.
 class CLooG {
-  SCoP *S;
+  SCoPPass *S;
   CloogProgram *Program;
   CloogOptions *Options;
   CloogState *State;
@@ -105,7 +105,7 @@ class CLooG {
   unsigned StatementNumber;
 
 public:
-  CLooG(SCoP *Scop) : S(Scop) {
+  CLooG(SCoPPass *Scop) : S(Scop) {
     StatementNumber = 0;
     State = cloog_state_malloc();
     buildCloogOptions();
@@ -190,7 +190,7 @@ public:
   CloogLoop *buildCloogLoopList() {
     CloogLoop *Loop = 0;
 
-    for (SCoP::iterator SI = S->begin(), SE =
+    for (SCoPPass::iterator SI = S->begin(), SE =
          S->end(); SI != SE; ++SI) {
       CloogLoop *NextLoop = buildCloogLoop(*SI);
       NextLoop->next = Loop;
@@ -206,7 +206,7 @@ public:
   CloogScatteringList *buildScatteringList() {
     CloogScatteringList *ScatteringList = 0;
 
-    for (SCoP::iterator SI = S->begin(), SE =
+    for (SCoPPass::iterator SI = S->begin(), SE =
          S->end(); SI != SE; ++SI) {
       // XXX: cloog_domain_list_alloc() not implemented in CLooG.
       CloogScatteringList *NewScatteringList
@@ -326,7 +326,7 @@ public:
 class ScopPrinter : public RegionPass {
 
   Region *region;
-  SCoP *S;
+  SCoPPass *S;
 
 public:
   static char ID;
@@ -335,7 +335,7 @@ public:
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
-    S = &getAnalysis<SCoP>();
+    S = &getAnalysis<SCoPPass>();
     return false;
   }
 
@@ -355,7 +355,7 @@ public:
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     // XXX: Cannot be removed, as otherwise LLVM crashes.
     AU.setPreservesAll();
-    AU.addRequired<SCoP>();
+    AU.addRequired<SCoPPass>();
   }
 };
 } //end anonymous namespace
@@ -373,7 +373,7 @@ namespace {
 class ScopCodeGen : public RegionPass {
 
   Region *region;
-  SCoP *S;
+  SCoPPass *S;
 
 public:
   static char ID;
@@ -385,7 +385,7 @@ public:
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
-    S = &getAnalysis<SCoP>();
+    S = &getAnalysis<SCoPPass>();
 
     if (!S->isValid())
       return false;
@@ -402,7 +402,7 @@ public:
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     // XXX: Cannot be removed, as otherwise LLVM crashes.
-    AU.addRequired<SCoP>();
+    AU.addRequired<SCoPPass>();
   }
 };
 } //end anonymous namespace

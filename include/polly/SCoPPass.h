@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 //
-#ifndef POLLY_SCOP_H
-#define POLLY_SCOP_H
+#ifndef POLLY_SCOP_PASS_H
+#define POLLY_SCOP_PASS_H
 
 #include "llvm/Analysis/RegionPass.h"
 #include "llvm/Analysis/Passes.h"
@@ -31,7 +31,7 @@ struct isl_constraint;
 using namespace llvm;
 
 namespace polly {
-class SCoP;
+class SCoPPass;
 
 /// A statement is the smallest element of a SCoP.  It describes
 /// a set of calculations that have to be executed.
@@ -42,7 +42,7 @@ class Statement {
   BasicBlock *BB;
 
   /// The parent of this Statment.
-  SCoP *Scop;
+  SCoPPass *Scop;
 
   /// The iteration domain describes the set of iterations for which this
   /// statement is executed.
@@ -75,7 +75,7 @@ class Statement {
 
 public:
   // XXX: value needs a comment.
-  Statement(SCoP *SCoP, BasicBlock *BB, unsigned *value);
+  Statement(SCoPPass *SCoP, BasicBlock *BB, unsigned *value);
   ~Statement();
 
   /// FIXME: This is only a dirty hack. If a statement can hold a BB or Region,
@@ -105,7 +105,7 @@ static inline raw_ostream& operator<<(raw_ostream &O, const Statement *S) {
 }
 
 /// @brief Static Control Part in program tree.
-class SCoP: public RegionPass {
+class SCoPPass: public RegionPass {
   /// The underlying Region.
   Region *R;
   bool valid;
@@ -145,8 +145,8 @@ public:
   LoopInfo *LI;
   SCoPDetection *SD;
 
-  SCoP();
-  ~SCoP();
+  SCoPPass();
+  ~SCoPPass();
 
   /// Context for ISL library?
   struct isl_ctx *isl_ctx;
@@ -155,6 +155,7 @@ public:
   /// CloogNames
   /// Mapping LLVM value to parameter?
   /// Context
+  // Is this constraints on parameters?
   struct isl_set *Context;
   /// Loops and block list
 
