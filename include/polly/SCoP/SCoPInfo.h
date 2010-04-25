@@ -32,13 +32,34 @@ class SCoPInfo : public FunctionPass {
   /// Types
   typedef std::set<const SCEV*> ParamSetType;
 
-  // { Variable, Coefficient }
-  typedef std::map<const SCEV*, const SCEV*> AffFuncType;
+  //===-------------------------------------------------------------------===//
+  // Affine function represent with llvm objects.
+  // A helper class for collect affine function information
+  struct SCEVAffFunc {
+    // The translation component
+    const SCEV *TransComp;
+    // { Variable, Coefficient }
+    typedef std::map<const SCEV*, const SCEV*> LnrTransSet;
+    LnrTransSet LnrTrans;
+    // The base address of the address SCEV.
+    const Value *BaseAddr;
+
+    explicit SCEVAffFunc() : TransComp(0), BaseAddr(0) {}
+
+    // getCoeff - Get the Coefficient of a given variable.
+    const SCEV *getCoeff(const SCEV *Var) {
+      LnrTransSet::iterator At = LnrTrans.find(Var);
+      return At == LnrTrans.end() ? 0 : At->second;
+    }
+
+    //
+    void print(raw_ostream &OS, ScalarEvolution *SE) const;
+  };
 
   // TODO: We need a standalone file to translate llvm affine function to
   // isl object
   // { Lowerbound, Upperbound }
-  typedef std::pair<AffFuncType, AffFuncType> AffBoundType;
+  typedef std::pair<SCEVAffFunc, SCEVAffFunc> AffBoundType;
   // Only map bounds to loops, we could construct the iterate domain of
   // a BB/Region by visit all its parent. We can also have some stack to
   // do that.
@@ -46,14 +67,15 @@ class SCoPInfo : public FunctionPass {
 
   // The access function of basic block (or region)
   // { address, isStore }
-  typedef std::pair<AffFuncType, bool> AccessFuncType;
+  typedef std::pair<SCEVAffFunc, bool> AccessFuncType;
   typedef std::vector<AccessFuncType> AccFuncSetType;
   typedef std::map<const BasicBlock*, AccFuncSetType> AccFuncMapType;
 
   // TODO: this use the isl object
-  typedef std::vector<AffFuncType> AffFuncStackType;
+  typedef std::vector<SCEVAffFunc> AffFuncStackType;
   //
   typedef std::vector<const SCEV*> IteratorVectorType;
+
   //===-------------------------------------------------------------------===//
   // SCoP represent with llvm objects.
   // A helper class for finding SCoP,
@@ -63,7 +85,7 @@ class SCoPInfo : public FunctionPass {
     ParamSetType Params;
     // TODO: Constraints on parameters?
     unsigned MaxLoopDepth;
-    LLVMSCoP(Region *r) : R(r), MaxLoopDepth(0) {
+    explicit LLVMSCoP(Region *r) : R(r), MaxLoopDepth(0) {
       assert(R && "Region Cant be null!");
     }
     void print(raw_ostream &OS) const;
@@ -133,7 +155,7 @@ class SCoPInfo : public FunctionPass {
   //===-------------------------------------------------------------------===//
   // Build affine function from SCEV expression.
   // Return true is S is affine, false otherwise.
-  bool buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP, AffFuncType &FuncToBuild);
+  bool buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP, SCEVAffFunc &FuncToBuild);
 
 
   // If the Region not a valid part of a SCoP,

@@ -36,7 +36,7 @@ PrintLoopBound("print-loop-bounds", cl::Hidden,
             cl::desc("Print the bounds of loops."));
 
 bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
-                            AffFuncType &FuncToBuild) {
+                            SCEVAffFunc &FuncToBuild) {
   assert(SCoP && "Scope can not be null!");
 
   Region *R = SCoP->R;
@@ -53,18 +53,27 @@ bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
   // FIXME: Simplify these code.
   for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
       I != E; ++I){
-    // Build the affine function.
-    FuncToBuild.insert(*I);
 
     const SCEV *Var = I->first;
 
     // Ignore the constant offest.
-    if(isa<SCEVConstant>(Var))
+    if(isa<SCEVConstant>(Var)) {
+      // Add the translation component
+      FuncToBuild.TransComp = I->second;
       continue;
+    }
 
     // Ignore the pointer.
-    if (Var->getType()->isPointerTy())
+    if (Var->getType()->isPointerTy()) {
+      assert(I->second->isOne() && "The coeffient of pointer expect is one!");
+      // Setup the base address
+      FuncToBuild.BaseAddr = cast<SCEVUnknown>(Var)->getValue();
       continue;
+    }
+
+
+    // Build the affine function.
+    FuncToBuild.LnrTrans.insert(*I);
 
     if (!Var->isLoopInvariant(Scope)) {
       // If var the induction variable of the loop?
@@ -189,7 +198,7 @@ bool SCoPInfo::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
     // Get the function set
     AccFuncSetType &AccFuncSet = AccFuncMap[BB];
     // Make the access function.
-    AccFuncSet.push_back(std::make_pair(AffFuncType(), isStore));
+    AccFuncSet.push_back(std::make_pair(SCEVAffFunc(), isStore));
 
     // Is the access function affine?
     const SCEV *Addr = SE->getSCEV(Pointer);
@@ -304,12 +313,16 @@ bool SCoPInfo::runOnFunction(llvm::Function &F) {
 }
 
 /// Debug/Testing function
-static void printAffineFunction(const std::map<const SCEV*, const SCEV*> &F,
-                                raw_ostream &OS, ScalarEvolution *SE) {
-  size_t size = F.size();
 
-  for (std::map<const SCEV*, const SCEV*>::const_iterator I = F.begin(),
-      E = F.end(); I != E; ++I){
+void SCoPInfo::SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
+  // Print BaseAddr
+  if (BaseAddr) {
+    WriteAsOperand(OS, BaseAddr, false);
+    OS << "[";
+  }
+
+  for (LnrTransSet::const_iterator I = LnrTrans.begin(), E = LnrTrans.end();
+      I != E; ++I) {
     // Print the coefficient (constant part)
     I->second->print(OS);
 
@@ -334,9 +347,15 @@ static void printAffineFunction(const std::map<const SCEV*, const SCEV*> &F,
     else
       S->print(OS);
 
-    if (--size)
-      OS << " + ";
+    OS << " + ";
   }
+
+  if (TransComp)
+    OS << *TransComp;
+
+  if (BaseAddr)
+    OS << "]";
+
 }
 
 void SCoPInfo::printAccFunc(llvm::raw_ostream &OS) const {
@@ -345,8 +364,8 @@ void SCoPInfo::printAccFunc(llvm::raw_ostream &OS) const {
     OS << "BB: " << I->first->getName() << "{\n";
     for (AccFuncSetType::const_iterator FI = I->second.begin(),
         FE = I->second.end(); FI != FE; ++FI) {
-      OS << (FI->second?"Writes":"Reads") << " addr: ";
-      printAffineFunction(FI->first, OS, SE);
+      OS << (FI->second?"Writes ":"Reads ");
+      FI->first.print(OS,SE);
       OS << "\n";
     }
     OS << "}\n";
@@ -362,9 +381,9 @@ void SCoPInfo::printBounds(raw_ostream &OS) const {
       E = LoopBounds.end(); I != E; ++I){
     OS << "Bounds of Loop: " << I->first->getHeader()->getName()
       << ":\t{ ";
-    printAffineFunction(I->second.first, OS, SE);
+    I->second.first.print(OS,SE);
     OS << ", ";
-    printAffineFunction(I->second.second, OS, SE);
+    I->second.second.print(OS,SE);
     OS << "}\n";
   }
 }
