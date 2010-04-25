@@ -151,6 +151,8 @@ class SCoPInfo : public FunctionPass {
   // corresponding information, return false otherwise.
   bool checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP);
 
+  bool checkCFG(BasicBlock *BB, Region *R);
+
   // Merge the SCoP information of sub regions into MergeTo.
   void mergeSubSCoPs(LLVMSCoP *MergeTo, SCoPSetType &SubSCoPs) {
     while (!SubSCoPs.empty()) {

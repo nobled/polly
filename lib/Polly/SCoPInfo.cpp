@@ -17,6 +17,7 @@
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Assembly/Writer.h"
+#include "llvm/Support/CFG.h"
 #include "llvm/Support/CommandLine.h"
 
 #define DEBUG_TYPE "polly-scop-info"
@@ -92,6 +93,55 @@ bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
   return true;
 }
 
+// TODO: Move to LoopInfo?
+static bool isPreHeader(BasicBlock *BB, LoopInfo *LI) {
+  TerminatorInst *TI = BB->getTerminator();
+  return (TI->getNumSuccessors() == 1) &&
+         LI->isLoopHeader(TI->getSuccessor(0));
+}
+
+bool SCoPInfo::checkCFG(BasicBlock *BB, Region *R) {
+  TerminatorInst *TI = BB->getTerminator();
+
+  unsigned int numSucc = TI->getNumSuccessors();
+
+  // Ret and unconditional branch is ok.
+  if (numSucc < 2) return true;
+
+  if (Loop *L = getScopeLoop(R)) {
+    // Only allow branches that are loop exits. This stops anything
+    // except loops that have just one exit and are detected by our LoopInfo
+    // analysis
+
+    // It is ok if BB is branching out of the loop
+    if (L->isLoopExiting(BB))
+      return true;
+
+    assert(L->getExitingBlock() &&
+      "Only can handle Loop with 1 exiting block now!");
+
+    // Now bb is not the exit block of the loop.
+    // Is BB branching to inner loop?
+    for (unsigned int i = 0; i < numSucc; ++i) {
+      BasicBlock *SuccBB = TI->getSuccessor(i);
+      if (isPreHeader(SuccBB, LI)) {
+        // If branching to inner loop
+        assert(numSucc == 2 && "Not a natural loop?");
+        return true;
+      }
+    }
+
+    // Now bb is not branching to inner loop.
+    // FIXME: Handle the branch condition
+    DEBUG(dbgs() << "Bad BB in cfg: " << BB->getName() << "\n");
+    return false;
+  }
+
+  // BB is not in any loop.
+  return true;
+  // TODO: handle the branch condition
+}
+
 bool SCoPInfo::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
   // Iterate over the BB to check its instructions, dont visit terminator
   for (BasicBlock::iterator I = BB->begin(), E = --BB->end(); I != E; ++I){
@@ -99,14 +149,20 @@ bool SCoPInfo::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
     // TODO: Write the code.
     Instruction &Inst = *I;
     DEBUG(dbgs() << Inst <<"\n");
-    // Break the execute flow is not allow.
-    if (Inst.mayThrow())
+    // Function call is not allowed in SCoP at the moment.
+    if (/*CallInst *CI = */dyn_cast<CallInst>(&Inst)) {
+      // TODO: Handle CI
+      DEBUG(dbgs() << "Bad call Inst!\n");
       return false;
+    }
 
     if (!Inst.mayWriteToMemory() && !Inst.mayReadFromMemory()) {
-      // Unkonwn side dffects is not allow.
-      if (Inst.mayHaveSideEffects())
+      // Handle cast instruction
+      if (isa<IntToPtrInst>(I) || isa<BitCastInst>(I)) {
+        DEBUG(dbgs() << "Bad cast Inst!\n");
         return false;
+      }
+
       continue;
     }
 
@@ -125,8 +181,10 @@ bool SCoPInfo::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
     }
 
     // Can we get the pointer?
-    if (!Pointer)
+    if (!Pointer) {
+      DEBUG(dbgs() << "Bad Inst accessing memory!\n");
       return false;
+    }
 
     // Get the function set
     AccFuncSetType &AccFuncSet = AccFuncMap[BB];
@@ -134,15 +192,13 @@ bool SCoPInfo::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
     AccFuncSet.push_back(std::make_pair(AffFuncType(), isStore));
 
     // Is the access function affine?
-    if (!buildAffineFunc(SE->getSCEV(Pointer), SCoP, AccFuncSet.back().first)){
-      AccFuncMap.erase(BB);
+    const SCEV *Addr = SE->getSCEV(Pointer);
+    if (!buildAffineFunc(Addr, SCoP, AccFuncSet.back().first)) {
+      DEBUG(dbgs() << "Bad memory addr " << *Addr << "\n");
       return false;
     }
   }
-
-  // Find the parameters used in conditions
-  // TerminatorInst *TI = BB->getTerminator();
-
+  // All instruction is ok.
   return true;
 }
 
@@ -168,13 +224,19 @@ SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, SCoPSetType &SCoPs) {
         isValidRegion = false;
     }
     else if (isValidRegion) {
+      BasicBlock *BB = I->getNodeAs<BasicBlock>();
       // We check the basic blocks only the region is valid.
-      if (!checkBasicBlock(I->getNodeAs<BasicBlock>(), SCoP))
+      if (!checkCFG(BB, R) || // Check cfg
+          !checkBasicBlock(BB, SCoP)) { // Check all non terminator instruction
+        DEBUG(dbgs() << "Bad BB found:" << BB->getName() << "\n");
+        // Clean up the access function map, so we get a clear dump.
+        AccFuncMap.erase(BB);
         isValidRegion = false;
+      }
     }
   }
 
-  //// Find the parameters used in loop bounds
+  // Find the parameters used in loop bounds
   Loop *L = castToLoop(R);
   if (L) {
     // Increase the max loop depth

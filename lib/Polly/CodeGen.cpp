@@ -63,7 +63,7 @@ static void createSingleEntryEdge(Region *R) {
 
 static void createSingleExitEdge(Region *R, Pass *P) {
   BasicBlock *BB = R->getExit();
-  int num = 0, i;
+  int num = 0, i = 0;
 
   for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI)
     if (R->contains(*PI))
