@@ -14,6 +14,8 @@
 #ifndef POLLY_SCOP_INFO_H
 #define POLLY_SCOP_INFO_H
 
+#include "polly/PollyType.h"
+
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/ScalarEvolution.h"
@@ -27,34 +29,140 @@
 using namespace llvm;
 
 namespace polly {
+
+//===----------------------------------------------------------------------===//
+/// TODO: place them to the right place
+class SCoPInfo;
+class SCoP;
+///
+class SCoPStmt
+{
+  SCoP &Parent;
+  BasicBlock &BB;
+
+  /// The iteration domain describes the set of iterations for which this
+  /// statement is executed.
+  ///
+  /// Example:
+  ///     for (i = 0; i < 100 + b; ++i)
+  ///       S(i);
+  ///
+  ///     Domain: 0 <= i <= 100 + b
+  polly_set *Domain;
+  /// The scattering map describes the order in which the different statements
+  /// executed. The scattering is closely related to the one of CLooG. So have
+  /// a look at cloog.org to find a complete description.
+  polly_map *Scattering;
+
+  SCoPStmt(SCoP &parent, BasicBlock &bb, polly_set *domain, polly_map *scat);
+
+  friend class SCoPInfo;
+public:
+
+  polly_set *getDomain() const { return Domain; }
+  polly_map *getScattering() const { return Scattering; }
+
+	~SCoPStmt();
+};
+
+
+/// @brief Static Control Part in program tree.
+class SCoP {
+  /// The underlying Region.
+  Region &R;
+
+  /// Max loop depth.
+  unsigned MaxLoopDepth;
+
+  typedef std::set<SCoPStmt*> StmtSet;
+  /// The Statments in this SCoP.
+  StmtSet Stmts;
+
+  /// Parameters of this SCoP
+  typedef SmallVector<const SCEV*, 8> ParamVecType;
+  ParamVecType Parameters;
+  /// Context
+  // Is this constraints on parameters?
+  polly_set *Context;
+
+  ///
+  polly_ctx *ctx;
+
+  ///
+  friend class SCoPInfo;
+
+  template<class It>
+  explicit SCoP(Region &r, unsigned maxLoopDepth, It ParamBegin, It ParamEnd);
+public:
+
+  ~SCoP();
+
+  inline ParamVecType::size_type getNumParams() const {
+    return Parameters.size();
+  }
+  inline const ParamVecType &getParams() const { return Parameters; }
+
+  //void addStatement(SCoPStmt *stmt) { Stmts.insert(stmt); }
+
+  typedef StmtSet::iterator iterator;
+  typedef StmtSet::const_iterator const_iterator;
+
+  iterator begin() { return Stmts.begin(); }
+  iterator end()   { return Stmts.end();   }
+
+  const_iterator begin() const { return Stmts.begin(); }
+  const_iterator end()   const { return Stmts.end();   }
+
+  typedef ParamVecType::iterator param_iterator;
+  typedef ParamVecType::const_iterator const_param_iterator;
+
+  param_iterator param_begin() { return Parameters.begin(); }
+  param_iterator param_end()   { return Parameters.end(); }
+
+  const_param_iterator param_begin() const { return Parameters.begin(); }
+  const_param_iterator param_end()   const { return Parameters.end(); }
+
+  inline const Region &getRegion() const { return R; }
+
+  inline unsigned getMaxLoopDepth() const { return MaxLoopDepth; }
+  /// Scattering dimension number
+  inline unsigned getScatterDim() const { return 2 * MaxLoopDepth + 1; }
+
+  inline polly_set *getContext() const { return Context; }
+
+  void print(raw_ostream &OS) const;
+};
+
+//===----------------------------------------------------------------------===//
+
+//===-------------------------------------------------------------------===//
+// Affine function represent with llvm objects.
+// A helper class for collect affine function information
+struct SCEVAffFunc {
+  // The translation component
+  const SCEV *TransComp;
+  // { Variable, Coefficient }
+  typedef std::map<const SCEV*, const SCEV*> LnrTransSet;
+  LnrTransSet LnrTrans;
+  // The base address of the address SCEV.
+  const Value *BaseAddr;
+
+  explicit SCEVAffFunc() : TransComp(0), BaseAddr(0) {}
+
+  // getCoeff - Get the Coefficient of a given variable.
+  const SCEV *getCoeff(const SCEV *Var) {
+    LnrTransSet::iterator At = LnrTrans.find(Var);
+    return At == LnrTrans.end() ? 0 : At->second;
+  }
+
+  //
+  void print(raw_ostream &OS, ScalarEvolution *SE) const;
+};
+
 class SCoPInfo : public FunctionPass {
   //===-------------------------------------------------------------------===//
   /// Types
   typedef std::set<const SCEV*> ParamSetType;
-
-  //===-------------------------------------------------------------------===//
-  // Affine function represent with llvm objects.
-  // A helper class for collect affine function information
-  struct SCEVAffFunc {
-    // The translation component
-    const SCEV *TransComp;
-    // { Variable, Coefficient }
-    typedef std::map<const SCEV*, const SCEV*> LnrTransSet;
-    LnrTransSet LnrTrans;
-    // The base address of the address SCEV.
-    const Value *BaseAddr;
-
-    explicit SCEVAffFunc() : TransComp(0), BaseAddr(0) {}
-
-    // getCoeff - Get the Coefficient of a given variable.
-    const SCEV *getCoeff(const SCEV *Var) {
-      LnrTransSet::iterator At = LnrTrans.find(Var);
-      return At == LnrTrans.end() ? 0 : At->second;
-    }
-
-    //
-    void print(raw_ostream &OS, ScalarEvolution *SE) const;
-  };
 
   // TODO: We need a standalone file to translate llvm affine function to
   // isl object
@@ -71,27 +179,22 @@ class SCoPInfo : public FunctionPass {
   typedef std::vector<AccessFuncType> AccFuncSetType;
   typedef std::map<const BasicBlock*, AccFuncSetType> AccFuncMapType;
 
-  // TODO: this use the isl object
-  typedef std::vector<SCEVAffFunc> AffFuncStackType;
-  //
-  typedef std::vector<const SCEV*> IteratorVectorType;
+  typedef std::map<const Region*, SCoP*> SCoPMapType;
 
   //===-------------------------------------------------------------------===//
   // SCoP represent with llvm objects.
   // A helper class for finding SCoP,
   struct LLVMSCoP {
     // The Region.
-    Region *R;
+    Region &R;
     ParamSetType Params;
     // TODO: Constraints on parameters?
     unsigned MaxLoopDepth;
-    explicit LLVMSCoP(Region *r) : R(r), MaxLoopDepth(0) {
-      assert(R && "Region Cant be null!");
-    }
+    explicit LLVMSCoP(Region &r) : R(r), MaxLoopDepth(0) {}
     void print(raw_ostream &OS) const;
   };
 
-  typedef std::vector<LLVMSCoP*> SCoPSetType;
+  typedef std::vector<LLVMSCoP*> TempSCoPSetType;
   //===-------------------------------------------------------------------===//
   // DO NOT IMPLEMENT
   SCoPInfo(const SCoPInfo &);
@@ -108,14 +211,11 @@ class SCoPInfo : public FunctionPass {
   BoundMapType LoopBounds;
   // Access function of bbs.
   AccFuncMapType AccFuncMap;
-  // found SCoPs.
-  SCoPSetType SCoPs;
+  // SCoPs in the function
+  SCoPMapType RegionToSCoPs;
 
-  void clear() {
-    AccFuncMap.clear();
-    LoopBounds.clear();
-    SCoPs.clear();
-  }
+  void clear();
+
   //===-------------------------------------------------------------------===//
   // Temporary Hack for extended regiontree.
   // Cast the region to loop if there is a loop have the same header and exit.
@@ -155,19 +255,28 @@ class SCoPInfo : public FunctionPass {
   //===-------------------------------------------------------------------===//
   // Build affine function from SCEV expression.
   // Return true is S is affine, false otherwise.
-  bool buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP, SCEVAffFunc &FuncToBuild);
+  bool buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
+                       SCEVAffFunc &FuncToBuild);
 
+
+  /*__isl_give*/ polly_basic_set *buildIterateDomain(SCoP &SCoP,
+                                  SmallVectorImpl<Loop*> &NestLoops);
 
   // If the Region not a valid part of a SCoP,
   // return false, otherwise return true.
-  LLVMSCoP *findSCoPs(Region* R, SCoPSetType &SCoPs);
+  LLVMSCoP *findSCoPs(Region* R, TempSCoPSetType &SCoPs);
 
   // Build the SCoP.
-  //void buildSCoP(LLVMSCoP *SCoP, Region *CurScope,
-  //               // TODO: How to handle union of Domains?
-  //               AffFuncStackType &ItDomStack,
-  //               IteratorVectorType &Iterators,
-  //               );
+  void buildSCoP(SCoP &SCoP, const Region &CurRegion,
+                 // TODO: How to handle union of Domains?
+                 SmallVectorImpl<Loop*> &NestLoops,
+                 // TODO: use vector?
+                 SmallVectorImpl<unsigned> &Scatter);
+
+  SCoPStmt *buildStmt(SCoP &SCoP, BasicBlock &BB,
+                      SmallVectorImpl<Loop*> &NestLoops,
+                      // TODO: use vector?
+                      SmallVectorImpl<unsigned> &Scatter);
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
@@ -176,7 +285,7 @@ class SCoPInfo : public FunctionPass {
   bool checkCFG(BasicBlock *BB, Region *R);
 
   // Merge the SCoP information of sub regions into MergeTo.
-  void mergeSubSCoPs(LLVMSCoP *MergeTo, SCoPSetType &SubSCoPs) {
+  void mergeSubSCoPs(LLVMSCoP *MergeTo, TempSCoPSetType &SubSCoPs) {
     while (!SubSCoPs.empty()) {
       LLVMSCoP *SubSCoP = SubSCoPs.back();
       // merge the parameters.
@@ -187,10 +296,19 @@ class SCoPInfo : public FunctionPass {
       delete SubSCoP;
     }
     // The induction variable is not parameter at this scope.
-    if (Loop *L = castToLoop(MergeTo->R))
+    if (Loop *L = castToLoop(&MergeTo->R))
       MergeTo->Params.erase(
         SE->getSCEV(L->getCanonicalInductionVariable()));
   }
+
+  //typedef SCoPSetType::iterator iterator;
+  //typedef SCoPSetType::const_iterator const_iterator;
+
+  //iterator begin() { return SCoPs.begin(); }
+  //const_iterator begin() { return SCoPs.begin(); }
+
+  //iterator end() { return SCoPs.end(); }
+  //iterator end() { return SCoPs.end(); }
 
   //
   void printBounds(raw_ostream &OS) const;
@@ -199,6 +317,11 @@ public:
   static char ID;
   explicit SCoPInfo() : FunctionPass(&ID) {}
   ~SCoPInfo();
+
+  SCoP *getSCoPFor(const Region* R) const {
+    SCoPMapType::const_iterator at = RegionToSCoPs.find(R);
+    return at == RegionToSCoPs.end()?0:at->second;
+  }
 
   /// Pass interface
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
@@ -223,6 +346,10 @@ public:
 
 /// Function for force linking.
 FunctionPass *createSCoPInfoPass();
+
+
+Pass* createScopPrinterPass();
+Pass* createScopCodeGenPass();
 
 } //end namespace polly
 

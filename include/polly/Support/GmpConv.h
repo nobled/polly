@@ -26,11 +26,18 @@ namespace polly {
 /// @param v      The mpz_t object your want to hold the result.
 /// @param apint  The APInt you want to convert.
 static inline void MPZ_from_APInt (mpz_t v, const APInt apint) {
-  const uint64_t *rawdata = apint.getRawData();
-  unsigned numWords = apint.getNumWords();
+  // There is no sign taken from the data, rop will simply be a positive
+  // integer. An application can handle any sign itself, and apply it for
+  // instance with mpz_neg.
+  APInt abs = apint.abs();
+
+  const uint64_t *rawdata = abs.getRawData();
+  unsigned numWords = abs.getNumWords();
 
   // TODO: Check if this is true for all platforms.
   mpz_import(v, numWords, 1, sizeof (uint64_t), 0, 0, rawdata);
+
+  if (apint.isNegative()) mpz_neg(v, v);
 }
 
 } //end namespace polly

@@ -13,6 +13,8 @@
 
 #include "polly/SCoPInfo.h"
 
+#include "polly/Support/GmpConv.h"
+
 #include "llvm/Analysis/AffineSCEVIterator.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
@@ -22,6 +24,8 @@
 
 #define DEBUG_TYPE "polly-scop-info"
 #include "llvm/Support/Debug.h"
+
+#include "isl_constraint.h"
 
 using namespace llvm;
 using namespace polly;
@@ -35,11 +39,66 @@ static cl::opt<bool>
 PrintLoopBound("print-loop-bounds", cl::Hidden,
             cl::desc("Print the bounds of loops."));
 
+//===----------------------------------------------------------------------===//
+SCoPStmt::SCoPStmt(SCoP &parent, BasicBlock &bb,
+                   polly_set *domain, polly_map *scat)
+  : Parent(parent), BB(bb), Domain(domain), Scattering(scat) {
+    assert(Domain && Scattering && "Domain and Scattering can not be null!");
+}
+
+SCoPStmt::~SCoPStmt() {
+  isl_set_free(Domain);
+  isl_map_free(Scattering);
+}
+
+//===----------------------------------------------------------------------===//
+/// SCoP class implement
+template<class It>
+SCoP::SCoP(Region &r, unsigned maxLoopDepth, It ParamBegin, It ParamEnd)
+           : R(r), MaxLoopDepth(maxLoopDepth) {
+   // Create the context
+   ctx = isl_ctx_alloc();
+
+   // Initialize parameters
+   for (It I = ParamBegin, E = ParamEnd; I != E ; ++I)
+     Parameters.push_back(*I);
+
+   // Create the dim with 0 parameters
+   polly_dim *dim = isl_dim_set_alloc(ctx, 0, getNumParams());
+   // TODO: Handle the constrain of parameters.
+   // Take the dim.
+   Context = isl_set_universe (dim);
+}
+
+SCoP::~SCoP() {
+  // Free the context
+  isl_set_free(Context);
+  // Free the statements;
+  for (StmtSet::iterator I = Stmts.begin(), E = Stmts.end(); I != E; ++I)
+    delete *I;
+  // We need a singleton to manage this?
+  //isl_ctx_free(ctx);
+}
+
+void SCoP::print(raw_ostream &OS) const {
+  OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
+  // Print Parameters.
+  for (const_param_iterator PI = param_begin(), PE = param_end();
+      PI != PE; ++PI)
+    OS << **PI << ", ";
+
+  OS << "), Max Loop Depth: "<< MaxLoopDepth <<"\n";
+
+
+}
+
+//===----------------------------------------------------------------------===//
+
 bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
                             SCEVAffFunc &FuncToBuild) {
   assert(SCoP && "Scope can not be null!");
 
-  Region *R = SCoP->R;
+  Region *R = &SCoP->R;
 
   if (isa<SCEVCouldNotCompute>(S))
     return false;
@@ -56,7 +115,7 @@ bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
 
     const SCEV *Var = I->first;
 
-    // Ignore the constant offest.
+    // Ignore the constant offset.
     if(isa<SCEVConstant>(Var)) {
       // Add the translation component
       FuncToBuild.TransComp = I->second;
@@ -65,7 +124,7 @@ bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
 
     // Ignore the pointer.
     if (Var->getType()->isPointerTy()) {
-      assert(I->second->isOne() && "The coeffient of pointer expect is one!");
+      assert(I->second->isOne() && "The coefficient of pointer expect is one!");
       // Setup the base address
       FuncToBuild.BaseAddr = cast<SCEVUnknown>(Var)->getValue();
       continue;
@@ -90,11 +149,19 @@ bool SCoPInfo::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
 
     if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var))
       assert(AddRec->getLoop()->contains(Scope) && "Where comes the indvar?");
-    else
-    // TODO: handle the paramer0 * parameter1 case.
-    // A dirty hack
-      assert(isa<SCEVUnknown>(Var) && "Can only process unknow right now.");
-
+    else if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var)) {
+      DEBUG(dbgs() << "Warning: Ignore cast expression: " << *Cast << "\n");
+      // Dirty hack. replace the cast expression by its operand.
+      FuncToBuild.LnrTrans.erase(FuncToBuild.LnrTrans.find(Var));
+      Var = Cast->getOperand();
+      FuncToBuild.LnrTrans.insert(std::make_pair(Var, I->first));
+    }
+    else {
+      // TODO: handle the paramer0 * parameter1 case.
+      // A dirty hack
+      DEBUG(dbgs() << *Var << "\n");
+      assert(isa<SCEVUnknown>(Var) && "Can only process unknown right now.");
+    }
     // Add the loop invariants to parameter lists.
     SCoP->Params.insert(Var);
   }
@@ -211,11 +278,11 @@ bool SCoPInfo::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
   return true;
 }
 
-SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, SCoPSetType &SCoPs) {
+SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, TempSCoPSetType &SCoPs) {
   bool isValidRegion = true;
-  SCoPSetType SubSCoPs;
+  TempSCoPSetType SubSCoPs;
 
-  LLVMSCoP *SCoP = new LLVMSCoP(R);
+  LLVMSCoP *SCoP = new LLVMSCoP(*R);
 
   // Visit all sub region node.
   for (Region::element_iterator I = R->element_begin(), E = R->element_end();
@@ -297,6 +364,220 @@ SCoPInfo::LLVMSCoP *SCoPInfo::findSCoPs(Region* R, SCoPSetType &SCoPs) {
   return SCoP;
 }
 
+//===----------------------------------------------------------------------===//
+/// Help function to build isl objects
+
+
+static void setCoefficient(const SCEV *Coeff, mpz_t v, bool isLower) {
+  if (Coeff) { // If the coefficient exist
+    const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
+    const APInt &CI = C->getValue()->getValue();
+    DEBUG(errs() << "Setting Coeff: " << CI);
+    DEBUG(errs() << " neg: " << -CI <<"\n" );
+    // Convert i >= expr to i - expr >= 0
+    MPZ_from_APInt(v, isLower?(-CI):CI);
+  }
+  else
+    isl_int_set_si(v, 0);
+}
+
+static __isl_give
+polly_constraint *toLoopBoundConstrain(__isl_keep polly_ctx *ctx,
+                                       __isl_keep polly_dim *dim, SCEVAffFunc &func,
+                                       const SmallVectorImpl<const SCEV*> &IndVars,
+                                       const SmallVectorImpl<const SCEV*> &Params,
+                                       bool isLower) {
+  unsigned num_in = IndVars.size(),
+           num_param = Params.size();
+
+  polly_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
+  isl_int v;
+  isl_int_init(v);
+
+  // Dont touch the current iterator.
+  for (unsigned i = 0, e = num_in - 1; i != e; ++i) {
+    setCoefficient(func.getCoeff(IndVars[i]), v, isLower);
+    isl_constraint_set_coefficient(c, isl_dim_set, i, v);
+  }
+
+  assert(!func.getCoeff(IndVars[num_in - 1]) &&
+          "Current iterator should not have any coff.");
+  // Set the coefficient of current iterator, convert i <= expr to expr - i >= 0
+  isl_int_set_si(v, isLower?1:(-1));
+  isl_constraint_set_coefficient(c, isl_dim_set, num_in - 1, v);
+
+  // Set the value of indvar of inner loops?
+
+  // Setup the coefficient of parameters
+  for (unsigned i = 0, e = num_param; i != e; ++i) {
+    setCoefficient(func.getCoeff(Params[i]), v, isLower);
+    isl_constraint_set_coefficient(c, isl_dim_param, i, v);
+  }
+
+  // Set the const.
+  setCoefficient(func.TransComp, v, isLower);
+  isl_constraint_set_constant(c, v);
+  // Free v
+  isl_int_clear(v);
+  return c;
+}
+
+static __isl_give
+polly_map *buildScattering(__isl_keep polly_ctx *ctx, unsigned ParamDim,
+                           SmallVectorImpl<unsigned> &Scatter,
+                           unsigned ScatDim, unsigned CurLoopDepth) {
+  // FIXME: No parameter need?
+  polly_dim *dim = isl_dim_alloc(ctx, 0/*ParamDim*/, CurLoopDepth, ScatDim);
+  polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+  isl_int v;
+  isl_int_init(v);
+
+  // Loop dimensions.
+  for (unsigned i = 0; i < CurLoopDepth; ++i) {
+    polly_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+    isl_int_set_si(v, 1);
+    isl_constraint_set_coefficient(c, isl_dim_out, 2 * i + 1, v);
+    isl_int_set_si(v, -1);
+    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
+
+    bmap = isl_basic_map_add_constraint(bmap, c);
+  }
+
+  // Constant dimensions
+  for (unsigned i = 0; i < CurLoopDepth + 1; ++i) {
+    polly_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+    isl_int_set_si(v, -1);
+    isl_constraint_set_coefficient(c, isl_dim_out, 2 * i, v);
+    isl_int_set_si(v, Scatter[i]);
+    isl_constraint_set_constant(c, v);
+
+    bmap = isl_basic_map_add_constraint(bmap, c);
+  }
+
+  // Fill scattering dimensions.
+  for (unsigned i = 2 * CurLoopDepth + 1; i < ScatDim ; ++i) {
+
+    polly_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+    isl_int_set_si(v, 1);
+    isl_constraint_set_coefficient(c, isl_dim_out, i, v);
+    isl_int_set_si(v, 0);
+    isl_constraint_set_constant(c, v);
+
+    bmap = isl_basic_map_add_constraint(bmap, c);
+  }
+
+  isl_int_clear(v);
+  isl_dim_free(dim);
+  return isl_map_from_basic_map(bmap);
+}
+
+__isl_give
+polly_basic_set *SCoPInfo::buildIterateDomain(SCoP &SCoP,
+                                    SmallVectorImpl<Loop*> &NestLoops){
+  // Create the basic set;
+  polly_dim *dim = isl_dim_set_alloc(SCoP.ctx, SCoP.getNumParams(),
+    NestLoops.size());
+  polly_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
+
+
+  SmallVector<const SCEV*, 8> IndVars;
+
+  for (int i = 0, e = NestLoops.size(); i != e; ++i) {
+    Loop *L = NestLoops[i];
+    Value *IndVar = L->getCanonicalInductionVariable();
+    IndVars.push_back(SE->getSCEV(IndVar));
+
+    BoundMapType::iterator at = LoopBounds.find(L);
+    assert(at != LoopBounds.end() &&
+      "Can not get loop bound when building statement!");
+
+    // Build the constrain of lower bound
+    polly_constraint *lb = toLoopBoundConstrain(SCoP.ctx, dim,
+      at->second.first, IndVars, SCoP.getParams(), true);
+
+    bset = isl_basic_set_add_constraint(bset, lb);
+
+    polly_constraint *ub = toLoopBoundConstrain(SCoP.ctx, dim,
+      at->second.second, IndVars, SCoP.getParams(), false);
+
+    bset = isl_basic_set_add_constraint(bset, ub);
+  }
+
+  isl_dim_free(dim);
+  return bset;
+}
+
+SCoPStmt *SCoPInfo::buildStmt(SCoP &SCoP, BasicBlock &BB,
+                              SmallVectorImpl<Loop*> &NestLoops,
+                              SmallVectorImpl<unsigned> &Scatter) {
+
+  polly_basic_set *bset = buildIterateDomain(SCoP, NestLoops);
+
+  polly_set *Domain = isl_set_from_basic_set(bset);
+
+  DEBUG(std::cerr << "\n\nIterate domain of BB: " << BB.getNameStr() << " is:\n");
+  DEBUG(isl_set_print(Domain, stderr, 20, ISL_FORMAT_ISL));
+  DEBUG(std::cerr << std::endl);
+
+  // Scattering function
+  DEBUG(dbgs() << "For BB: " << BB.getName() << " ScatDim: " << Scatter.size()
+               << " LoopDepth: " << NestLoops.size() << " { ");
+  DEBUG(
+    for (unsigned i = 0, e = Scatter.size(); i != e; ++i)
+      dbgs() << Scatter[i] << ", ";
+    dbgs() << "}\n";
+    );
+  polly_map *Scattering = buildScattering(SCoP.ctx, SCoP.getNumParams(),
+                                          Scatter,
+                                          SCoP.getScatterDim(),
+                                          NestLoops.size());
+  DEBUG(std::cerr << "\nScattering:\n");
+  DEBUG(isl_map_print(Scattering, stderr, 20, ISL_FORMAT_ISL));
+  DEBUG(std::cerr << std::endl);
+  // Access function
+
+  return new SCoPStmt(SCoP, BB, Domain, Scattering);
+}
+
+void SCoPInfo::buildSCoP(SCoP &SCoP, const Region &CurRegion,
+                         SmallVectorImpl<Loop*> &NestLoops,
+                         SmallVectorImpl<unsigned> &Scatter) {
+  Loop *L = castToLoop(&CurRegion);
+
+  if (L)
+    NestLoops.push_back(L);
+
+  // TODO: scattering function
+  unsigned loopDepth = NestLoops.size();
+  assert(Scatter.size() > loopDepth && "Scatter not big enough!");
+
+  for (Region::const_element_iterator I = CurRegion.element_begin(),
+      E = CurRegion.element_end(); I != E; ++I) {
+    if (I->isSubRegion())
+      buildSCoP(SCoP, *(I->getNodeAs<Region>()), NestLoops, Scatter);
+    else {
+      // Build the statement
+      SCoP.Stmts.insert(buildStmt(SCoP, *(I->getNodeAs<BasicBlock>()),
+                                  NestLoops, Scatter));
+      // Increasing the Scattering function is ok for at the moment, because
+      // we are using a depth iterator and the program is linear
+      ++Scatter[loopDepth];
+    }
+
+  }
+
+
+  if (L) {
+    // Clear the scatter function when leaving the loop.
+    Scatter[loopDepth] = 0;
+    NestLoops.pop_back();
+    // To next loop
+    ++Scatter[loopDepth-1];
+    // TODO: scattering function
+  }
+
+}
+
 bool SCoPInfo::runOnFunction(llvm::Function &F) {
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
@@ -305,16 +586,69 @@ bool SCoPInfo::runOnFunction(llvm::Function &F) {
 
   Region *TopRegion = RI->getTopLevelRegion();
 
-  if(LLVMSCoP *SCoP = findSCoPs(TopRegion, SCoPs))
-    SCoPs.push_back(SCoP);
+  // found SCoPs.
+  TempSCoPSetType TempSCoPs;
 
+  if(LLVMSCoP *SCoP = findSCoPs(TopRegion, TempSCoPs))
+    TempSCoPs.push_back(SCoP);
+
+  // dump temp scops
+  DEBUG(
+    if (TempSCoPs.empty())
+      dbgs() << "No SCoP found!\n";
+    else
+      // Print all SCoPs.
+      for (TempSCoPSetType::const_iterator I = TempSCoPs.begin(), E = TempSCoPs.end();
+          I != E; ++I)
+        (*I)->print(dbgs());
+  );
+
+  SmallVector<Loop*, 8> NestLoops;
+  SmallVector<unsigned, 8> Scatter;
+
+  unsigned numSCoPFound = TempSCoPs.size();
+  DEBUG(dbgs() << numSCoPFound << " SCoP found!\n");
+
+  while (!TempSCoPs.empty()) {
+    LLVMSCoP *TempSCoP = TempSCoPs.back();
+    SCoP *scop = new SCoP(TempSCoP->R, TempSCoP->MaxLoopDepth,
+                          TempSCoP->Params.begin(), TempSCoP->Params.end());
+    // Add the scop to the map.
+    RegionToSCoPs.insert(std::make_pair(&(scop->getRegion()), scop));
+
+    unsigned numScatter = TempSCoP->MaxLoopDepth + 1;
+    // Initialize the scattering function
+    Scatter.assign(numScatter, 0);
+
+    buildSCoP(*scop, scop->getRegion(), NestLoops, Scatter);
+
+    assert(NestLoops.empty() && "NestLoops not empty at top level!");
+
+    // Discard the temp scop.
+    delete TempSCoP;
+    TempSCoPs.pop_back();
+  }
+
+  assert(numSCoPFound == RegionToSCoPs.size() && "Where comes the scop?");
 
   return false;
 }
 
+void SCoPInfo::clear() {
+  AccFuncMap.clear();
+  LoopBounds.clear();
+
+  for (SCoPMapType::iterator I = RegionToSCoPs.begin(),
+    E = RegionToSCoPs.end(); I != E; ++I)
+    delete I->second;
+
+  RegionToSCoPs.clear();
+
+}
+
 /// Debug/Testing function
 
-void SCoPInfo::SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
+void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
   // Print BaseAddr
   if (BaseAddr) {
     WriteAsOperand(OS, BaseAddr, false);
@@ -389,7 +723,7 @@ void SCoPInfo::printBounds(raw_ostream &OS) const {
 }
 
 void SCoPInfo::LLVMSCoP::print(raw_ostream &OS) const {
-  OS << "SCoP: " << R->getNameStr() << "\tParameters: (";
+  OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
   // Print Parameters.
   for (ParamSetType::const_iterator PI = Params.begin(), PE = Params.end();
       PI != PE; ++PI)
@@ -399,14 +733,14 @@ void SCoPInfo::LLVMSCoP::print(raw_ostream &OS) const {
 }
 
 void SCoPInfo::print(raw_ostream &OS, const Module *) const {
-  if (SCoPs.empty())
-    OS << "No SCoP found!\n";
-  else
-    // Print all SCoPs.
-    for (SCoPSetType::const_iterator I = SCoPs.begin(), E = SCoPs.end();
-        I != E; ++I){
-      (*I)->print(OS);
-    }
+   if (RegionToSCoPs.empty())
+     OS << "No SCoP found!\n";
+   else
+     // Print all SCoPs.
+     for (SCoPMapType::const_iterator I = RegionToSCoPs.begin(),
+        E = RegionToSCoPs.end(); I != E; ++I){
+       I->second->print(OS);
+     }
 
   if (PrintLoopBound)
     printBounds(OS);

@@ -55,13 +55,13 @@ declare void @init_array(...)
 
 declare void @print_array(...)
 ; CHECK:  for (s1=0;s1<=2047;s1++) {
-; CHECK:    S1(s1);
+; CHECK:    S{{[0-4]}}(s1);
 ; CHECK:    for (s3=0;s3<=2047;s3++) {
-; CHECK:      S0(s1,s3);
+; CHECK:      S{{[0-4]}}(s1,s3);
 ; CHECK:      for (s5=0;s5<=2047;s5++) {
-; CHECK:        S2(s1,s3,s5);
+; CHECK:        S{{[0-4]}}(s1,s3,s5);
 ; CHECK:      }
-; CHECK:      S3(s1,s3);
+; CHECK:      S{{[0-4]}}(s1,s3);
 ; CHECK:    }
-; CHECK:    S4(s1);
+; CHECK:    S{{[0-4]}}(s1);
 ; CHECK:  }

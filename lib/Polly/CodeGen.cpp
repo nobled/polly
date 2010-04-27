@@ -11,7 +11,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/SCoPPass.h"
+#include "polly/SCoPInfo.h"
+
+#include "llvm/Analysis/RegionPass.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -97,7 +99,7 @@ static void createSingleExitEdge(Region *R, Pass *P) {
 
 /// CLooG interface to convert from a SCoP back to LLVM-IR.
 class CLooG {
-  SCoPPass *S;
+  SCoP *S;
   CloogProgram *Program;
   CloogOptions *Options;
   CloogState *State;
@@ -105,7 +107,7 @@ class CLooG {
   unsigned StatementNumber;
 
 public:
-  CLooG(SCoPPass *Scop) : S(Scop) {
+  CLooG(SCoP *Scop) : S(Scop) {
     StatementNumber = 0;
     State = cloog_state_malloc();
     buildCloogOptions();
@@ -171,7 +173,7 @@ public:
   }
 
   /// Allocate a CloogLoop data structure containing information about stmt.
-  CloogLoop *buildCloogLoop(Statement* stmt) {
+  CloogLoop *buildCloogLoop(SCoPStmt* stmt) {
     CloogStatement *Statement = cloog_statement_malloc(State);
     Statement->number = StatementNumber++;
 
@@ -190,7 +192,7 @@ public:
   CloogLoop *buildCloogLoopList() {
     CloogLoop *Loop = 0;
 
-    for (SCoPPass::iterator SI = S->begin(), SE =
+    for (SCoP::iterator SI = S->begin(), SE =
          S->end(); SI != SE; ++SI) {
       CloogLoop *NextLoop = buildCloogLoop(*SI);
       NextLoop->next = Loop;
@@ -206,7 +208,7 @@ public:
   CloogScatteringList *buildScatteringList() {
     CloogScatteringList *ScatteringList = 0;
 
-    for (SCoPPass::iterator SI = S->begin(), SE =
+    for (SCoP::iterator SI = S->begin(), SE =
          S->end(); SI != SE; ++SI) {
       // XXX: cloog_domain_list_alloc() not implemented in CLooG.
       CloogScatteringList *NewScatteringList
@@ -304,7 +306,7 @@ public:
 
   void buildCloogProgram() {
     Program = cloog_program_malloc();
-    Program->context = cloog_domain_from_isl_set(isl_set_copy(S->Context));
+    Program->context = cloog_domain_from_isl_set(isl_set_copy(S->getContext()));
     Program->loop = buildCloogLoopList();
 
     // XXX: Not necessary? Check with the CLooG guys.
@@ -312,12 +314,12 @@ public:
 
     // TODO: * Replace constants.
     //       * Support parameters.
-    Program->names = buildCloogNames(0, S->NumScatterDim, S->getMaxLoopDepth(),
+    Program->names = buildCloogNames(0, S->getScatterDim(), S->getMaxLoopDepth(),
                                      0);
 
     // XXX: Not sure if the next two stmts are necessary.  Check with CLooG
     // guys.
-    Program->nb_scattdims = S->NumScatterDim;
+    Program->nb_scattdims = S->getScatterDim();
     Program->scaldims = buildScaldims(Program);
   }
 };
@@ -326,7 +328,7 @@ public:
 class ScopPrinter : public RegionPass {
 
   Region *region;
-  SCoPPass *S;
+  SCoP *S;
 
 public:
   static char ID;
@@ -335,13 +337,14 @@ public:
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
-    S = &getAnalysis<SCoPPass>();
+    S = getAnalysis<SCoPInfo>().getSCoPFor(R);
+
     return false;
   }
 
   void print(raw_ostream &OS, const Module *) const {
 
-    if (!S->isValid()) {
+    if (!S) {
       OS << "Invalid SCoP\n";
       return;
     }
@@ -355,7 +358,7 @@ public:
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     // XXX: Cannot be removed, as otherwise LLVM crashes.
     AU.setPreservesAll();
-    AU.addRequired<SCoPPass>();
+    AU.addRequired<SCoPInfo>();
   }
 };
 } //end anonymous namespace
@@ -365,7 +368,7 @@ char ScopPrinter::ID = 0;
 static RegisterPass<ScopPrinter>
 X("polly-print-scop", "Polly - Print SCoP as C code");
 
-RegionPass* polly::createScopPrinterPass() {
+Pass* polly::createScopPrinterPass() {
   return new ScopPrinter();
 }
 
@@ -373,7 +376,7 @@ namespace {
 class ScopCodeGen : public RegionPass {
 
   Region *region;
-  SCoPPass *S;
+  SCoP *S;
 
 public:
   static char ID;
@@ -385,9 +388,9 @@ public:
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
-    S = &getAnalysis<SCoPPass>();
+    S = getAnalysis<SCoPInfo>().getSCoPFor(R);
 
-    if (!S->isValid())
+    if (!S)
       return false;
 
     createSingleEntryEdge(R);
@@ -402,7 +405,7 @@ public:
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     // XXX: Cannot be removed, as otherwise LLVM crashes.
-    AU.addRequired<SCoPPass>();
+    AU.addRequired<SCoPInfo>();
   }
 };
 } //end anonymous namespace
@@ -412,6 +415,6 @@ char ScopCodeGen::ID = 0;
 static RegisterPass<ScopCodeGen>
 Y("polly-codegen-scop", "Polly - Code generation");
 
-RegionPass* polly::createScopCodeGenPass() {
+Pass* polly::createScopCodeGenPass() {
   return new ScopCodeGen();
 }
