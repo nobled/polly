@@ -427,7 +427,7 @@ polly_map *buildScattering(__isl_keep polly_ctx *ctx, unsigned ParamDim,
                            SmallVectorImpl<unsigned> &Scatter,
                            unsigned ScatDim, unsigned CurLoopDepth) {
   // FIXME: No parameter need?
-  polly_dim *dim = isl_dim_alloc(ctx, 0/*ParamDim*/, CurLoopDepth, ScatDim);
+  polly_dim *dim = isl_dim_alloc(ctx, ParamDim, CurLoopDepth, ScatDim);
   polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
   isl_int v;
   isl_int_init(v);
@@ -627,6 +627,16 @@ bool SCoPInfo::runOnFunction(llvm::Function &F) {
     // Discard the temp scop.
     delete TempSCoP;
     TempSCoPs.pop_back();
+
+    // Verify
+    DEBUG(
+      for (SCoP::iterator I = scop->begin(), E = scop->end(); I != E; ++I) {
+        unsigned dim = isl_dim_size((*I)->getScattering()->dim, isl_dim_param);
+        dbgs() << "param dim of " << (*I)->BB.getName() << " is "
+               << dim << "\n";
+      }
+    );
+
   }
 
   assert(numSCoPFound == RegionToSCoPs.size() && "Where comes the scop?");
