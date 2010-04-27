@@ -315,7 +315,7 @@ public:
     // TODO: * Replace constants.
     //       * Support parameters.
     Program->names = buildCloogNames(0, S->getScatterDim(), S->getMaxLoopDepth(),
-                                     0);
+                                     S->getNumParams());
 
     // XXX: Not sure if the next two stmts are necessary.  Check with CLooG
     // guys.
