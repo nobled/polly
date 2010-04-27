@@ -28,3 +28,17 @@ void polly::MPZ_from_APInt (mpz_t v, const APInt apint) {
 
   if (apint.isNegative()) mpz_neg(v, v);
 }
+
+APInt polly::APInt_from_MPZ (const mpz_t mpz) {
+  uint64_t *p = NULL;
+  size_t sz;
+
+  p = (uint64_t*) mpz_export(p, &sz, 1, sizeof(uint64_t), 0, 0, mpz);
+
+  if (p)
+    return APInt((unsigned)mpz_sizeinbase(mpz, 2), (unsigned)sz , p);
+  else {
+    uint64_t val = 0;
+    return APInt(1, 1, &val);
+  }
+}

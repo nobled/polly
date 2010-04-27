@@ -27,6 +27,10 @@ namespace polly {
 /// @param apint  The APInt you want to convert.
 void MPZ_from_APInt (mpz_t v, const llvm::APInt apint);
 
+/// @brief Convert mpz to APInt.
+///
+/// @param mpz    The mpz_t you want to convert.
+llvm::APInt APInt_from_MPZ (const mpz_t mpz);
 } //end namespace polly
 
 #endif
