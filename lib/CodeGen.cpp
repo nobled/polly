@@ -33,19 +33,6 @@ using namespace llvm;
 
 namespace {
 
-/// SplitBlockPredecessors - This method transforms BB by introducing a new
-/// basic block into the function, and moving some of the predecessors of BB to
-/// be predecessors of the new block.  The new predecessors are indicated by the
-/// Preds array, which has NumPreds elements in it.  The new block is given a
-/// suffix of 'Suffix'.
-///
-/// This currently updates the LLVM IR, AliasAnalysis, DominatorTree,
-/// DominanceFrontier, LoopInfo, and LCCSA but no other analyses.
-/// In particular, it does not preserve LoopSimplify (because it's
-/// complicated to handle the case where one of the edges being split
-/// is an exit of a loop with other exits).
-///
-
 /// CLooG interface to convert from a SCoP back to LLVM-IR.
 class CLooG {
   SCoP *S;
