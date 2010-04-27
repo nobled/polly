@@ -162,7 +162,7 @@ bool SCoPDetection::isMaxValid(Region *R) {
 }
 
 bool SCoPDetection::runOnFunction(Function &F) {
-  releaseMemory();
+  SCoPRegions.clear();
 
   RI = &getAnalysis<RegionInfo>();
   LI = &getAnalysis<LoopInfo>();
