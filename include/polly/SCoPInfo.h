@@ -62,6 +62,10 @@ public:
   polly_set *getDomain() const { return Domain; }
   polly_map *getScattering() const { return Scattering; }
 
+  BasicBlock *getBasicBlock() {
+    return &BB;
+  }
+
 	~SCoPStmt();
 };
 
