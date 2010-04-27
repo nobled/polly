@@ -1,13 +1,16 @@
-##===- projects/sample/lib/Makefile ------------------------*- Makefile -*-===##
+##===- projects/sample/lib/sample/Makefile -----------------*- Makefile -*-===##
 
 #
-# Relative path to the top of the source tree.
+# Indicate where we are relative to the top of the source tree.
 #
 LEVEL=..
 
 #
-# List all of the subdirectories that we will compile.
+# Give the name of a library.  This will build a dynamic version.
 #
-DIRS=sample
+LIBRARYNAME=sample
 
+#
+# Include Makefile.common so we know what to do.
+#
 include $(LEVEL)/Makefile.common
