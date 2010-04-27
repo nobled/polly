@@ -25,7 +25,14 @@ using namespace llvm;
 namespace polly {
 SCoPDetection::SCoPDetection() : FunctionPass(&ID) {}
 
-bool SCoPDetection::isValid(Instruction *I) {
+bool SCoPDetection::isValid(Region *R, Instruction *I) {
+
+  // Not yet handled in Code generation.
+  for (Value::use_iterator UI = I->use_begin(), UE = I->use_end(); UI != UE;
+       ++UI)
+    if (!R->contains(((Instruction*) *UI)->getParent()))
+      return false;
+
   if (I->isBinaryOp())
     return true;
 
@@ -42,7 +49,7 @@ bool SCoPDetection::isValid(Instruction *I) {
     // Only allow branches that are loop exits. This stops anything
     // except loops that have just one exit and are detected by our LoopInfo
     // analysis
-    if (!loop || loop->getExitingBlock() == I->getParent())
+    if (loop && loop->getExitingBlock() == I->getParent())
       return true;
 
     DEBUG(dbgs() << "\tInvalid Instruction in BB: "
@@ -71,10 +78,10 @@ bool SCoPDetection::isValid(Instruction *I) {
   return false;
 }
 
-bool SCoPDetection::isValid(BasicBlock *BB) {
+bool SCoPDetection::isValid(Region *R, BasicBlock *BB) {
   for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
        II != IE; ++II)
-    if(!isValid(&(*II)))
+    if(!isValid(R, &(*II)))
       return false;
 
   return true;
@@ -128,11 +135,13 @@ bool SCoPDetection::isValid(Region *R) {
 
   DEBUG(dbgs() << "Checking Region: " << R->getNameStr() << "\n");
 
+  if (R->getExit() == 0)
+    return false;
+
   for (Region::block_iterator BI = R->block_begin(), BE = R->block_end();
        BI != BE; ++BI)
-    if (!isValid((*BI)->getNodeAs<BasicBlock>()))
+    if (!isValid(R, (*BI)->getNodeAs<BasicBlock>()))
       return false;
-
 
   if (!hasValidLoops(R))
     return false;
@@ -174,7 +183,7 @@ bool SCoPDetection::runOnFunction(Function &F) {
 
 void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
-  AU.addRequired<RegionInfo>();
+  AU.addRequiredTransitive<RegionInfo>();
   AU.addRequired<LoopInfo>();
   AU.addRequired<ScalarEvolution>();
 }

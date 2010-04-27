@@ -42,8 +42,8 @@ class SCoPDetection : public FunctionPass {
   typedef std::set<Region*> RegionSet;
   RegionSet SCoPRegions;
 
-  bool isValid(Instruction *I);
-  bool isValid(BasicBlock *BB);
+  bool isValid(Region *R, Instruction *I);
+  bool isValid(Region *R, BasicBlock *BB);
   bool isValid(Region *R);
   bool isValidLoop(Loop *L);
   bool hasValidLoops(Region *R);
