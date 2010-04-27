@@ -13,6 +13,8 @@
 
 #include "polly/SCoPInfo.h"
 
+#include "polly/Support/IRHelper.h"
+
 #include "llvm/Analysis/RegionPass.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/Debug.h"
@@ -30,59 +32,6 @@ using namespace polly;
 using namespace llvm;
 
 namespace {
-
-static void createSingleEntryEdge(Region *R) {
-  BasicBlock *BB = R->getEntry();
-
-  if (BB->getSinglePredecessor())
-    return;
-
-  BasicBlock::iterator SplitIt = BB->begin();
-
-  while (isa<PHINode>(SplitIt))
-    ++SplitIt;
-
-  BasicBlock *newBB = BB->splitBasicBlock(SplitIt, BB->getName()+".region");
-
-  for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI)
-    (*PI)->getTerminator()->replaceUsesOfWith(BB, newBB);
-
-  for (BasicBlock::iterator PI = BB->begin(); isa<PHINode>(PI); ++PI) {
-    PHINode *PN = cast<PHINode>(PI);
-    PHINode *NPN =
-        PHINode::Create(PN->getType(), PN->getName()+".ph", newBB->begin());
-
-    for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI) {
-      if (R->contains(*PI)) {
-        Value *V = PN->removeIncomingValue(*PI, false);
-        NPN->addIncoming(V, *PI);
-      }
-    }
-    PN->replaceAllUsesWith(NPN);
-    NPN->addIncoming(PN,BB);
- }
-}
-
-static void createSingleExitEdge(Region *R, Pass *P) {
-  BasicBlock *BB = R->getExit();
-  int num = 0, i = 0;
-
-  for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI)
-    if (R->contains(*PI))
-      ++num;
-
-  BasicBlock **Preds = new BasicBlock *[num];
-
-  for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI) {
-    if (R->contains(*PI))
-      Preds[i] = *PI;
-    ++i;
-  }
-
-  SplitBlockPredecessors(BB, Preds, num, ".region", P);
-
-  delete Preds;
-}
 
 /// SplitBlockPredecessors - This method transforms BB by introducing a new
 /// basic block into the function, and moving some of the predecessors of BB to

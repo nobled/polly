@@ -5,4 +5,5 @@ add_polly_library(LLVMPolly
   SCoPDetection.cpp
   SCoPInfo.cpp
   Support/GmpConv.cpp
+  Support/IRHelper.cpp
   )
