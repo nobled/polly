@@ -184,11 +184,11 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, LLVMSCoP &SCoP,
         Var = Cast->getOperand();
         FuncToBuild.LnrTrans.insert(std::make_pair(Var, I->first));
       }
-      else {
-        // TODO: handle the paramer0 * parameter1 case.
-        // A dirty hack
-        DEBUG(dbgs() << *Var << "\n");
-        assert(isa<SCEVUnknown>(Var) && "Can only process unknown right now.");
+      // TODO: handle the paramer0 * parameter1 case.
+      // A dirty hack
+      else if (!isa<SCEVUnknown>(Var)){
+        DEBUG(dbgs() << "Bad SCEV: "<<*Var << " in " << *S <<"\n");
+        return false;
       }
       // Add the loop invariants to parameter lists.
       SCoP.Params.insert(Var);
