@@ -131,7 +131,6 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, LLVMSCoP &SCoP,
   // FIXME: Simplify these code.
   for (AffineSCEVIterator I = affine_begin(S, &SE), E = affine_end();
     I != E; ++I){
-
       const SCEV *Var = I->first;
 
       // Ignore the constant offset.
@@ -152,7 +151,6 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, LLVMSCoP &SCoP,
         FuncToBuild.BaseAddr = BaseAddr->getValue();
         continue;
       }
-
 
       // Build the affine function.
       FuncToBuild.LnrTrans.insert(*I);
@@ -175,8 +173,14 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, LLVMSCoP &SCoP,
         return false;
       }
 
-      if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var))
-        assert(AddRec->getLoop()->contains(Scope) && "Where comes the indvar?");
+      if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)) {
+        // The indvar only expect come from outer loop
+        // Or from a loop whose backend taken count could not compute.
+        assert((AddRec->getLoop()->contains(Scope) ||
+                isa<SCEVCouldNotCompute>(
+                  SE.getBackedgeTakenCount(AddRec->getLoop()))) &&
+                "Where comes the indvar?");
+      }
       else if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var)) {
         DEBUG(dbgs() << "Warning: Ignore cast expression: " << *Cast << "\n");
         // Dirty hack. replace the cast expression by its operand.
