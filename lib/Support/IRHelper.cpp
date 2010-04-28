@@ -19,21 +19,15 @@
 
 using namespace llvm;
 
-void polly::createSingleEntryEdge(Region *R) {
+void polly::createSingleEntryEdge(Region *R, Pass *P) {
   BasicBlock *BB = R->getEntry();
-
-  if (BB->getSinglePredecessor())
-    return;
 
   BasicBlock::iterator SplitIt = BB->begin();
 
   while (isa<PHINode>(SplitIt))
     ++SplitIt;
 
-  BasicBlock *newBB = BB->splitBasicBlock(SplitIt, BB->getName()+".region");
-
-  for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI)
-    (*PI)->getTerminator()->replaceUsesOfWith(BB, newBB);
+  BasicBlock *newBB = SplitBlock(BB, SplitIt, P);
 
   for (BasicBlock::iterator PI = BB->begin(); isa<PHINode>(PI); ++PI) {
     PHINode *PN = cast<PHINode>(PI);
@@ -49,6 +43,11 @@ void polly::createSingleEntryEdge(Region *R) {
     PN->replaceAllUsesWith(NPN);
     NPN->addIncoming(PN,BB);
  }
+
+ for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI)
+   if (R->contains(*PI))
+     (*PI)->getTerminator()->replaceUsesOfWith(BB, newBB);
+
 }
 
 void polly::createSingleExitEdge(Region *R, Pass *P) {
@@ -62,13 +61,13 @@ void polly::createSingleExitEdge(Region *R, Pass *P) {
   BasicBlock **Preds = new BasicBlock *[num];
 
   for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI) {
-    if (R->contains(*PI))
+    if (R->contains(*PI)) {
       Preds[i] = *PI;
-    ++i;
+      ++i;
+    }
   }
 
   SplitBlockPredecessors(BB, Preds, num, ".region", P);
 
-  delete Preds;
+  delete[] Preds;
 }
-

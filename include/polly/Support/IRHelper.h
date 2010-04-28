@@ -20,7 +20,7 @@ namespace llvm {
 }
 
 namespace polly {
-  void createSingleEntryEdge(llvm::Region *R);
+  void createSingleEntryEdge(llvm::Region *R, llvm::Pass *P);
   void createSingleExitEdge(llvm::Region *R, llvm::Pass *P);
 }
 #endif
