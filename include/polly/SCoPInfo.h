@@ -1,4 +1,4 @@
-//===- polly/SCoP/SCoPDetection.h - Create SCoPs from LLVM IR --------*- C++ -*-===//
+//===- polly/SCoP/SCoPInfo.h - Create SCoPs from LLVM IR --------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -63,11 +63,12 @@ class SCoPStmt {
 
   friend class SCoP;
 public:
+  ~SCoPStmt();
 
   polly_set *getDomain() const { return Domain; }
   polly_map *getScattering() const { return Scattering; }
 
-  ~SCoPStmt();
+  BasicBlock *getBasicBlock() const { return &BB; }
 };
 
 struct LLVMSCoP;
