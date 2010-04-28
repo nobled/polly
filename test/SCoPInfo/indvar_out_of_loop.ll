@@ -1,14 +1,10 @@
-; RUN: opt -indvars -polly-scop-info  -analyze %s | FileCheck %s
+; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s
 ; XFAIL: *
 
-;void f(long a[], long N, long M) {
+;void f(long a[], long N) {
 ;  long i;
-
-;  if (N > M)
-;    for (i = 0; i < N; ++i)
-;     a[i] = i;
-;  else
-;    i = M + 3;
+;  for (i = 0; i < N; ++i)
+;    a[i] = i;
 
 ;  a[2 *i + 5 ] = 0;
 ;}
@@ -41,4 +37,4 @@ bb2:                                              ; preds = %bb1.bb2_crit_edge, 
   ret void
 }
 
-; CHECK: SCoP: entry => <Function Return>        Parameters: (%N, %M )
+; CHECK: SCoP: entry => <Function Return>        Parameters: (%N, )

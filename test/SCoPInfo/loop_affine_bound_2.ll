@@ -1,9 +1,9 @@
-; RUN: opt -indvars -polly-scop-info  -analyze %s | FileCheck %s
+; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;
-;  for (j = 0; j < (4*N + 7*M +3); ++j) 
-;    for (i = (7*j + 6*M -9); i < (3*j + 5*N + 2) ; ++i) 
+;  for (j = 0; j < (4*N + 7*M +3); ++j)
+;    for (i = (7*j + 6*M -9); i < (3*j + 5*N + 2) ; ++i)
 ;        a[i][j] = 0;
 ;}
 
