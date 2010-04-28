@@ -273,7 +273,7 @@ void SCoP::buildSCoP(LLVMSCoP &TempSCoP,
                       SmallVectorImpl<Loop*> &NestLoops,
                       SmallVectorImpl<unsigned> &Scatter,
                       LoopInfo &LI, ScalarEvolution &SE) {
-  Loop *L = castToLoop(&CurRegion, &LI);
+  Loop *L = castToLoop(CurRegion, LI);
 
   if (L)
     NestLoops.push_back(L);

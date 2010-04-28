@@ -27,13 +27,15 @@ using namespace llvm;
 
 namespace polly {
 
+struct LLVMSCoP;
+
 //===----------------------------------------------------------------------===//
 // Temporary Hack for extended regiontree.
 // Cast the region to loop if there is a loop have the same header and exit.
-Loop *castToLoop(const Region *R, LoopInfo *LI);
+Loop *castToLoop(const Region &R, LoopInfo &LI);
 // Get the Loop containing all bbs of this region, for ScalarEvolution
 // "getSCEVAtScope"
-Loop *getScopeLoop(const Region *R, LoopInfo *LI);
+Loop *getScopeLoop(const Region &R, LoopInfo &LI);
 
 //===---------------------------------------------------------------------===//
 // Affine function represent with llvm objects.
@@ -54,6 +56,10 @@ struct SCEVAffFunc {
     LnrTransSet::iterator At = LnrTrans.find(Var);
     return At == LnrTrans.end() ? 0 : At->second;
   }
+
+  static bool buildAffineFunc(const SCEV *S, LLVMSCoP &SCoP,
+    SCEVAffFunc &FuncToBuild,
+    LoopInfo &LI, ScalarEvolution &SE);
 
   //
   void print(raw_ostream &OS, ScalarEvolution *SE) const;
@@ -81,7 +87,6 @@ typedef std::map<const BasicBlock*, AccFuncSetType> AccFuncMapType;
 // SCoP represent with llvm objects.
 // A helper class for finding SCoP,
 
-struct LLVMSCoP;
 typedef std::vector<LLVMSCoP*> TempSCoPSetType;
 typedef std::map<const Region*, LLVMSCoP*> TempSCoPMapType;
 
@@ -100,7 +105,7 @@ struct LLVMSCoP {
 
   // Merge the SCoP information of sub regions into MergeTo.
   void mergeSubSCoPs(TempSCoPSetType &SubSCoPs,
-                     LoopInfo *LI, ScalarEvolution *SE);
+                     LoopInfo &LI, ScalarEvolution &SE);
 
   AffBoundType *getLoopBound(const Loop *L) {
     BoundMapType::iterator at = LoopBounds.find(L);
@@ -134,21 +139,15 @@ class SCoPDetection : public FunctionPass {
 
   void clear();
 
-  //===-------------------------------------------------------------------===//
-  // Build affine function from SCEV expression.
-  // Return true is S is affine, false otherwise.
-  bool buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
-    SCEVAffFunc &FuncToBuild);
-
   // If the Region not a valid part of a SCoP,
   // return false, otherwise return true.
-  LLVMSCoP *findSCoPs(Region* R, TempSCoPSetType &SCoPs);
+  LLVMSCoP *findSCoPs(Region &R, TempSCoPSetType &SCoPs);
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
-  bool checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP);
+  bool checkBasicBlock(BasicBlock &BB, LLVMSCoP &SCoP);
 
-  bool checkCFG(BasicBlock *BB, Region *R);
+  bool checkCFG(BasicBlock &BB, Region &R);
 
 public:
   static char ID;

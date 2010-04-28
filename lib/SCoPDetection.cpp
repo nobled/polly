@@ -30,13 +30,13 @@ using namespace polly;
 //===----------------------------------------------------------------------===//
 // Temporary Hack for extended regiontree.
 // Cast the region to loop if there is a loop have the same header and exit.
-Loop *polly::castToLoop(const Region *R, LoopInfo *LI) {
-  BasicBlock *entry = R->getEntry();
+Loop *polly::castToLoop(const Region &R, LoopInfo &LI) {
+  BasicBlock *entry = R.getEntry();
 
-  if (!LI->isLoopHeader(entry))
+  if (!LI.isLoopHeader(entry))
     return 0;
 
-  Loop *L = LI->getLoopFor(entry);
+  Loop *L = LI.getLoopFor(entry);
 
   BasicBlock *exit = L->getExitBlock();
 
@@ -44,10 +44,10 @@ Loop *polly::castToLoop(const Region *R, LoopInfo *LI) {
   // assert(exit && "Oop! we need the extended region tree :P");
   if (!exit) return 0;
 
-  if (exit != R->getExit()) {
+  if (exit != R.getExit()) {
     // SubRegion/ParentRegion with the same entry.
-    assert((R->getNode(R->getEntry())->isSubRegion() ||
-      R->getParent()->getEntry() == entry) &&
+    assert((R.getNode(R.getEntry())->isSubRegion() ||
+      R.getParent()->getEntry() == entry) &&
       "Expect the loop is the smaller or bigger region");
     return 0;
   }
@@ -57,12 +57,13 @@ Loop *polly::castToLoop(const Region *R, LoopInfo *LI) {
 
 // Get the Loop containing all bbs of this region, for ScalarEvolution
 // "getSCEVAtScope"
-Loop *polly::getScopeLoop(const Region *R, LoopInfo *LI) {
-  while (R) {
-    if (Loop *L = castToLoop(R, LI))
+Loop *polly::getScopeLoop(const Region &R, LoopInfo &LI) {
+  const Region *tempR = &R;
+  while (tempR) {
+    if (Loop *L = castToLoop(*tempR, LI))
       return L;
 
-    R = R->getParent();
+    tempR = tempR->getParent();
   }
   return 0;
 }
@@ -113,96 +114,22 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
 
 }
 
-//===----------------------------------------------------------------------===//
-// LLVMSCoP Implement
-
-void LLVMSCoP::mergeSubSCoPs(TempSCoPSetType &SubSCoPs,
-                             LoopInfo *LI, ScalarEvolution *SE) {
-  while (!SubSCoPs.empty()) {
-    LLVMSCoP *SubSCoP = SubSCoPs.back();
-    // Merge the parameters.
-    Params.insert(SubSCoP->Params.begin(),
-                  SubSCoP->Params.end());
-    // Merge loop bounds
-    LoopBounds.insert(SubSCoP->LoopBounds.begin(),
-                      SubSCoP->LoopBounds.end());
-    // Merge Access function
-    AccFuncMap.insert(SubSCoP->AccFuncMap.begin(),
-                      SubSCoP->AccFuncMap.end());
-    // Discard the merged scop.
-    SubSCoPs.pop_back();
-    delete SubSCoP;
-  }
-  // The induction variable is not parameter at this scope.
-  if (Loop *L = castToLoop(&R, LI))
-    Params.erase(SE->getSCEV(L->getCanonicalInductionVariable()));
-}
-
-
-void LLVMSCoP::print(raw_ostream &OS, ScalarEvolution *SE) const {
-  OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
-  // Print Parameters.
-  for (ParamSetType::const_iterator PI = Params.begin(), PE = Params.end();
-    PI != PE; ++PI)
-    OS << **PI << ", ";
-
-  OS << "), Max Loop Depth: "<< MaxLoopDepth <<"\n";
-
-  printBounds(OS, SE);
-
-  printAccFunc(OS, SE);
-}
-
-void LLVMSCoP::printAccFunc(llvm::raw_ostream &OS, ScalarEvolution *SE) const {
-  for (AccFuncMapType::const_iterator I = AccFuncMap.begin(),
-    E = AccFuncMap.end(); I != E; ++I) {
-      OS << "BB: " << I->first->getName() << "{\n";
-      for (AccFuncSetType::const_iterator FI = I->second.begin(),
-        FE = I->second.end(); FI != FE; ++FI) {
-          OS << (FI->second?"Writes ":"Reads ");
-          FI->first.print(OS,SE);
-          OS << "\n";
-      }
-      OS << "}\n";
-  }
-}
-
-void LLVMSCoP::printBounds(raw_ostream &OS, ScalarEvolution *SE) const {
-  if (LoopBounds.empty()) {
-    OS << "No good loops found!\n";
-    return;
-  }
-  for (BoundMapType::const_iterator I = LoopBounds.begin(),
-    E = LoopBounds.end(); I != E; ++I){
-      OS << "Bounds of Loop: " << I->first->getHeader()->getName()
-        << ":\t{ ";
-      I->second.first.print(OS,SE);
-      OS << ", ";
-      I->second.second.print(OS,SE);
-      OS << "}\n";
-  }
-}
-
-//===----------------------------------------------------------------------===//
-// SCoPDetection Implement
-
-bool SCoPDetection::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
-                                    SCEVAffFunc &FuncToBuild) {
-  assert(SCoP && "Scope can not be null!");
-
-  Region &R = SCoP->R;
+bool SCEVAffFunc::buildAffineFunc(const SCEV *S, LLVMSCoP &SCoP,
+                                  SCEVAffFunc &FuncToBuild,
+                                  LoopInfo &LI, ScalarEvolution &SE) {
+  Region &R = SCoP.R;
 
   if (isa<SCEVCouldNotCompute>(S))
     return false;
 
-  Loop *Scope = getScopeLoop(&R, LI);
+  Loop *Scope = getScopeLoop(R, LI);
 
   // Compute S at scope first.
   //if (ScopeL)
-  S = SE->getSCEVAtScope(S, Scope);
+  S = SE.getSCEVAtScope(S, Scope);
 
   // FIXME: Simplify these code.
-  for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
+  for (AffineSCEVIterator I = affine_begin(S, &SE), E = affine_end();
     I != E; ++I){
 
       const SCEV *Var = I->first;
@@ -264,11 +191,84 @@ bool SCoPDetection::buildAffineFunc(const SCEV *S, LLVMSCoP *SCoP,
         assert(isa<SCEVUnknown>(Var) && "Can only process unknown right now.");
       }
       // Add the loop invariants to parameter lists.
-      SCoP->Params.insert(Var);
+      SCoP.Params.insert(Var);
   }
 
   return true;
 }
+
+//===----------------------------------------------------------------------===//
+// LLVMSCoP Implement
+
+void LLVMSCoP::mergeSubSCoPs(TempSCoPSetType &SubSCoPs,
+                             LoopInfo &LI, ScalarEvolution &SE) {
+  while (!SubSCoPs.empty()) {
+    LLVMSCoP *SubSCoP = SubSCoPs.back();
+    // Merge the parameters.
+    Params.insert(SubSCoP->Params.begin(),
+                  SubSCoP->Params.end());
+    // Merge loop bounds
+    LoopBounds.insert(SubSCoP->LoopBounds.begin(),
+                      SubSCoP->LoopBounds.end());
+    // Merge Access function
+    AccFuncMap.insert(SubSCoP->AccFuncMap.begin(),
+                      SubSCoP->AccFuncMap.end());
+    // Discard the merged scop.
+    SubSCoPs.pop_back();
+    delete SubSCoP;
+  }
+  // The induction variable is not parameter at this scope.
+  if (Loop *L = castToLoop(R, LI))
+    Params.erase(SE.getSCEV(L->getCanonicalInductionVariable()));
+}
+
+
+void LLVMSCoP::print(raw_ostream &OS, ScalarEvolution *SE) const {
+  OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
+  // Print Parameters.
+  for (ParamSetType::const_iterator PI = Params.begin(), PE = Params.end();
+    PI != PE; ++PI)
+    OS << **PI << ", ";
+
+  OS << "), Max Loop Depth: "<< MaxLoopDepth <<"\n";
+
+  printBounds(OS, SE);
+
+  printAccFunc(OS, SE);
+}
+
+void LLVMSCoP::printAccFunc(llvm::raw_ostream &OS, ScalarEvolution *SE) const {
+  for (AccFuncMapType::const_iterator I = AccFuncMap.begin(),
+    E = AccFuncMap.end(); I != E; ++I) {
+      OS << "BB: " << I->first->getName() << "{\n";
+      for (AccFuncSetType::const_iterator FI = I->second.begin(),
+        FE = I->second.end(); FI != FE; ++FI) {
+          OS << (FI->second?"Writes ":"Reads ");
+          FI->first.print(OS,SE);
+          OS << "\n";
+      }
+      OS << "}\n";
+  }
+}
+
+void LLVMSCoP::printBounds(raw_ostream &OS, ScalarEvolution *SE) const {
+  if (LoopBounds.empty()) {
+    OS << "No good loops found!\n";
+    return;
+  }
+  for (BoundMapType::const_iterator I = LoopBounds.begin(),
+    E = LoopBounds.end(); I != E; ++I){
+      OS << "Bounds of Loop: " << I->first->getHeader()->getName()
+        << ":\t{ ";
+      I->second.first.print(OS,SE);
+      OS << ", ";
+      I->second.second.print(OS,SE);
+      OS << "}\n";
+  }
+}
+
+//===----------------------------------------------------------------------===//
+// SCoPDetection Implement
 
 // TODO: Move to LoopInfo?
 static bool isPreHeader(BasicBlock *BB, LoopInfo *LI) {
@@ -277,21 +277,21 @@ static bool isPreHeader(BasicBlock *BB, LoopInfo *LI) {
     LI->isLoopHeader(TI->getSuccessor(0));
 }
 
-bool SCoPDetection::checkCFG(BasicBlock *BB, Region *R) {
-  TerminatorInst *TI = BB->getTerminator();
+bool SCoPDetection::checkCFG(BasicBlock &BB, Region &R) {
+  TerminatorInst *TI = BB.getTerminator();
 
   unsigned int numSucc = TI->getNumSuccessors();
 
   // Ret and unconditional branch is ok.
   if (numSucc < 2) return true;
 
-  if (Loop *L = getScopeLoop(R, LI)) {
+  if (Loop *L = getScopeLoop(R, *LI)) {
     // Only allow branches that are loop exits. This stops anything
     // except loops that have just one exit and are detected by our LoopInfo
     // analysis
 
     // It is ok if BB is branching out of the loop
-    if (L->isLoopExiting(BB))
+    if (L->isLoopExiting(&BB))
       return true;
 
     assert(L->getExitingBlock() &&
@@ -310,7 +310,7 @@ bool SCoPDetection::checkCFG(BasicBlock *BB, Region *R) {
 
     // Now bb is not branching to inner loop.
     // FIXME: Handle the branch condition
-    DEBUG(dbgs() << "Bad BB in cfg: " << BB->getName() << "\n");
+    DEBUG(dbgs() << "Bad BB in cfg: " << BB.getName() << "\n");
     return false;
   }
 
@@ -322,17 +322,22 @@ bool SCoPDetection::checkCFG(BasicBlock *BB, Region *R) {
 // FIXME: cause regression
 //static bool allUsedInRegion(const Region &R, const Value &V) {
 //  for (Value::const_use_iterator I = V.use_begin(),
-//       E = V.use_end(); I != E; ++I)
-//    if (!R.contains((Instruction*)*I)) return false;
+//      E = V.use_end(); I != E; ++I) {
+//    Instruction *Inst = (Instruction*)*I;
+//    if (!R.contains(Inst)) {
+//      DEBUG(dbgs() << "Find bad Instruction " << V << " used by"
+//        << *Inst << " in BB: "
+//        << Inst->getParent()->getName() << "\n");
+//      return false;
+//    }
+//  }
 //
 //  return true;
 //}
 
-bool SCoPDetection::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
+bool SCoPDetection::checkBasicBlock(BasicBlock &BB, LLVMSCoP &SCoP) {
   // Iterate over the BB to check its instructions, dont visit terminator
-  for (BasicBlock::iterator I = BB->begin(), E = --BB->end(); I != E; ++I){
-    // Find the parameters used in load/store
-    // TODO: Write the code.
+  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I){
     Instruction &Inst = *I;
 
     //
@@ -377,13 +382,13 @@ bool SCoPDetection::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
     }
 
     // Get the function set
-    AccFuncSetType &AccFuncSet = SCoP->AccFuncMap[BB];
+    AccFuncSetType &AccFuncSet = SCoP.AccFuncMap[&BB];
     // Make the access function.
     AccFuncSet.push_back(std::make_pair(SCEVAffFunc(), isStore));
 
     // Is the access function affine?
     const SCEV *Addr = SE->getSCEV(Pointer);
-    if (!buildAffineFunc(Addr, SCoP, AccFuncSet.back().first)) {
+    if (!SCEVAffFunc::buildAffineFunc(Addr, SCoP, AccFuncSet.back().first, *LI, *SE)) {
       DEBUG(dbgs() << "Bad memory addr " << *Addr << "\n");
       return false;
     }
@@ -392,19 +397,19 @@ bool SCoPDetection::checkBasicBlock(BasicBlock *BB, LLVMSCoP *SCoP) {
   return true;
 }
 
-LLVMSCoP *SCoPDetection::findSCoPs(Region* R, TempSCoPSetType &SCoPs) {
+LLVMSCoP *SCoPDetection::findSCoPs(Region& R, TempSCoPSetType &SCoPs) {
   bool isValidRegion = true;
   TempSCoPSetType SubSCoPs;
 
-  LLVMSCoP *SCoP = new LLVMSCoP(*R);
+  LLVMSCoP *SCoP = new LLVMSCoP(R);
 
   // Visit all sub region node.
-  for (Region::element_iterator I = R->element_begin(), E = R->element_end();
+  for (Region::element_iterator I = R.element_begin(), E = R.element_end();
     I != E; ++I){
 
       if (I->isSubRegion()) {
         Region *SubR = I->getNodeAs<Region>();
-        if (LLVMSCoP *SubSCoP = findSCoPs(SubR, SCoPs)) {
+        if (LLVMSCoP *SubSCoP = findSCoPs(*SubR, SCoPs)) {
           SubSCoPs.push_back(SubSCoP);
           // Update the loop depth.
           if (SubSCoP->MaxLoopDepth > SCoP->MaxLoopDepth)
@@ -414,20 +419,20 @@ LLVMSCoP *SCoPDetection::findSCoPs(Region* R, TempSCoPSetType &SCoPs) {
           isValidRegion = false;
       }
       else if (isValidRegion) {
-        BasicBlock *BB = I->getNodeAs<BasicBlock>();
+        BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
         // We check the basic blocks only the region is valid.
         if (!checkCFG(BB, R) || // Check cfg
-          !checkBasicBlock(BB, SCoP)) { // Check all non terminator instruction
-            DEBUG(dbgs() << "Bad BB found:" << BB->getName() << "\n");
+          !checkBasicBlock(BB, *SCoP)) { // Check all non terminator instruction
+            DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
             // Clean up the access function map, so we get a clear dump.
-            SCoP->AccFuncMap.erase(BB);
+            SCoP->AccFuncMap.erase(&BB);
             isValidRegion = false;
         }
       }
   }
 
   // Find the parameters used in loop bounds
-  Loop *L = castToLoop(R, LI);
+  Loop *L = castToLoop(R, *LI);
   if (L) {
     // Increase the max loop depth
     ++SCoP->MaxLoopDepth;
@@ -455,8 +460,8 @@ LLVMSCoP *SCoPDetection::findSCoPs(Region* R, TempSCoPSetType &SCoPs) {
       AffBoundType &affbounds = SCoP->LoopBounds[L];
 
       // Build the lower bound.
-      if (!buildAffineFunc(LB, SCoP, affbounds.first) ||
-        !buildAffineFunc(UB, SCoP, affbounds.second))
+      if (!SCEVAffFunc::buildAffineFunc(LB, *SCoP, affbounds.first, *LI, *SE)||
+        !SCEVAffFunc::buildAffineFunc(UB, *SCoP, affbounds.second, *LI, *SE))
         isValidRegion = false;
     }
     else // We can handle the loop if its loop bounds could not compute.
@@ -464,7 +469,7 @@ LLVMSCoP *SCoPDetection::findSCoPs(Region* R, TempSCoPSetType &SCoPs) {
   }
 
   if (!isValidRegion) {
-    DEBUG(dbgs() << "Bad region found: " << R->getNameStr() << "!\n");
+    DEBUG(dbgs() << "Bad region found: " << R.getNameStr() << "!\n");
     // If this Region is not a part of SCoP,
     // add the sub scops to the SCoP vector.
     SCoPs.insert(SCoPs.end(), SubSCoPs.begin(), SubSCoPs.end());
@@ -478,7 +483,7 @@ LLVMSCoP *SCoPDetection::findSCoPs(Region* R, TempSCoPSetType &SCoPs) {
     return 0;
   }
 
-  SCoP->mergeSubSCoPs(SubSCoPs, LI, SE);
+  SCoP->mergeSubSCoPs(SubSCoPs, *LI, *SE);
 
   return SCoP;
 }
@@ -495,7 +500,7 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   // found SCoPs.
   TempSCoPSetType TempSCoPs;
 
-  if(LLVMSCoP *SCoP = findSCoPs(TopRegion, TempSCoPs))
+  if(LLVMSCoP *SCoP = findSCoPs(*TopRegion, TempSCoPs))
     TempSCoPs.push_back(SCoP);
 
   while (!TempSCoPs.empty()) {
