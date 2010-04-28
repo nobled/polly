@@ -15,7 +15,6 @@
 #ifndef POLLY_LINKALLPASSES_H
 #define POLLY_LINKALLPASSES_H
 
-#include "polly/SCoPDetection.h"
 #include "polly/SCoPInfo.h"
 /// TODO: Place the headers that containing pass you want to force link here.
 
@@ -33,7 +32,6 @@ namespace {
 
       (void) polly::createSCoPInfoPass();
       (void) polly::createScopPrinterPass();
-      (void) polly::createSCoPDetectionPass();
       (void) polly::createScopCodeGenPass();
     }
   } PollyForcePassLinking; // Force link by creating a global definition.
