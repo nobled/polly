@@ -52,6 +52,29 @@ SCoPStmt::~SCoPStmt() {
   isl_map_free(Scattering);
 }
 
+void SCoPStmt::print(raw_ostream &OS) const {
+  OS << "\tStatement " << BB.getNameStr() << ":\n";
+
+  OS << "\t\tDomain:\n";
+  if (Domain) {
+    isl_set_print(Domain, stderr, 20, ISL_FORMAT_ISL);
+    DEBUG(isl_set_dump(Domain, stderr, 20));
+  }
+  else
+    OS << "\t\t\tn/a\n";
+
+  OS << "\n";
+
+  OS << "\t\t Scattering:\n";
+  if (Scattering) {
+    isl_map_print(Scattering, stderr, 20, ISL_FORMAT_ISL);
+    DEBUG(isl_map_dump(Scattering, stderr, 20));
+  } else
+    OS << "\t\t\tn/a\n";
+}
+
+void SCoPStmt::dump() const { print(dbgs()); }
+
 //===----------------------------------------------------------------------===//
 /// SCoP class implement
 template<class It>
@@ -75,11 +98,33 @@ SCoP::~SCoP() {
   // Free the context
   isl_set_free(Context);
   // Free the statements;
-  for (StmtSet::iterator I = Stmts.begin(), E = Stmts.end(); I != E; ++I)
+  for (iterator I = begin(), E = end(); I != E; ++I)
     delete *I;
   // We need a singleton to manage this?
   //isl_ctx_free(ctx);
 }
+
+void SCoP::printContext(raw_ostream &OS) const {
+  OS << "\tContext:\n";
+  if (Context) {
+    isl_set_print(Context, stderr, 12, ISL_FORMAT_ISL);
+    DEBUG(isl_set_dump(Context, stderr, 12));
+  }
+  else
+    OS << "\t\tn/a\n";
+
+  OS << "\n";
+}
+
+void SCoP::printStatements(raw_ostream &OS) const {
+  OS << "Statements {\n";
+
+  for (const_iterator SI = begin(), SE = end();SI != SE; ++SI)
+    OS << (**SI) << "\n";
+
+  OS << "}\n";
+}
+
 
 void SCoP::print(raw_ostream &OS) const {
   OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
@@ -90,8 +135,14 @@ void SCoP::print(raw_ostream &OS) const {
 
   OS << "), Max Loop Depth: "<< MaxLoopDepth <<"\n";
 
+  printContext(OS);
+  printStatements(OS);
 
 }
+
+void SCoP::dump() const { print(dbgs()); }
+
+
 //===----------------------------------------------------------------------===//
 /// Help function to build isl objects
 

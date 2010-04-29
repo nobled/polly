@@ -69,7 +69,16 @@ public:
   polly_map *getScattering() const { return Scattering; }
 
   BasicBlock *getBasicBlock() const { return &BB; }
+
+  void print(raw_ostream &OS) const;
+  void dump() const;
 };
+
+/// @brief Print SCoPStmt S to raw_ostream O.
+static inline raw_ostream& operator<<(raw_ostream &O, const SCoPStmt &S) {
+  S.print(O);
+  return O;
+}
 
 struct LLVMSCoP;
 
@@ -155,9 +164,18 @@ public:
   inline polly_set *getContext() const { return Context; }
 
   void print(raw_ostream &OS) const;
+  void printContext(raw_ostream &OS) const;
+  void printStatements(raw_ostream &OS) const;
+  void dump() const;
 
   polly_ctx *getCtx() const { return ctx; }
 };
+
+/// @brief Print SCoP scop to raw_ostream O.
+static inline raw_ostream& operator<<(raw_ostream &O, const SCoP &scop) {
+  scop.print(O);
+  return O;
+}
 
 class SCoPInfo : public RegionPass {
   //===-------------------------------------------------------------------===//
