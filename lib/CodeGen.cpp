@@ -32,18 +32,15 @@ namespace {
 
 class ScopPrinter : public RegionPass {
 
-  Region *region;
   SCoP *S;
 
 public:
   static char ID;
 
-  ScopPrinter() : RegionPass(&ID) {}
+  ScopPrinter() : RegionPass(&ID), S(0) {}
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
-    region = R;
-    S = getAnalysis<SCoPInfo>().getSCoPFor(R);
-
+    S = getAnalysis<SCoPInfo>().getSCoP();
     return false;
   }
 
@@ -53,12 +50,14 @@ public:
       OS << "Invalid SCoP\n";
       return;
     }
-
+    OS << "SCoP: " << S->getRegion().getNameStr() << "\n";
     CLooG C = CLooG(S);
     struct clast_stmt *clast = C.getClast();
     OS << "Generated CLAST '" << clast << "'\n";
     C.pprint();
   }
+
+  virtual void releaseMemory() { S = 0; }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     // XXX: Cannot be removed, as otherwise LLVM crashes.
@@ -80,20 +79,18 @@ Pass* polly::createScopPrinterPass() {
 namespace {
 class ScopCodeGen : public RegionPass {
 
-  Region *region;
   SCoP *S;
 
 public:
   static char ID;
 
-  ScopCodeGen() : RegionPass(&ID) {}
+  ScopCodeGen() : RegionPass(&ID), S(0) {}
 
   void insertNewCodeBranch() {
   }
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
-    region = R;
-    S = getAnalysis<SCoPInfo>().getSCoPFor(R);
+    S = getAnalysis<SCoPInfo>().getSCoP();
 
     if (!S)
       return false;
@@ -112,6 +109,9 @@ public:
     // XXX: Cannot be removed, as otherwise LLVM crashes.
     AU.addRequired<SCoPInfo>();
   }
+
+  virtual void releaseMemory() { S = 0; }
+
 };
 } //end anonymous namespace
 
