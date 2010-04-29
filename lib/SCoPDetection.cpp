@@ -293,13 +293,12 @@ bool SCoPDetection::checkCFG(BasicBlock &BB, Region &R) {
     // Only allow branches that are loop exits. This stops anything
     // except loops that have just one exit and are detected by our LoopInfo
     // analysis
-
     // It is ok if BB is branching out of the loop
     if (L->isLoopExiting(&BB))
       return true;
 
     assert(L->getExitingBlock() &&
-      "Only can handle Loop with 1 exiting block now!");
+      "The Loop return from getScopeLoop will always have 1 exit!");
 
     // Now bb is not the exit block of the loop.
     // Is BB branching to inner loop?
@@ -307,7 +306,10 @@ bool SCoPDetection::checkCFG(BasicBlock &BB, Region &R) {
       BasicBlock *SuccBB = TI->getSuccessor(i);
       if (isPreHeader(SuccBB, LI)) {
         // If branching to inner loop
-        assert(numSucc == 2 && "Not a natural loop?");
+        // FIXME: We can only handle a bb branching to preheader or not.
+        if (numSucc > 2)
+          return false;
+
         return true;
       }
     }
