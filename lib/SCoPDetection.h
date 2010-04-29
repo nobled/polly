@@ -28,7 +28,7 @@ using namespace llvm;
 
 namespace polly {
 
-class LLVMSCoP;
+class TempSCoP;
 class SCoPDetection;
 
 //===----------------------------------------------------------------------===//
@@ -68,8 +68,8 @@ class SCEVAffFunc {
   const Value *BaseAddr;
 
   // getCoeff - Get the Coefficient of a given variable.
-  const SCEV *getCoeff(const SCEV *Var) {
-    LnrTransSet::iterator At = LnrTrans.find(Var);
+  const SCEV *getCoeff(const SCEV *Var) const {
+    LnrTransSet::const_iterator At = LnrTrans.find(Var);
     return At == LnrTrans.end() ? 0 : At->second;
   }
 
@@ -89,7 +89,7 @@ public:
   ///
   /// @return             Return true if S could be convert to affine function,
   ///                     false otherwise.
-  static bool buildAffineFunc(const SCEV *S, LLVMSCoP &SCoP,
+  static bool buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
     SCEVAffFunc &FuncToBuild, LoopInfo &LI, ScalarEvolution &SE);
 
   /// @brief Build a loop bound constrain from an affine function.
@@ -104,7 +104,7 @@ public:
   polly_constraint *toLoopBoundConstrain(polly_ctx *ctx, polly_dim *dim,
                                   const SmallVectorImpl<const SCEV*> &IndVars,
                                   const SmallVectorImpl<const SCEV*> &Params,
-                                  bool isLower);
+                                  bool isLower) const;
 
   /// @brief Print the affine function.
   ///
@@ -136,9 +136,7 @@ typedef std::set<const SCEV*> ParamSetType;
 /// A helper class for remembering the parameter number and the max depth  in
 /// this SCoP, and others context.
 ///
-class LLVMSCoP {
-  typedef std::vector<LLVMSCoP*> TempSCoPSetType;
-
+class TempSCoP {
   // The Region.
   Region &R;
 
@@ -146,23 +144,26 @@ class LLVMSCoP {
   ParamSetType Params;
 
   // TODO: Constraints on parameters?
-  // Remember the bounds of loops, to help us build iterate domain of BBs.
-  BoundMapType LoopBounds;
-
-  // Access function of bbs.
-  AccFuncMapType AccFuncMap;
 
   // The max loop depth of this SCoP
   unsigned MaxLoopDepth;
 
-  // Merge the SCoP information of sub regions
-  void mergeSubSCoPs(TempSCoPSetType &SubSCoPs,
-    LoopInfo &LI, ScalarEvolution &SE);
+  // The flag to indicate if this SCoP the max one.
+  bool isMax;
 
-  // TODO: Remove SCoPDetection from friend class list.
+  // Remember the bounds of loops, to help us build iterate domain of BBs.
+  const BoundMapType &LoopBounds;
+
+  // Access function of bbs.
+  const AccFuncMapType &AccFuncMap;
+
   friend class SCoPDetection;
+
+  explicit TempSCoP(Region &r, BoundMapType &loopBounds,
+    AccFuncMapType &accFuncMap)
+    : R(r), MaxLoopDepth(0), isMax(true),
+    LoopBounds(loopBounds), AccFuncMap(accFuncMap) {}
 public:
-  explicit LLVMSCoP(Region &r) : R(r), MaxLoopDepth(0) {}
 
   /// @name Information about this Temporary SCoP.
   ///
@@ -187,10 +188,15 @@ public:
   /// @param L The loop to get the bounds.
   ///
   // @return The bounds of the loop L in { Lower bound, Upper bound } form.
-  AffBoundType *getLoopBound(const Loop *L) {
-    BoundMapType::iterator at = LoopBounds.find(L);
+  const AffBoundType *getLoopBound(const Loop *L) {
+    BoundMapType::const_iterator at = LoopBounds.find(L);
     return at != LoopBounds.end()? &(at->second) : 0;
   }
+
+  /// @brief Is this SCoP the maximum one?
+  ///
+  /// @return Return true if this SCoP is the maximum one, false otherwise.
+  bool isMaxSCoP() const { return isMax; }
   //@}
 
   /// @brief Print the Temporary SCoP information.
@@ -214,14 +220,17 @@ public:
 
 };
 
-typedef std::map<const Region*, LLVMSCoP*> TempSCoPMapType;
-typedef std::vector<LLVMSCoP*> TempSCoPSetType;
+typedef std::map<const Region*, TempSCoP*> TempSCoPMapType;
+typedef std::vector<TempSCoP*> TempSCoPSetType;
 
 //===----------------------------------------------------------------------===//
 /// @brief The Function Pass to detection Static control part in llvm function.
 ///
 /// Please run "Canonicalize Induction Variables" pass(-indvars) before this
 /// pass.
+///
+/// TODO: Provide interface to update the temporay SCoP information.
+///
 class SCoPDetection : public FunctionPass {
   //===-------------------------------------------------------------------===//
   // DO NOT IMPLEMENT
@@ -238,22 +247,31 @@ class SCoPDetection : public FunctionPass {
   // RegionInfo for regiontrees
   RegionInfo *RI;
 
+  // Remember the bounds of loops, to help us build iterate domain of BBs.
+  BoundMapType LoopBounds;
+
+  // Access function of bbs.
+  AccFuncMapType AccFuncMap;
+
   // SCoPs in the function
   TempSCoPMapType RegionToSCoPs;
 
   // Clear the context.
   void clear();
 
-
   // If the Region not a valid part of a SCoP,
   // return false, otherwise return true.
-  LLVMSCoP *findSCoPs(Region &R, TempSCoPSetType &SCoPs);
+  TempSCoP *isValidSCoP(Region &R);
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
-  bool checkBasicBlock(BasicBlock &BB, LLVMSCoP &SCoP);
+  bool checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP);
 
+  // Check if the CFG is valid for SCoP.
   bool checkCFG(BasicBlock &BB, Region &R);
+
+  // Merge the SCoP information of sub regions
+  void mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs);
 
 public:
   static char ID;
@@ -263,14 +281,21 @@ public:
   /// @brief Get the temporay SCoP information in LLVM IR represent
   ///        for Region R.
   ///
-  /// @param R The Region to extract SCoP information.
+  /// @param R            The Region to extract SCoP information.
+  /// @param subSCoPAllow Should this function return information about
+  ///                     the subSCoPs?
   ///
   /// @return The SCoP information in LLVM IR represent.
-  LLVMSCoP *getTempSCoPFor(const Region* R) const {
+  TempSCoP *getTempSCoPFor(const Region* R, bool maxSCoPOnly = true) const {
     // FIXME: Get the temporay scop info for the sub regions of scops.
     // Or we could create these information on the fly!
     TempSCoPMapType::const_iterator at = RegionToSCoPs.find(R);
-    return at == RegionToSCoPs.end()?0:at->second;
+    if (at == RegionToSCoPs.end())
+      return 0;
+
+    if (at->second->isMaxSCoP() || !maxSCoPOnly) return at->second;
+
+    return 0;
   }
 
   /// @name FunctionPass interface

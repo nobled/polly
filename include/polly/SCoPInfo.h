@@ -80,7 +80,7 @@ static inline raw_ostream& operator<<(raw_ostream &O, const SCoPStmt &S) {
   return O;
 }
 
-class LLVMSCoP;
+class TempSCoP;
 
 /// @brief Static Control Part in program tree.
 class SCoP {
@@ -115,12 +115,12 @@ class SCoP {
 
 
 
-  void buildSCoP(LLVMSCoP &TempSCoP, const Region &CurRegion,
+  void buildSCoP(TempSCoP &TempSCoP, const Region &CurRegion,
                   SmallVectorImpl<Loop*> &NestLoops,
                   SmallVectorImpl<unsigned> &Scatter,
                   LoopInfo &LI, ScalarEvolution &SE);
 
-  void buildStmt(LLVMSCoP &TempSCoP, BasicBlock &BB,
+  void buildStmt(TempSCoP &TempSCoP, BasicBlock &BB,
                   SmallVectorImpl<Loop*> &NestLoops,
                   SmallVectorImpl<unsigned> &Scatter,
                   ScalarEvolution &SE);
@@ -188,7 +188,7 @@ class SCoPInfo : public RegionPass {
   SCoP *scop;
 
   /*__isl_give*/
-  polly_basic_set *buildIterateDomain(SCoP &SCoP, LLVMSCoP &TempSCoP,
+  polly_basic_set *buildIterateDomain(SCoP &SCoP, TempSCoP &TempSCoP,
                                       SmallVectorImpl<Loop*> &NestLoops);
 
   void clear() {

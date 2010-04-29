@@ -40,6 +40,9 @@ static cl::opt<bool>
 PrintLoopBound("print-loop-bounds", cl::Hidden,
             cl::desc("Print the bounds of loops."));
 
+static cl::opt<bool>
+BuildSubSCoP("build-sub-scop", cl::Hidden, cl::desc("Build subSCoPs."));
+
 //===----------------------------------------------------------------------===//
 SCoPStmt::SCoPStmt(SCoP &parent, BasicBlock &bb,
                    polly_set *domain, polly_map *scat)
@@ -196,7 +199,7 @@ polly_map *buildScattering(__isl_keep polly_ctx *ctx, unsigned ParamDim,
 }
 
 static __isl_give
-polly_basic_set *buildIterateDomain(SCoP &SCoP, LLVMSCoP &TempSCoP,
+polly_basic_set *buildIterateDomain(SCoP &SCoP, TempSCoP &TempSCoP,
                                     ScalarEvolution &SE,
                                     SmallVectorImpl<Loop*> &NestLoops) {
   // Create the basic set;
@@ -212,7 +215,7 @@ polly_basic_set *buildIterateDomain(SCoP &SCoP, LLVMSCoP &TempSCoP,
     Value *IndVar = L->getCanonicalInductionVariable();
     IndVars.push_back(SE.getSCEV(IndVar));
 
-    AffBoundType *bounds = TempSCoP.getLoopBound(L);
+    const AffBoundType *bounds = TempSCoP.getLoopBound(L);
     assert(bounds && "Can not get loop bound when building statement!");
 
     // Build the constrain of lower bound
@@ -231,7 +234,7 @@ polly_basic_set *buildIterateDomain(SCoP &SCoP, LLVMSCoP &TempSCoP,
   return bset;
 }
 
-void SCoP::buildStmt(LLVMSCoP &TempSCoP, BasicBlock &BB,
+void SCoP::buildStmt(TempSCoP &TempSCoP, BasicBlock &BB,
                       SmallVectorImpl<Loop*> &NestLoops,
                       SmallVectorImpl<unsigned> &Scatter,
                       ScalarEvolution &SE) {
@@ -265,7 +268,7 @@ void SCoP::buildStmt(LLVMSCoP &TempSCoP, BasicBlock &BB,
   Stmts.insert(new SCoPStmt(*this, BB, Domain, Scattering));
 }
 
-void SCoP::buildSCoP(LLVMSCoP &TempSCoP,
+void SCoP::buildSCoP(TempSCoP &TempSCoP,
                       const Region &CurRegion,
                       SmallVectorImpl<Loop*> &NestLoops,
                       SmallVectorImpl<unsigned> &Scatter,
@@ -318,7 +321,8 @@ void SCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
-  LLVMSCoP *TempSCoP = getAnalysis<SCoPDetection>().getTempSCoPFor(R);
+  TempSCoP *TempSCoP =
+    getAnalysis<SCoPDetection>().getTempSCoPFor(R, !BuildSubSCoP);
 
   if (!TempSCoP) return false;
 
