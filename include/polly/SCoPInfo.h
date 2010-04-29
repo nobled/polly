@@ -80,7 +80,7 @@ static inline raw_ostream& operator<<(raw_ostream &O, const SCoPStmt &S) {
   return O;
 }
 
-struct LLVMSCoP;
+class LLVMSCoP;
 
 /// @brief Static Control Part in program tree.
 class SCoP {
