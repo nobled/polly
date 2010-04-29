@@ -146,60 +146,6 @@ void SCoP::dump() const { print(dbgs()); }
 //===----------------------------------------------------------------------===//
 /// Help function to build isl objects
 
-static void setCoefficient(const SCEV *Coeff, mpz_t v, bool isLower) {
-  if (Coeff) { // If the coefficient exist
-    const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
-    const APInt &CI = C->getValue()->getValue();
-    DEBUG(errs() << "Setting Coeff: " << CI);
-    DEBUG(errs() << " neg: " << -CI <<"\n" );
-    // Convert i >= expr to i - expr >= 0
-    MPZ_from_APInt(v, isLower?(-CI):CI);
-  }
-  else
-    isl_int_set_si(v, 0);
-}
-
-static __isl_give
-polly_constraint *toLoopBoundConstrain(__isl_keep polly_ctx *ctx,
-                                       __isl_keep polly_dim *dim, SCEVAffFunc &func,
-                                       const SmallVectorImpl<const SCEV*> &IndVars,
-                                       const SmallVectorImpl<const SCEV*> &Params,
-                                       bool isLower) {
-  unsigned num_in = IndVars.size(),
-           num_param = Params.size();
-
-  polly_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
-  isl_int v;
-  isl_int_init(v);
-
-  // Dont touch the current iterator.
-  for (unsigned i = 0, e = num_in - 1; i != e; ++i) {
-    setCoefficient(func.getCoeff(IndVars[i]), v, isLower);
-    isl_constraint_set_coefficient(c, isl_dim_set, i, v);
-  }
-
-  assert(!func.getCoeff(IndVars[num_in - 1]) &&
-          "Current iterator should not have any coff.");
-  // Set the coefficient of current iterator, convert i <= expr to expr - i >= 0
-  isl_int_set_si(v, isLower?1:(-1));
-  isl_constraint_set_coefficient(c, isl_dim_set, num_in - 1, v);
-
-  // Set the value of indvar of inner loops?
-
-  // Setup the coefficient of parameters
-  for (unsigned i = 0, e = num_param; i != e; ++i) {
-    setCoefficient(func.getCoeff(Params[i]), v, isLower);
-    isl_constraint_set_coefficient(c, isl_dim_param, i, v);
-  }
-
-  // Set the const.
-  setCoefficient(func.TransComp, v, isLower);
-  isl_constraint_set_constant(c, v);
-  // Free v
-  isl_int_clear(v);
-  return c;
-}
-
 static __isl_give
 polly_map *buildScattering(__isl_keep polly_ctx *ctx, unsigned ParamDim,
                            SmallVectorImpl<unsigned> &Scatter,
@@ -270,13 +216,13 @@ polly_basic_set *buildIterateDomain(SCoP &SCoP, LLVMSCoP &TempSCoP,
     assert(bounds && "Can not get loop bound when building statement!");
 
     // Build the constrain of lower bound
-    polly_constraint *lb = toLoopBoundConstrain(SCoP.getCtx(), dim,
-      bounds->first, IndVars, SCoP.getParams(), true);
+    polly_constraint *lb = bounds->first.toLoopBoundConstrain(SCoP.getCtx(),
+      dim, IndVars, SCoP.getParams(), true);
 
     bset = isl_basic_set_add_constraint(bset, lb);
 
-    polly_constraint *ub = toLoopBoundConstrain(SCoP.getCtx(), dim,
-      bounds->second, IndVars, SCoP.getParams(), false);
+    polly_constraint *ub = bounds->second.toLoopBoundConstrain(SCoP.getCtx(),
+      dim, IndVars, SCoP.getParams(), false);
 
     bset = isl_basic_set_add_constraint(bset, ub);
   }
@@ -379,11 +325,12 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   SmallVector<Loop*, 8> NestLoops;
   SmallVector<unsigned, 8> Scatter;
 
+  ParamSetType &Params = TempSCoP->getParamSet();
+  unsigned maxLoopDepth = TempSCoP->getMaxLoopDepth();
   // Create the scop.
-  scop = new SCoP(TempSCoP->R, TempSCoP->MaxLoopDepth,
-                  TempSCoP->Params.begin(), TempSCoP->Params.end());
+  scop = new SCoP(*R, maxLoopDepth, Params.begin(), Params.end());
 
-  unsigned numScatter = TempSCoP->MaxLoopDepth + 1;
+  unsigned numScatter = maxLoopDepth + 1;
   // Initialize the scattering function
   Scatter.assign(numScatter, 0);
 

@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "SCoPDetection.h"
+#include "polly/Support/GmpConv.h"
 
 #include "llvm/Analysis/AffineSCEVIterator.h"
 #include "llvm/Analysis/RegionIterator.h"
@@ -23,6 +24,9 @@
 
 #define DEBUG_TYPE "polly-scop-detect"
 #include "llvm/Support/Debug.h"
+
+
+#include "isl_constraint.h"
 
 using namespace llvm;
 using namespace polly;
@@ -117,7 +121,7 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
 bool SCEVAffFunc::buildAffineFunc(const SCEV *S, LLVMSCoP &SCoP,
                                   SCEVAffFunc &FuncToBuild,
                                   LoopInfo &LI, ScalarEvolution &SE) {
-  Region &R = SCoP.R;
+  Region &R = SCoP.getMaxRegion();
 
   if (isa<SCEVCouldNotCompute>(S))
     return false;
@@ -195,11 +199,63 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, LLVMSCoP &SCoP,
         return false;
       }
       // Add the loop invariants to parameter lists.
-      SCoP.Params.insert(Var);
+      SCoP.getParamSet().insert(Var);
   }
 
   return true;
 }
+
+static void setCoefficient(const SCEV *Coeff, mpz_t v, bool isLower) {
+  if (Coeff) { // If the coefficient exist
+    const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
+    const APInt &CI = C->getValue()->getValue();
+    // Convert i >= expr to i - expr >= 0
+    MPZ_from_APInt(v, isLower?(-CI):CI);
+  }
+  else
+    isl_int_set_si(v, 0);
+}
+
+polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
+                                   polly_dim *dim,
+                                   const SmallVectorImpl<const SCEV*> &IndVars,
+                                   const SmallVectorImpl<const SCEV*> &Params,
+                                   bool isLower) {
+   unsigned num_in = IndVars.size(),
+     num_param = Params.size();
+
+   polly_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
+   isl_int v;
+   isl_int_init(v);
+
+   // Dont touch the current iterator.
+   for (unsigned i = 0, e = num_in - 1; i != e; ++i) {
+     setCoefficient(getCoeff(IndVars[i]), v, isLower);
+     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
+   }
+
+   assert(!getCoeff(IndVars[num_in - 1]) &&
+     "Current iterator should not have any coff.");
+   // Set the coefficient of current iterator, convert i <= expr to expr - i >= 0
+   isl_int_set_si(v, isLower?1:(-1));
+   isl_constraint_set_coefficient(c, isl_dim_set, num_in - 1, v);
+
+   // Set the value of indvar of inner loops?
+
+   // Setup the coefficient of parameters
+   for (unsigned i = 0, e = num_param; i != e; ++i) {
+     setCoefficient(getCoeff(Params[i]), v, isLower);
+     isl_constraint_set_coefficient(c, isl_dim_param, i, v);
+   }
+
+   // Set the const.
+   setCoefficient(TransComp, v, isLower);
+   isl_constraint_set_constant(c, v);
+   // Free v
+   isl_int_clear(v);
+   return c;
+}
+
 
 //===----------------------------------------------------------------------===//
 // LLVMSCoP Implement
@@ -225,7 +281,6 @@ void LLVMSCoP::mergeSubSCoPs(TempSCoPSetType &SubSCoPs,
   if (Loop *L = castToLoop(R, LI))
     Params.erase(SE.getSCEV(L->getCanonicalInductionVariable()));
 }
-
 
 void LLVMSCoP::print(raw_ostream &OS, ScalarEvolution *SE) const {
   OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
@@ -325,29 +380,10 @@ bool SCoPDetection::checkCFG(BasicBlock &BB, Region &R) {
   // TODO: handle the branch condition
 }
 
-// FIXME: cause regression
-//static bool allUsedInRegion(const Region &R, const Value &V) {
-//  for (Value::const_use_iterator I = V.use_begin(),
-//      E = V.use_end(); I != E; ++I) {
-//    Instruction *Inst = (Instruction*)*I;
-//    if (!R.contains(Inst)) {
-//      DEBUG(dbgs() << "Find bad Instruction " << V << " used by"
-//        << *Inst << " in BB: "
-//        << Inst->getParent()->getName() << "\n");
-//      return false;
-//    }
-//  }
-//
-//  return true;
-//}
-
 bool SCoPDetection::checkBasicBlock(BasicBlock &BB, LLVMSCoP &SCoP) {
   // Iterate over the BB to check its instructions, dont visit terminator
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I){
     Instruction &Inst = *I;
-
-    //
-    //if (!allUsedInRegion(SCoP->R, Inst)) return false;
 
     DEBUG(dbgs() << Inst <<"\n");
     // Function call is not allowed in SCoP at the moment.
