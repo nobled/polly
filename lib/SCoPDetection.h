@@ -32,8 +32,8 @@ class TempSCoP;
 class SCoPDetection;
 
 //===----------------------------------------------------------------------===//
-//Temporary Hack for extended regiontree.
-//
+/// Temporary Hack for extended regiontree.
+///
 /// @brief Cast the region to loop.
 ///
 /// @param R  The Region to be casted.

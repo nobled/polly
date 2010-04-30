@@ -86,22 +86,8 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
   }
 
   for (LnrTransSet::const_iterator I = LnrTrans.begin(), E = LnrTrans.end();
-    I != E; ++I) {
-      // Print the coefficient (constant part)
-      I->second->print(OS);
-
-      OS << " * ";
-
-      // Print the variable
-      const SCEV* S = I->first;
-
-      if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(S))
-        WriteAsOperand(OS, U->getValue(), false);
-      else
-        S->print(OS);
-
-      OS << " + ";
-  }
+    I != E; ++I)
+      OS << *I->second << " * " << *I->first << " + ";
 
   if (TransComp)
     OS << *TransComp;
@@ -493,13 +479,8 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
     if (!isa<SCEVCouldNotCompute>(LoopCount)) {
       // The AffineSCEVIterator will always return the induction variable
       // which start from 0, and step by 1.
-
-      // The loop will aways start with 0?
-      const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType());
-
-      //SE->getAddRecExpr(SE->getConstant() )
-
-      const SCEV *UB = LoopCount;
+      const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType()),
+                 *UB = LoopCount;
 
       AffBoundType &affbounds = LoopBounds[L];
 

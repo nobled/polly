@@ -30,18 +30,7 @@ static void printSCEVAffine(raw_ostream &OS, const SCEV* S,
 
   for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
     I != E; ++I) {
-      // Print the coefficient (constant part)
-      I->second->print(OS);
-
-      OS << " * ";
-
-      // Print the variable
-      const SCEV* S = I->first;
-
-      if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(S))
-        WriteAsOperand(OS, U->getValue(), false);
-      else
-        S->print(OS);
+      OS << *I->second << " * " << *I->first;
 
       // The constant part of the SCEV will always be the last one.
       if (!isa<SCEVConstant>(S))
