@@ -7,4 +7,5 @@ add_polly_library(LLVMPolly
   SCoPInfo.cpp
   Support/GmpConv.cpp
   Support/IRHelper.cpp
+  Support/AffSCEVItTester.cpp
   )

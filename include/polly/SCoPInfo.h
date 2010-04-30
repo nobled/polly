@@ -219,8 +219,8 @@ public:
 
 /// Function for force linking.
 Pass *createSCoPInfoPass();
-Pass* createScopPrinterPass();
-Pass* createScopCodeGenPass();
+Pass *createScopPrinterPass();
+Pass *createScopCodeGenPass();
 
 } //end namespace polly
 

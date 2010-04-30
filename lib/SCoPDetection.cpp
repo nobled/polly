@@ -14,8 +14,8 @@
 
 #include "SCoPDetection.h"
 #include "polly/Support/GmpConv.h"
+#include "polly/Support/AffineSCEVIterator.h"
 
-#include "llvm/Analysis/AffineSCEVIterator.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Assembly/Writer.h"

@@ -16,6 +16,7 @@
 #define POLLY_LINKALLPASSES_H
 
 #include "polly/SCoPInfo.h"
+#include "polly/Support/AffineSCEVIterator.h"
 /// TODO: Place the headers that containing pass you want to force link here.
 
 #include <cstdlib>
@@ -33,6 +34,7 @@ namespace {
       (void) polly::createSCoPInfoPass();
       (void) polly::createScopPrinterPass();
       (void) polly::createScopCodeGenPass();
+      (void) polly::createAffSCEVItTesterPass();
     }
   } PollyForcePassLinking; // Force link by creating a global definition.
 }
