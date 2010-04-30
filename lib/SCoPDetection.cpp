@@ -97,17 +97,6 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
 
       if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(S))
         WriteAsOperand(OS, U->getValue(), false);
-      else if(const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(S)) {
-        PHINode *V = AddRec->getLoop()->getCanonicalInductionVariable();
-        // Get the induction variable of the loop.
-        const SCEV *IndVar = SE->getSCEV(V);
-
-        if (IndVar == AddRec)
-          // Print out the llvm value if AddRec is the induction variable.
-          WriteAsOperand(OS, V, false);
-        else
-          S->print(OS);
-      }
       else
         S->print(OS);
 
@@ -341,7 +330,7 @@ bool SCoPDetection::checkCFG(BasicBlock &BB, Region &R) {
     // Is BB branching to inner loop?
     for (unsigned int i = 0; i < numSucc; ++i) {
       BasicBlock *SuccBB = TI->getSuccessor(i);
-      if (isPreHeader(SuccBB, LI)) {
+      if (isPreHeader(SuccBB, LI) || LI->isLoopHeader(SuccBB)) {
         // If branching to inner loop
         // FIXME: We can only handle a bb branching to preheader or not.
         if (numSucc > 2)
@@ -475,7 +464,7 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
         BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
         // We check the basic blocks only the region is valid.
         if (!checkCFG(BB, R) || // Check cfg
-          !checkBasicBlock(BB, *SCoP)) { // Check all non terminator instruction
+          !checkBasicBlock(BB, *SCoP)) {// Check all non terminator instruction
             DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
             // Clean up the access function map, so we get a clear dump.
             AccFuncMap.erase(&BB);
@@ -486,6 +475,13 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
 
   // Find the parameters used in loop bounds
   Loop *L = castToLoop(R, *LI);
+
+  // We can only handle loops whose indvar in canonical form.
+  if (L && L->getCanonicalInductionVariable() == 0) {
+    DEBUG(dbgs() << "No CanIV for loop : " << L->getHeader()->getName() <<"?\n");
+    isValidRegion = false;
+  }
+
   if (L && isValidRegion) {
     // Increase the max loop depth
     ++SCoP->MaxLoopDepth;
