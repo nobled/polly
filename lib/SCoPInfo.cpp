@@ -60,6 +60,7 @@ void SCoPStmt::print(raw_ostream &OS) const {
   OS << "\t\tDomain:\n";
   if (Domain) {
     isl_set_print(Domain, stderr, 20, ISL_FORMAT_ISL);
+    DEBUG(OS << "\n");
     DEBUG(isl_set_dump(Domain, stderr, 20));
   }
   else
@@ -70,6 +71,7 @@ void SCoPStmt::print(raw_ostream &OS) const {
   OS << "\t\t Scattering:\n";
   if (Scattering) {
     isl_map_print(Scattering, stderr, 20, ISL_FORMAT_ISL);
+    DEBUG(OS << "\n");
     DEBUG(isl_map_dump(Scattering, stderr, 20));
   } else
     OS << "\t\t\tn/a\n";
