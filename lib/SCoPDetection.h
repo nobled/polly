@@ -229,7 +229,7 @@ typedef std::vector<TempSCoP*> TempSCoPSetType;
 /// Please run "Canonicalize Induction Variables" pass(-indvars) before this
 /// pass.
 ///
-/// TODO: Provide interface to update the temporay SCoP information.
+/// TODO: Provide interface to update the temporary SCoP information.
 ///
 class SCoPDetection : public FunctionPass {
   //===-------------------------------------------------------------------===//
@@ -256,12 +256,16 @@ class SCoPDetection : public FunctionPass {
   // SCoPs in the function
   TempSCoPMapType RegionToSCoPs;
 
+  // Todo: Remember hidden regions
+  typedef std::set<const Region*> RegionSet;
+  RegionSet HiddenRegions;
+
   // Clear the context.
   void clear();
 
   // If the Region not a valid part of a SCoP,
   // return false, otherwise return true.
-  TempSCoP *isValidSCoP(Region &R);
+  TempSCoP *getTempSCoP(Region &R);
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
@@ -286,17 +290,35 @@ public:
   ///                     the subSCoPs?
   ///
   /// @return The SCoP information in LLVM IR represent.
-  TempSCoP *getTempSCoPFor(const Region* R, bool maxSCoPOnly = true) const {
+  TempSCoP *getTempSCoPFor(const Region* R) const {
     // FIXME: Get the temporay scop info for the sub regions of scops.
     // Or we could create these information on the fly!
     TempSCoPMapType::const_iterator at = RegionToSCoPs.find(R);
     if (at == RegionToSCoPs.end())
       return 0;
 
-    if (at->second->isMaxSCoP() || !maxSCoPOnly) return at->second;
+    // Dirty Hack: Force TempSCoP calculate on the fly.
+    // Force recalculate the loop bounds and access functions.
+    const_cast<SCoPDetection*>(this)->LoopBounds.clear();
+    const_cast<SCoPDetection*>(this)->AccFuncMap.clear();
+    // Recalculate the temporary SCoP info.
+    TempSCoP *tempSCoP =
+      const_cast<SCoPDetection*>(this)->getTempSCoP(*const_cast<Region*>(R));
+    assert(tempSCoP && "R should be valid if it contains in the map!");
 
-    return 0;
+    // Do not believe the "isMax" field.
+    tempSCoP->isMax = at->second->isMaxSCoP();
+
+    // Update the map.
+    delete at->second;
+    const_cast<SCoPDetection*>(this)->RegionToSCoPs[R] = tempSCoP;
+    return tempSCoP;
+    // End dirty hack.
+
+    //return at->second;
   }
+
+  bool isHidden(const Region *R) const { return HiddenRegions.count(R); }
 
   /// @name FunctionPass interface
   //@{

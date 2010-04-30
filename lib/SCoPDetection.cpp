@@ -437,7 +437,7 @@ void SCoPDetection::mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs){
    Parent.Params.erase(SE->getSCEV(L->getCanonicalInductionVariable()));
 }
 
-TempSCoP *SCoPDetection::isValidSCoP(Region& R) {
+TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
   bool isValidRegion = true;
   TempSCoPSetType SubSCoPs;
 
@@ -449,7 +449,12 @@ TempSCoP *SCoPDetection::isValidSCoP(Region& R) {
 
       if (I->isSubRegion()) {
         Region *SubR = I->getNodeAs<Region>();
-        if (TempSCoP *SubSCoP = isValidSCoP(*SubR)) {
+        // Dirty hack for calculate temp scop on the fly
+        // Dont extract the information for a hidden region.
+        if (isHidden(SubR))
+          continue;
+        //
+        if (TempSCoP *SubSCoP = getTempSCoP(*SubR)) {
           SubSCoPs.push_back(SubSCoP);
           // Update the loop depth.
           if (SubSCoP->MaxLoopDepth > SCoP->MaxLoopDepth)
@@ -537,16 +542,17 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
 
   Region *TopRegion = RI->getTopLevelRegion();
 
-  // found SCoPs.
-  TempSCoPSetType TempSCoPs;
-
-  if(TempSCoP *SCoP = isValidSCoP(*TopRegion))
+  if(TempSCoP *SCoP = getTempSCoP(*TopRegion))
     RegionToSCoPs.insert(std::make_pair(&(SCoP->R), SCoP));
 
   return false;
 }
 
 void SCoPDetection::clear() {
+  HiddenRegions.clear();
+  LoopBounds.clear();
+  AccFuncMap.clear();
+
   while (!RegionToSCoPs.empty()) {
     TempSCoPMapType::iterator I = RegionToSCoPs.begin();
     delete I->second;
