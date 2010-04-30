@@ -422,19 +422,27 @@ bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
 }
 
 void SCoPDetection::mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs){
- while (!SubSCoPs.empty()) {
-   TempSCoP *SubSCoP = SubSCoPs.back();
-   // The scop is not maximum any more.
-   SubSCoP->isMax = false;
-   // Merge the parameters.
-   Parent.Params.insert(SubSCoP->Params.begin(),
-     SubSCoP->Params.end());
-   // Discard the merged scop.
-   SubSCoPs.pop_back();
- }
- // The induction variable is not parameter at this scope.
- if (Loop *L = castToLoop(Parent.R, *LI))
-   Parent.Params.erase(SE->getSCEV(L->getCanonicalInductionVariable()));
+  Loop *L = castToLoop(Parent.R, *LI);
+  while (!SubSCoPs.empty()) {
+    TempSCoP *SubSCoP = SubSCoPs.back();
+    // The scop is not maximum any more.
+    SubSCoP->isMax = false;
+    // Merge the parameters.
+    for (ParamSetType::iterator I = SubSCoP->Params.begin(),
+        E = SubSCoP->Params.end(); I != E; ++I) {
+      if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(*I)) {
+        assert((!L || AddRec->getLoop()->contains(L) ||
+          isa<SCEVCouldNotCompute>(
+            SE->getBackedgeTakenCount(AddRec->getLoop())))
+          &&"Where comes the indvar?");
+        if ( L == AddRec->getLoop()) continue;
+      }
+      // TODO: Each parameter must be the loop invariants of top level loop.
+      Parent.Params.insert(*I);
+    }
+    // Discard the merged scop.
+    SubSCoPs.pop_back();
+  }
 }
 
 TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
@@ -478,7 +486,7 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
 
   // Find the parameters used in loop bounds
   Loop *L = castToLoop(R, *LI);
-  if (L) {
+  if (L && isValidRegion) {
     // Increase the max loop depth
     ++SCoP->MaxLoopDepth;
 
@@ -487,20 +495,15 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
     DEBUG(dbgs() << "Backedge taken count: "<< *LoopCount <<"\n");
 
     if (!isa<SCEVCouldNotCompute>(LoopCount)) {
-
-      Value* V = L->getCanonicalInductionVariable();
-
-      assert(V && "IndVarSimplify pass not work!");
-
-      const SCEVAddRecExpr *IndVar =
-        dyn_cast<SCEVAddRecExpr>(SE->getSCEV(V));
-
-      assert(IndVar && "Expect IndVar a SECVAddRecExpr");
+      // The AffineSCEVIterator will always return the induction variable
+      // which start from 0, and step by 1.
 
       // The loop will aways start with 0?
-      const SCEV *LB = IndVar->getStart();
+      const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType());
 
-      const SCEV *UB = SE->getAddExpr(LB, LoopCount);
+      //SE->getAddRecExpr(SE->getConstant() )
+
+      const SCEV *UB = LoopCount;
 
       AffBoundType &affbounds = LoopBounds[L];
 
