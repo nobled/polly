@@ -1,4 +1,5 @@
 ; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s
+; RUN: opt -polly-scop-detect  -analyze %s | FileCheck %s
 
 ;void f(long a[], long N, long M) {
 ;  long i, j, k;

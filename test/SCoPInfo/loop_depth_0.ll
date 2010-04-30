@@ -1,3 +1,4 @@
+; RUN: opt -polly-scop-detect  -analyze %s | FileCheck %s -check-prefix=NOCIV
 ; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s
 
 ;void f(long a[][128], long N, long M) {
@@ -54,3 +55,4 @@ return:                                           ; preds = %bb6
 }
 
 ; CHECK: SCoP: entry => <Function Return> Parameters: (%N, %M, ), Max Loop Depth: 2
+; NOCIV: SCoP: entry => bb6      Parameters: (%N, %M, ), Max Loop Depth: 2

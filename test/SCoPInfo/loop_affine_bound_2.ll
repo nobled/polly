@@ -1,4 +1,5 @@
 ; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s
+; RUN: opt -polly-scop-detect  -analyze %s | FileCheck %s
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;
@@ -61,4 +62,4 @@ return:                                           ; preds = %bb3, %entry
   ret void
 }
 
-; CHECK: SCoP: entry => <Function Return> Parameters: (%M, %N, )
+; CHECK: SCoP: entry => <Function Return>        Parameters: (%M, %N, ), Max Loop Depth: 2

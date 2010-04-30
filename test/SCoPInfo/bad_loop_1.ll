@@ -1,4 +1,5 @@
-; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s
+; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s -check-prefix=INDVAR
+; RUN: opt -polly-scop-detect  -analyze %s | FileCheck %s
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;
@@ -51,4 +52,5 @@ return:                                           ; preds = %bb2.preheader, %bb2
 
 declare i64 @rnd(...)
 
-; CHECK: SCoP: bb1.us => bb2.bb3_crit_edge.us Parameters: (%N, {0,+,1}<%bb2.preheader.us>, )
+; INDVAR: SCoP: bb1.us => bb2.bb3_crit_edge.us    Parameters: (%N, {0,+,1}<%bb2.preheader.us>, ), Max Loop Depth: 1
+; CHECK: SCoP: bb1.us => bb2.bb3_crit_edge.us    Parameters: ({0,+,1}<%bb2.preheader.us>, %N, ), Max Loop Depth: 1
