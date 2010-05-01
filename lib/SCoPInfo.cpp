@@ -91,8 +91,8 @@ SCoP::SCoP(Region &r, unsigned maxLoopDepth, It ParamBegin, It ParamEnd)
    for (It I = ParamBegin, E = ParamEnd; I != E ; ++I)
      Parameters.push_back(*I);
 
-   // Create the dim with 0 parameters
-   polly_dim *dim = isl_dim_set_alloc(ctx, 0, getNumParams());
+   // Create the dim with 0 output?
+   polly_dim *dim = isl_dim_set_alloc(ctx, getNumParams(), 0);
    // TODO: Handle the constrain of parameters.
    // Take the dim.
    Context = isl_set_universe (dim);
