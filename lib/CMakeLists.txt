@@ -8,4 +8,5 @@ add_polly_library(LLVMPolly
   Support/GmpConv.cpp
   Support/IRHelper.cpp
   Support/AffSCEVItTester.cpp
+  ClastParser.cpp
   )
