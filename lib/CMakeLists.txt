@@ -9,4 +9,5 @@ add_polly_library(LLVMPolly
   Support/IRHelper.cpp
   Support/AffSCEVItTester.cpp
   ClastParser.cpp
+  ClastPrinter.cpp
   )

@@ -58,7 +58,6 @@ class ClastParser {
   void dfs(clast_stmt *stmt, cp_ctx ctx);
 };
 
-/// Function for force linking.
 llvm::RegionPass* createClastPrinterPass();
 } //end polly namespace
 #endif /* POLLY_CLAST_PARSER_H */
