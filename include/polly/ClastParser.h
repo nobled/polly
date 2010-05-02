@@ -48,7 +48,7 @@ class CPActions {
 
 class ClastParser {
   CPActions *act;
- 
+
   public:
   ClastParser(CPActions *actions);
 
@@ -59,5 +59,6 @@ class ClastParser {
 };
 
 llvm::RegionPass* createClastPrinterPass();
+llvm::RegionPass* createClastCodeGenerationPass();
 } //end polly namespace
 #endif /* POLLY_CLAST_PARSER_H */
