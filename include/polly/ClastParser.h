@@ -34,7 +34,7 @@ struct cp_ctx {
 
 class CPActions {
   protected:
-  void eval(clast_expr *expr, cp_ctx ctx);
+  void eval(clast_expr *expr, cp_ctx *ctx);
 
   public:
   virtual void in(clast_stmt *s, int depth, cp_ctx *ctx) = 0;
@@ -50,10 +50,10 @@ class ClastParser {
   public:
   ClastParser(CPActions &actions);
 
-  void parse(clast_stmt *root, cp_ctx &ctx);
+  void parse(clast_stmt *root, cp_ctx *ctx);
 
   protected:
-  void dfs(clast_stmt *stmt, int depth, cp_ctx ctx);
+  void dfs(clast_stmt *stmt, int depth, cp_ctx *ctx);
 };
 
 llvm::RegionPass* createClastPrinterPass();

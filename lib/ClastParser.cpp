@@ -30,17 +30,17 @@ ClastParser::ClastParser(CPActions &actions) {
   act = &actions;
 }
 
-void ClastParser::parse(clast_stmt *root, cp_ctx &ctx) {
+void ClastParser::parse(clast_stmt *root, cp_ctx *ctx) {
   if(root)
     dfs(root, -1, ctx);
 }
 
 // Traverse the clast with Depth-First-Search and
 // fire in-/out- events when entering/leaving a node.
-void ClastParser::dfs(clast_stmt *stmt, int depth, cp_ctx ctx) {
+void ClastParser::dfs(clast_stmt *stmt, int depth, cp_ctx *ctx) {
   clast_stmt *next = NULL;
   // Before child-dfs.
-  act->in(stmt, depth, &ctx);
+  act->in(stmt, depth, ctx);
 
   // Select next child.
   if      (CLAST_STMT_IS_A(stmt, stmt_user))
@@ -54,25 +54,24 @@ void ClastParser::dfs(clast_stmt *stmt, int depth, cp_ctx ctx) {
 
   // DFS to child.
   if(next) {
-    cp_ctx nctx = ctx;
-    dfs(next, depth+1, nctx);
+    dfs(next, depth+1, ctx);
   }
 
   // After child-dfs.
-  act->out(stmt, depth, &ctx);
+  act->out(stmt, depth, ctx);
 
   // Continue with sibling.
   if(stmt->next)
     dfs(stmt->next, depth, ctx);
 }
 
-void CPActions::eval(clast_expr *expr, cp_ctx ctx) {
+void CPActions::eval(clast_expr *expr, cp_ctx *ctx) {
   int n = 1;
   clast_expr* next =  NULL;
   clast_expr_type t = expr->type;
 
   // Before child-dfs.
-  in(expr, &ctx);
+  in(expr, ctx);
 
   // Select next child.
   if      (t == clast_expr_term)
@@ -90,6 +89,6 @@ void CPActions::eval(clast_expr *expr, cp_ctx ctx) {
     eval(next, ctx);
 
   // After child-dfs.
-  out(expr, &ctx);
+  out(expr, ctx);
 }
 }

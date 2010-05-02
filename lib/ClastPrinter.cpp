@@ -44,7 +44,7 @@ class CPPrinterActions : virtual public CPActions {
         indent(depth);
 	if(a->LHS)
 	  *ost << a->LHS << "=";
-	  eval(a->RHS, *ctx);
+	  eval(a->RHS, ctx);
 	  *ost << "\n";
 	break;
       case DFS_OUT:
@@ -85,10 +85,10 @@ class CPPrinterActions : virtual public CPActions {
       case DFS_IN:
 	indent(depth);
 	*ost << "for (" << f->iterator <<"=";
-	eval(f->LB, *ctx);
+	eval(f->LB, ctx);
 	*ost << ";";
 	*ost << f->iterator <<"<=";
-	eval(f->UB, *ctx);
+	eval(f->UB, ctx);
 	*ost << ";";
 	*ost << f->iterator << "+=";
 	APInt_from_MPZ(f->stride).print(*ost, false);
@@ -102,14 +102,14 @@ class CPPrinterActions : virtual public CPActions {
   }
 
   void print(struct clast_equation *eq, int depth, cp_ctx *ctx) {
-    eval(eq->LHS, *ctx);
+    eval(eq->LHS, ctx);
     if (eq->sign == 0)
       *ost << "==";
     else if (eq->sign > 0)
       *ost << ">=";
     else
       *ost << "<=";
-    eval(eq->RHS, *ctx);
+    eval(eq->RHS, ctx);
   }
 
   void print(struct clast_guard *g, int depth, cp_ctx *ctx) {
@@ -285,7 +285,7 @@ class ClastPrinter : public RegionPass {
     ClastParser cp = ClastParser(cpa);
     cp_ctx ctx;
 
-    cp.parse(C.getClast(), ctx);
+    cp.parse(C.getClast(), &ctx);
     OS << "\n";
   }
 

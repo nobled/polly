@@ -41,13 +41,13 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   protected:
-  void print(struct clast_assignment *a, cp_ctx *ctx) {
+  void print(struct clast_assignment *a, int depth, cp_ctx *ctx) {
     switch(ctx->dir) {
       case DFS_IN:
-        indent(ctx->depth);
+        indent(depth);
 	if(a->LHS)
 	  *ost << a->LHS << "=";
-	  eval(a->RHS, *ctx);
+	  eval(a->RHS, ctx);
 	  *ost << "\n";
 	break;
       case DFS_OUT:
@@ -55,103 +55,103 @@ class CPCodeGenerationActions : public CPActions {
     }
   }
 
-  void print(struct clast_user_stmt *u, cp_ctx *ctx) {
+  void print(struct clast_user_stmt *u, int depth, cp_ctx *ctx) {
     // Actually we have a list of pointers here. be careful.
     BasicBlock *BB = (BasicBlock*)u->statement->usr;
     switch(ctx->dir) {
       case DFS_IN:
-	indent(ctx->depth);
-	*ost << BB->getNameStr() << " == S" << u->statement->number << " {\n";
+	indent(depth);
+	*ost << BB->getNameStr() << " {\n";
 	break;
       case DFS_OUT:
-	indent(ctx->depth);
+	indent(depth);
 	*ost << "}\n";
 	break;
     }
   }
 
-  void print(struct clast_block *b, cp_ctx *ctx) {
+  void print(struct clast_block *b, int depth, cp_ctx *ctx) {
     switch(ctx->dir) {
       case DFS_IN:
-	indent(ctx->depth);
+	indent(depth);
 	*ost << "{\n";
 	break;
       case DFS_OUT:
-	indent(ctx->depth);
+	indent(depth);
 	*ost << "}\n";
 	break;
     }
   }
 
-  void print(struct clast_for *f, cp_ctx *ctx) {
+  void print(struct clast_for *f, int depth, cp_ctx *ctx) {
     switch(ctx->dir) {
       case DFS_IN:
-	indent(ctx->depth);
+	indent(depth);
 	*ost << "for (" << f->iterator <<"=";
-	eval(f->LB, *ctx);
+	eval(f->LB, ctx);
 	*ost << ";";
 	*ost << f->iterator <<"<=";
-	eval(f->UB, *ctx);
+	eval(f->UB, ctx);
 	*ost << ";";
 	*ost << f->iterator << "+=";
 	APInt_from_MPZ(f->stride).print(*ost, false);
 	*ost << ") {\n";
 	break;
       case DFS_OUT:
-	indent(ctx->depth);
+	indent(depth);
 	*ost << "}\n";
 	break;
     }
   }
 
-  void print(struct clast_equation *eq, cp_ctx *ctx) {
-    eval(eq->LHS, *ctx);
+  void print(struct clast_equation *eq, int depth, cp_ctx *ctx) {
+    eval(eq->LHS, ctx);
     if (eq->sign == 0)
       *ost << "==";
     else if (eq->sign > 0)
       *ost << ">=";
     else
       *ost << "<=";
-    eval(eq->RHS, *ctx);
+    eval(eq->RHS, ctx);
   }
 
-  void print(struct clast_guard *g, cp_ctx *ctx) {
+  void print(struct clast_guard *g, int depth, cp_ctx *ctx) {
     switch(ctx->dir) {
       case DFS_IN:
-	indent(ctx->depth);
+	indent(depth);
 	*ost << "if (";
 
-	print(&(g->eq[0]), ctx);
+	print(&(g->eq[0]), depth, ctx);
 	if (g->n > 1)
 	  for(int i=1;i<g->n;i++) {
 	    *ost << " && ";
-	    print(&(g->eq[i]), ctx);
+	    print(&(g->eq[i]), depth, ctx);
 	  }
 
 	*ost << ") {\n";
 	break;
       case DFS_OUT:
-	indent(ctx->depth);
+	indent(depth);
 	*ost << "}\n";
 	break;
     }
   }
 
-  void print(struct clast_root *r, cp_ctx *ctx) {}
+  void print(struct clast_root *r, int depth, cp_ctx *ctx) {}
 
-  void print(clast_stmt *stmt, cp_ctx *ctx) {
+  void print(clast_stmt *stmt, int depth, cp_ctx *ctx) {
     if	    (CLAST_STMT_IS_A(stmt, stmt_root))
-      print((struct clast_root *)stmt, ctx);
+      print((struct clast_root *)stmt, depth, ctx);
     else if (CLAST_STMT_IS_A(stmt, stmt_ass))
-      print((struct clast_assignment *)stmt, ctx);
+      print((struct clast_assignment *)stmt, depth, ctx);
     else if (CLAST_STMT_IS_A(stmt, stmt_user))
-      print((struct clast_user_stmt *)stmt, ctx);
+      print((struct clast_user_stmt *)stmt, depth, ctx);
     else if (CLAST_STMT_IS_A(stmt, stmt_block))
-      print((struct clast_block *)stmt, ctx);
+      print((struct clast_block *)stmt, depth, ctx);
     else if (CLAST_STMT_IS_A(stmt, stmt_for))
-      print((struct clast_for *)stmt, ctx);
+      print((struct clast_for *)stmt, depth, ctx);
     else if (CLAST_STMT_IS_A(stmt, stmt_guard))
-      print((struct clast_guard *)stmt, ctx);
+      print((struct clast_guard *)stmt, depth, ctx);
   }
 
   void print(clast_name *e, cp_ctx *ctx) {
@@ -160,30 +160,36 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   void print(clast_term *e, cp_ctx *ctx) {
-    clast_expr *v = e->var;
-    static APInt a;
+    APInt a = APInt_from_MPZ(e->val);
+    if(e->var) {
+      static int brkt;
+      brkt = (e->var->type == clast_expr_red) &&
+             ((struct clast_reduction*) e->var)->n > 1;
+      if (ctx->dir == DFS_IN) {
+        if (a == 1)
+          ;
+        else if (a == -1)
+          *ost << "-";
+        else {
+          a.print(*ost, true);
+          *ost << " *";
+        }
+        if (brkt)
+          *ost << "(";
 
-    switch(ctx->dir) {
-      case DFS_IN:
-	a = APInt_from_MPZ(e->val);
-	if(a != 1) {
-	  if (v) *ost << "(";
-	  a.print(*ost, false);
-	  if (v) *ost << " * ";
-	}
-	break;
-      case DFS_OUT:
-	if(a != 1) {
-	  if (v) *ost << ")";
-	}
-	break;
-    }
+      }
+      else {
+       if (brkt)
+         *ost << ")";
+      }
+    } else
+      a.print(*ost, true);
   }
 
   void print(clast_binary *e, cp_ctx *ctx) {
     switch(ctx->dir) {
       case DFS_IN:
-	break;
+        break;
       case DFS_OUT:
 	break;
     }
@@ -192,39 +198,22 @@ class CPCodeGenerationActions : public CPActions {
   void print_red_name(clast_reduction *r, cp_ctx *ctx) {
     switch(r->type) {
       case clast_red_min:
-	*ost << " min(";
+	*ost << "min(";
 	break;
       case clast_red_max:
-	*ost << " max(";
+	*ost << "max(";
 	break;
       case clast_red_sum:
-	*ost << " sum(";
+	*ost << "sum(";
     }
   }
 
   void print(clast_reduction *r, cp_ctx *ctx) {
-    switch(ctx->dir) {
-      case DFS_IN:
-	if (r->n <= 1)
-	  return;
-
-	if (r->n > 1)
-	  print_red_name(r, ctx);
-	else
-	  *ost << " ";
-
-	eval(r->elts[0], *ctx);
-
-	for (int i=1; i<r->n; ++i) {
-	  *ost << ",";
-	  eval(r->elts[i], *ctx);
-	}
-
-	break;
-      case DFS_OUT:
-	if (r->n > 1)
-	  *ost << ")";
-	break;
+    if (r->n > 1) {
+      if (ctx->dir == DFS_IN)
+        print_red_name(r, ctx);
+      else
+        *ost << ")";
     }
   }
 
@@ -250,14 +239,14 @@ class CPCodeGenerationActions : public CPActions {
     ost = &strm;
   }
 
-  virtual void in(clast_stmt *s, cp_ctx *ctx) {
+  virtual void in(clast_stmt *s, int depth, cp_ctx *ctx) {
     ctx->dir = DFS_IN;
-    print(s, ctx);
+    print(s, depth, ctx);
   }
 
-  virtual void out(clast_stmt *s, cp_ctx *ctx) {
+  virtual void out(clast_stmt *s, int depth, cp_ctx *ctx) {
     ctx->dir = DFS_OUT;
-    print(s, ctx);
+    print(s, depth, ctx);
   }
 
   virtual void in(clast_expr *e, cp_ctx *ctx) {
@@ -377,8 +366,10 @@ class ClastCodeGeneration : public RegionPass {
 
     CLooG C = CLooG(S);
     //CPCodeGenerationActions cpa = CPCodeGenerationActions(dbgs());
-    //ClastParser cp = ClastParser(&cpa);
-    //cp.parse(C.getClast());
+    //ClastParser cp = ClastParser(cpa);
+    //cp_ctx ctx;
+
+    //cp.parse(C.getClast(), &ctx);
     //OS << "\n";
     return false;
   }
