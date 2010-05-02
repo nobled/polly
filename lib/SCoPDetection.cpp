@@ -49,7 +49,6 @@ Loop *polly::castToLoop(const Region &R, LoopInfo &LI) {
   BasicBlock *exit = L->getExitBlock();
 
   // Is the loop with multiple exits?
-  // assert(exit && "Oop! we need the extended region tree :P");
   if (!exit) return 0;
 
   if (exit != R.getExit()) {
@@ -230,8 +229,6 @@ polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
    isl_int_set_si(v, isLower?1:(-1));
    isl_constraint_set_coefficient(c, isl_dim_set, num_in - 1, v);
 
-   // Set the value of indvar of inner loops?
-
    // Setup the coefficient of parameters
    for (unsigned i = 0, e = num_param; i != e; ++i) {
      setCoefficient(getCoeff(Params[i]), v, isLower);
@@ -327,7 +324,7 @@ bool SCoPDetection::checkCFG(BasicBlock &BB, Region &R) {
 
   unsigned int numSucc = TI->getNumSuccessors();
 
-  // Ret and unconditional branch is ok.
+  // Return and unconditional branch is ok.
   if (numSucc < 2) return true;
 
   if (Loop *L = getScopeLoop(R, *LI)) {
@@ -425,6 +422,50 @@ bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
   return true;
 }
 
+bool SCoPDetection::checkLoopBounds(TempSCoP &SCoP) {
+  Region &R = SCoP.getMaxRegion();
+
+  // Find the parameters used in loop bounds
+  if (Loop *L = castToLoop(R, *LI)) {
+
+    DEBUG(dbgs() << "Region : " << R.getNameStr()
+      << " also is a loop: " <<(L ? L->getHeader()->getName() : "Not a loop")
+      << "\n");
+
+    // We can only handle loops whose indvar in canonical form.
+    if (L->getCanonicalInductionVariable() == 0) {
+      DEBUG(dbgs() << "No CanIV for loop : " << L->getHeader()->getName() <<"?\n");
+      return false;
+    }
+
+    // Increase the max loop depth
+    ++SCoP.MaxLoopDepth;
+
+    const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
+
+    DEBUG(dbgs() << "Backedge taken count: "<< *LoopCount <<"\n");
+
+    // We can handle the loop if its loop bounds could not compute.
+    if (isa<SCEVCouldNotCompute>(LoopCount))
+      return false;
+
+    // The AffineSCEVIterator will always return the induction variable
+    // which start from 0, and step by 1.
+    const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType()),
+      *UB = LoopCount;
+
+    AffBoundType &affbounds = LoopBounds[L];
+
+    // Build the lower bound.
+    if (!SCEVAffFunc::buildAffineFunc(LB, SCoP, affbounds.first, *LI, *SE)||
+      !SCEVAffFunc::buildAffineFunc(UB, SCoP, affbounds.second, *LI, *SE))
+      return false;
+  }
+
+
+  return true;
+}
+
 bool SCoPDetection::mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs){
   Loop *L = castToLoop(Parent.R, *LI);
   while (!SubSCoPs.empty()) {
@@ -500,59 +541,25 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
       }
   }
 
-  // Find the parameters used in loop bounds
-  Loop *L = castToLoop(R, *LI);
+  if (isValidRegion && //If all sub node of the region are valid
+      checkLoopBounds(*SCoP) &&// Find the parameters used in loop bounds
+      mergeSubSCoPs(*SCoP, SubSCoPs)) {// Merge the information from sub SCoPs.
+    // If all above success.
+    // Insert the scop to the map.
+    RegionToSCoPs.insert(std::make_pair(&(SCoP->R), SCoP));
 
-  // We can only handle loops whose indvar in canonical form.
-  if (L && L->getCanonicalInductionVariable() == 0) {
-    DEBUG(dbgs() << "No CanIV for loop : " << L->getHeader()->getName() <<"?\n");
-    isValidRegion = false;
+    return SCoP;
   }
 
-  if (L && isValidRegion) {
-    // Increase the max loop depth
-    ++SCoP->MaxLoopDepth;
+  DEBUG(dbgs() << "Bad region found: " << R.getNameStr() << "!\n");
+  // Erase the Loop bounds, so it looks better when we are dumping
+  // the loop bounds
+  if (Loop *L = castToLoop(R, *LI))
+    LoopBounds.erase(L);
+  // discard the SCoP
+  delete SCoP;
 
-    const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
-
-    DEBUG(dbgs() << "Backedge taken count: "<< *LoopCount <<"\n");
-
-    if (!isa<SCEVCouldNotCompute>(LoopCount)) {
-      // The AffineSCEVIterator will always return the induction variable
-      // which start from 0, and step by 1.
-      const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType()),
-                 *UB = LoopCount;
-
-      AffBoundType &affbounds = LoopBounds[L];
-
-      // Build the lower bound.
-      if (!SCEVAffFunc::buildAffineFunc(LB, *SCoP, affbounds.first, *LI, *SE)||
-        !SCEVAffFunc::buildAffineFunc(UB, *SCoP, affbounds.second, *LI, *SE))
-        isValidRegion = false;
-    }
-    else // We can handle the loop if its loop bounds could not compute.
-      isValidRegion = false;
-  }
-
-  // Merge the information from sub SCoPs.
-  isValidRegion &= mergeSubSCoPs(*SCoP, SubSCoPs);
-
-  if (!isValidRegion) {
-    DEBUG(dbgs() << "Bad region found: " << R.getNameStr() << "!\n");
-    // Erase the Loop bounds, so it looks better when we are dumping
-    // the loop bounds
-    if (L)
-      LoopBounds.erase(L);
-    // discard the SCoP
-    delete SCoP;
-
-    return 0;
-  }
-
-  // Insert the scop to the map.
-  RegionToSCoPs.insert(std::make_pair(&(SCoP->R), SCoP));
-
-  return SCoP;
+  return 0;
 }
 
 
