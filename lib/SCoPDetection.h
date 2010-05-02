@@ -266,6 +266,9 @@ class SCoPDetection : public FunctionPass {
   // Check if the CFG is valid for SCoP.
   bool checkCFG(BasicBlock &BB, Region &R);
 
+  // Check if the loop bounds in SCoP is valid.
+  bool checkLoopBounds(TempSCoP &SCoP);
+
   // Merge the SCoP information of sub regions
   bool mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs);
 
