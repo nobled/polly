@@ -61,6 +61,7 @@ void ClastParser::dfs(clast_stmt *stmt, cp_ctx ctx) {
   if(next) {
     cp_ctx nctx = ctx;
     ++(nctx.depth);
+    nctx.pred = stmt;
     dfs(next, nctx);
   }
 
