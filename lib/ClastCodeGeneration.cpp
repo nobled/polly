@@ -18,6 +18,7 @@
 #include "polly/CLooG.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Support/Debug.h"
 
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"
@@ -303,7 +304,6 @@ class ClastCodeGeneration : public RegionPass {
                        ConstantInt::getFalse(branch->getContext()), branch);
     OldTermInst->eraseFromParent();
 
-
     // Return the edge on which the new code will be inserted.
     for (succ_iterator SI = succ_begin(branch),
          SE = succ_end(branch); SI != SE; ++SI)
@@ -313,24 +313,52 @@ class ClastCodeGeneration : public RegionPass {
     return succ_end(branch);
   }
 
-  void createLoop(succ_iterator edge) {
+
+  /// Create a loop on a specific edge
+  /// @returns An edge on which the loop body can be inserted.
+  succ_iterator createLoop(succ_iterator edge, APInt NumLoopIterations) {
     BasicBlock *dest = *edge;
     BasicBlock *src = edge.getSource();
-    BasicBlock *loop = SplitEdge(src, dest, this);
-    TerminatorInst *oldT = loop->getTerminator();
-    //IRBuilder LBuilder(loop);
-    PHINode *NPN =
-        PHINode::Create(IntegerType::getInt64Ty(loop->getContext()), "asph",
-                        loop->begin());
-    BranchInst::Create(dest, loop,
-                       ConstantInt::getFalse(loop->getContext()), loop);
-    NPN->addIncoming(NPN, loop);
-    NPN->addIncoming(
-      ConstantInt::get(IntegerType::getInt64Ty(loop->getContext()), 0, false),
-      src);
+    const IntegerType *LoopIVType = IntegerType::getInt64Ty(src->getContext());
 
-    //BasicBlock *latch = SplitEdge(loop, loop, this);
-    oldT->eraseFromParent();
+    // Create the loop header
+    BasicBlock *loop = SplitEdge(src, dest, this);
+
+    if (*succ_begin(loop) != dest) {
+      loop = dest;
+      dest = *succ_begin(dest);
+    }
+
+    loop->setName("polly.loop.header");
+    TerminatorInst *oldTerminator = loop->getTerminator();
+    PHINode *loopIV = PHINode::Create(LoopIVType, "polly.loopiv",
+                                      loop->begin());
+
+    ICmpInst *IS = new ICmpInst(oldTerminator, ICmpInst::ICMP_SGT, loopIV,
+                                ConstantInt::get(src->getContext(),
+                                                 NumLoopIterations));
+    BranchInst::Create(dest, loop, IS, loop);
+    loopIV->addIncoming(loopIV, loop);
+    loopIV->addIncoming(ConstantInt::get(LoopIVType, 0), src);
+    oldTerminator->eraseFromParent();
+
+    // Create the loop latch
+    BasicBlock *latch = SplitEdge(loop, loop, this);
+    latch->setName("polly.loop.latch");
+
+    // Add loop induction variable increment
+    Value *ConstOne = ConstantInt::get(LoopIVType, 1);
+    Instruction* IncrementedIV = BinaryOperator::CreateAdd(loopIV, ConstOne);
+    IncrementedIV->insertBefore(latch->begin());
+    loopIV->replaceUsesOfWith(loopIV,IncrementedIV);
+
+    // Return the loop body
+    succ_iterator SI = succ_begin(loop);
+
+    while (*SI != latch)
+      ++SI;
+
+    return SI;
    }
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
@@ -344,7 +372,9 @@ class ClastCodeGeneration : public RegionPass {
     createSingleEntryEdge(R, this);
     createSingleExitEdge(R, this);
     succ_iterator edge = insertNewCodeBranch();
-    createLoop(edge);
+    APInt NumLoopIterations(64, 2047);
+    edge = createLoop(edge, NumLoopIterations);
+    edge = createLoop(edge, NumLoopIterations);
 
     CLooG C = CLooG(S);
     //CPCodeGenerationActions cpa = CPCodeGenerationActions(dbgs());
