@@ -24,7 +24,7 @@ struct clast_expr;
 namespace polly {
 
 enum cp_dir {
-  DFS_IN, 
+  DFS_IN,
   DFS_OUT
 };
 
@@ -48,12 +48,12 @@ class CPActions {
 
 class ClastParser {
   CPActions *act;
-  
+ 
   public:
   ClastParser(CPActions *actions);
 
   void parse(clast_stmt *root);
- 
+
   protected:
   void dfs(clast_stmt *stmt, cp_ctx ctx);
 };
@@ -61,5 +61,4 @@ class ClastParser {
 /// Function for force linking.
 llvm::RegionPass* createClastPrinterPass();
 } //end polly namespace
-
 #endif /* POLLY_CLAST_PARSER_H */

@@ -47,10 +47,10 @@ void ClastParser::parse(clast_stmt *root) {
 // fire in-/out- events when entering/leaving a node.
 void ClastParser::dfs(clast_stmt *stmt, cp_ctx ctx) {
   clast_stmt *next = NULL;
-  
+
   // Before child-dfs.
   act->in(stmt, &ctx);
-  
+
   // Select next child.
   if      (CLAST_STMT_IS_A(stmt, stmt_user))
     next = ((struct clast_user_stmt*)stmt)->substitutions;
@@ -60,7 +60,7 @@ void ClastParser::dfs(clast_stmt *stmt, cp_ctx ctx) {
     next = ((struct clast_for*) stmt)->body;
   else if (CLAST_STMT_IS_A(stmt, stmt_guard))
     next = ((struct clast_guard*) stmt)->then;
- 
+
   // DFS to child.
   if(next) {
     cp_ctx nctx = ctx;
@@ -70,7 +70,7 @@ void ClastParser::dfs(clast_stmt *stmt, cp_ctx ctx) {
 
   // After child-dfs.
   act->out(stmt, &ctx);
- 
+
   // Continue with sibling.
   if(stmt->next)
     dfs(stmt->next, ctx);
@@ -82,7 +82,7 @@ void CPActions::eval(clast_expr *expr, cp_ctx ctx) {
 
   // Before child-dfs.
   in(expr, &ctx);
-  
+
   // Select next child.
   switch(expr->type) {
     case clast_expr_term:
@@ -122,14 +122,14 @@ class CPPrinterActions : public CPActions {
     for(int i=0;i<depth;i++)
       *ost << " ";
   }
-  
+
   protected:
   void print(struct clast_assignment *a, cp_ctx *ctx) {
     switch(ctx->dir) {
-      case DFS_IN: 
-	indent(ctx->depth);
+      case DFS_IN:
+        indent(ctx->depth);
 	if(a->LHS)
-	  *ost << a->LHS << "="; 
+	  *ost << a->LHS << "=";
 	  eval(a->RHS, *ctx);
 	  *ost << "\n";
 	break;
@@ -142,11 +142,11 @@ class CPPrinterActions : public CPActions {
     // Actually we have a list of pointers here. be careful.
     BasicBlock *BB = (BasicBlock*)u->statement->usr;
     switch(ctx->dir) {
-      case DFS_IN: 
+      case DFS_IN:
 	indent(ctx->depth);
 	*ost << BB->getNameStr() << " == S" << u->statement->number << " {\n";
 	break;
-      case DFS_OUT: 
+      case DFS_OUT:
 	indent(ctx->depth);
 	*ost << "}\n";
 	break;
@@ -155,11 +155,11 @@ class CPPrinterActions : public CPActions {
 
   void print(struct clast_block *b, cp_ctx *ctx) {
     switch(ctx->dir) {
-      case DFS_IN: 
+      case DFS_IN:
 	indent(ctx->depth);
 	*ost << "{\n";
 	break;
-      case DFS_OUT: 
+      case DFS_OUT:
 	indent(ctx->depth);
 	*ost << "}\n";
 	break;
@@ -173,14 +173,14 @@ class CPPrinterActions : public CPActions {
 	*ost << "for (" << f->iterator <<"=";
 	eval(f->LB, *ctx);
 	*ost << ";";
-	*ost << f->iterator <<"<="; 
+	*ost << f->iterator <<"<=";
 	eval(f->UB, *ctx);
 	*ost << ";";
 	*ost << f->iterator << "+=";
 	APInt_from_MPZ(f->stride).print(*ost, false);
 	*ost << ") {\n";
 	break;
-      case DFS_OUT: 
+      case DFS_OUT:
 	indent(ctx->depth);
 	*ost << "}\n";
 	break;
@@ -200,20 +200,20 @@ class CPPrinterActions : public CPActions {
 
   void print(struct clast_guard *g, cp_ctx *ctx) {
     switch(ctx->dir) {
-      case DFS_IN: 
+      case DFS_IN:
 	indent(ctx->depth);
 	*ost << "if (";
 
-	print(&(g->eq[0]), ctx);	
+	print(&(g->eq[0]), ctx);
 	if (g->n > 1)
 	  for(int i=1;i<g->n;i++) {
 	    *ost << " && ";
 	    print(&(g->eq[i]), ctx);
 	  }
-	
+
 	*ost << ") {\n";
 	break;
-      case DFS_OUT: 
+      case DFS_OUT:
 	indent(ctx->depth);
 	*ost << "}\n";
 	break;
@@ -236,7 +236,7 @@ class CPPrinterActions : public CPActions {
     else if (CLAST_STMT_IS_A(stmt, stmt_guard))
       print((struct clast_guard *)stmt, ctx);
   }
- 
+
   void print(clast_name *e, cp_ctx *ctx) {
     if(ctx->dir == DFS_IN)
       *ost << e->name;
@@ -247,7 +247,7 @@ class CPPrinterActions : public CPActions {
     static APInt a;
 
     switch(ctx->dir) {
-      case DFS_IN: 
+      case DFS_IN:
 	a = APInt_from_MPZ(e->val);
 	if(a != 1) {
 	  if (v) *ost << "(";
@@ -297,7 +297,7 @@ class CPPrinterActions : public CPActions {
 	  *ost << " ";
 
 	eval(r->elts[0], *ctx);
-	
+
 	for (int i=1; i<r->n; ++i) {
 	  *ost << ",";
 	  eval(r->elts[i], *ctx);
@@ -342,12 +342,12 @@ class CPPrinterActions : public CPActions {
     ctx->dir = DFS_OUT;
     print(s, ctx);
   }
-  
+
   virtual void in(clast_expr *e, cp_ctx *ctx) {
     ctx->dir = DFS_IN;
     print(e, ctx);
   }
-  
+
   virtual void out(clast_expr *e, cp_ctx *ctx) {
     ctx->dir = DFS_OUT;
     print(e, ctx);
@@ -366,10 +366,10 @@ class ClastPrinter : public RegionPass {
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
     S = getAnalysis<SCoPInfo>().getSCoP();
-    
+
     if(!S)
       return false;
-    
+
     return false;
   }
 
@@ -378,7 +378,7 @@ class ClastPrinter : public RegionPass {
       OS << "Invalid SCoP\n";
       return;
     }
-    
+
     CLooG C = CLooG(S);
     CPPrinterActions cpa = CPPrinterActions(OS);
     ClastParser cp = ClastParser(&cpa);
