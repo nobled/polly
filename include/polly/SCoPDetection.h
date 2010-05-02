@@ -270,7 +270,7 @@ class SCoPDetection : public FunctionPass {
   bool checkLoopBounds(TempSCoP &SCoP);
 
   // Merge the SCoP information of sub regions
-  bool mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs);
+  bool mergeSubSCoP(TempSCoP &Parent, TempSCoP &SubSCoP);
 
 public:
   static char ID;

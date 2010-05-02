@@ -37,6 +37,7 @@ PrintSubSCoPs("print-sub-temp-scop", cl::desc("Print out subSCoP."),
 
 //===----------------------------------------------------------------------===//
 // Temporary Hack for extended regiontree.
+
 // Cast the region to loop if there is a loop have the same header and exit.
 Loop *polly::castToLoop(const Region &R, LoopInfo &LI) {
   BasicBlock *entry = R.getEntry();
@@ -93,12 +94,12 @@ static bool isParameter(const SCEV *Var, Region &R,
     // Or from a loop whose backend taken count could not compute.
     assert((AddRec->getLoop()->contains(getScopeLoop(R, LI)) ||
       isa<SCEVCouldNotCompute>(
-      SE.getBackedgeTakenCount(AddRec->getLoop()))) &&
+        SE.getBackedgeTakenCount(AddRec->getLoop()))) &&
       "Where comes the indvar?");
     return true;
   }
   else if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(Var)) {
-    // Some SCEVUnknown will depend on loop variant:
+    // Some SCEVUnknown will depend on loop variant or conditions:
     // 1. Phi node depend on conditions
     if (PHINode *phi = dyn_cast<PHINode>(U->getValue()))
       // If the phinode contained in the non-entry block of current region,
@@ -174,8 +175,8 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
       if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)){
         // Is the loop with multiple exit that miss by
         // current "extend region tree"?
-        if (!AddRec->getLoop()->getExitBlock())
-          return false;
+        //if (!AddRec->getLoop()->getExitBlock())
+        //  return false;
 
         assert(AddRec->getLoop() == Scope && "getAtScope not work?");
         continue;
@@ -282,12 +283,15 @@ void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE) const {
 void TempSCoP::printAccFunc(llvm::raw_ostream &OS, ScalarEvolution *SE) const {
   for (AccFuncMapType::const_iterator I = AccFuncMap.begin(),
     E = AccFuncMap.end(); I != E; ++I) {
+      if (!R.contains(I->first))
+        continue;
+
       OS << "BB: " << I->first->getName() << "{\n";
       for (AccFuncSetType::const_iterator FI = I->second.begin(),
-        FE = I->second.end(); FI != FE; ++FI) {
-          OS << (FI->second?"Writes ":"Reads ");
-          FI->first.print(OS,SE);
-          OS << "\n";
+          FE = I->second.end(); FI != FE; ++FI) {
+        OS << (FI->second?"Writes ":"Reads ");
+        FI->first.print(OS,SE);
+        OS << "\n";
       }
       OS << "}\n";
   }
@@ -299,13 +303,16 @@ void TempSCoP::printBounds(raw_ostream &OS, ScalarEvolution *SE) const {
     return;
   }
   for (BoundMapType::const_iterator I = LoopBounds.begin(),
-    E = LoopBounds.end(); I != E; ++I){
-      OS << "Bounds of Loop: " << I->first->getHeader()->getName()
-        << ":\t{ ";
-      I->second.first.print(OS,SE);
-      OS << ", ";
-      I->second.second.print(OS,SE);
-      OS << "}\n";
+      E = LoopBounds.end(); I != E; ++I){
+    if (!R.contains(I->first->getHeader()))
+      continue;
+
+    OS << "Bounds of Loop: " << I->first->getHeader()->getName()
+      << ":\t{ ";
+    I->second.first.print(OS,SE);
+    OS << ", ";
+    I->second.second.print(OS,SE);
+    OS << "}\n";
   }
 }
 
@@ -466,84 +473,89 @@ bool SCoPDetection::checkLoopBounds(TempSCoP &SCoP) {
   return true;
 }
 
-bool SCoPDetection::mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs){
+bool SCoPDetection::mergeSubSCoP(TempSCoP &Parent, TempSCoP &SubSCoP){
   Loop *L = castToLoop(Parent.R, *LI);
-  while (!SubSCoPs.empty()) {
-    TempSCoP *SubSCoP = SubSCoPs.back();
-    // Merge the parameters.
-    for (ParamSetType::iterator I = SubSCoP->Params.begin(),
-        E = SubSCoP->Params.end(); I != E; ++I) {
-      const SCEV *Param = *I;
-      // The valid parameter in subregion may not valid in its parameter
-      if (isParameter(Param, Parent.getMaxRegion(), *LI, *SE)) {
-        // Param is a valid parameter in Parent, too.
-        Parent.Params.insert(Param);
-        continue;
-      }
-      // Param maybe the indvar of the loop at current level.
-      else if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Param)) {
-        if ( L == AddRec->getLoop())
-          continue;
-        // Else it is a invalid parameter.
-        assert((!L || AddRec->getLoop()->contains(L) ||
-          isa<SCEVCouldNotCompute>(
-            SE->getBackedgeTakenCount(AddRec->getLoop())))
-          && "Where comes the indvar?");
-      }
 
-      DEBUG(dbgs() << "Bad parameter in parent: " << *Param
-        << " in " << Parent.getMaxRegion().getNameStr() << " at "
-        << (L?L->getHeader()->getName():"Top Level")
-        << "\n");
-      return false;
+  // Merge the parameters.
+  for (ParamSetType::iterator I = SubSCoP.Params.begin(),
+      E = SubSCoP.Params.end(); I != E; ++I) {
+    const SCEV *Param = *I;
+    // The valid parameter in subregion may not valid in its parameter
+    if (isParameter(Param, Parent.getMaxRegion(), *LI, *SE)) {
+      // Param is a valid parameter in Parent, too.
+      Parent.Params.insert(Param);
+      continue;
     }
-    // Discard the merged scop.
-    SubSCoPs.pop_back();
+    // Param maybe the indvar of the loop at current level.
+    else if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Param)) {
+      if ( L == AddRec->getLoop())
+        continue;
+      // Else it is a invalid parameter.
+      assert((!L || AddRec->getLoop()->contains(L) ||
+        isa<SCEVCouldNotCompute>(
+          SE->getBackedgeTakenCount(AddRec->getLoop())))
+        && "Where comes the indvar?");
+    }
+
+    DEBUG(dbgs() << "Bad parameter in parent: " << *Param
+      << " in " << Parent.getMaxRegion().getNameStr() << " at "
+      << (L?L->getHeader()->getName():"Top Level")
+      << "\n");
+    return false;
   }
+
+  // Update the loop depth.
+  if (SubSCoP.MaxLoopDepth > Parent.MaxLoopDepth)
+    Parent.MaxLoopDepth = SubSCoP.MaxLoopDepth;
+
   return true;
 }
 
 TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
+  TempSCoP *SCoP = new TempSCoP(R, LoopBounds, AccFuncMap);
   bool isValidRegion = true;
+
   TempSCoPSetType SubSCoPs;
 
-  TempSCoP *SCoP = new TempSCoP(R, LoopBounds, AccFuncMap);
+  // Compute loop depth, so we could check if we are missed any loops
+  Loop *ScopeLoop = getScopeLoop(R, *LI);
+  unsigned LoopDep = ScopeLoop ? ScopeLoop->getLoopDepth() : 0;
 
   // Visit all sub region node.
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
-    I != E; ++I){
-      if (I->isSubRegion()) {
-        Region *SubR = I->getNodeAs<Region>();
-        // Dirty hack for calculate temp scop on the fly
-        // Dont extract the information for a hidden region.
-        if (isHidden(SubR))
-          continue;
-        //
-        if (TempSCoP *SubSCoP = getTempSCoP(*SubR)) {
-          SubSCoPs.push_back(SubSCoP);
-          // Update the loop depth.
-          if (SubSCoP->MaxLoopDepth > SCoP->MaxLoopDepth)
-            SCoP->MaxLoopDepth = SubSCoP->MaxLoopDepth;
-        }
-        else
-          isValidRegion = false;
+      I != E; ++I){
+    if (I->isSubRegion()) {
+      Region *SubR = I->getNodeAs<Region>();
+      // Dirty hack for calculate temp scop on the fly
+      // Dont extract the information for a hidden region.
+      if (isHidden(SubR))
+        continue;
+      // Extract information of sub scop and merge them.
+      if (TempSCoP *SubSCoP = getTempSCoP(*SubR)) {
+        isValidRegion &= mergeSubSCoP(*SCoP, *SubSCoP);
+        continue;
       }
-      else if (isValidRegion) {
-        // We check the basic blocks only the region is valid.
-        BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-        if (!checkCFG(BB, R) || // Check cfg
-          !checkBasicBlock(BB, *SCoP)) {// Check all non terminator instruction
-            DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
-            // Clean up the access function map, so we get a clear dump.
-            AccFuncMap.erase(&BB);
-            isValidRegion = false;
-        }
+      isValidRegion = false;
+    }
+    else if (isValidRegion) {
+      // We check the basic blocks only the region is valid.
+      BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
+      if (!checkCFG(BB, R) || // Check cfg
+          !checkBasicBlock(BB, *SCoP) ||// Check all non terminator instruction
+          // All BasicBlocks not in any sub regions expect to have the same loop
+          // depth as the minimum loop, otherwise we must miss some loop that
+          // have multiple exits.
+          (LoopDep != LI->getLoopDepth(&BB))) {
+        DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
+        // Clean up the access function map, so we get a clear dump.
+        AccFuncMap.erase(&BB);
+        isValidRegion = false;
       }
+    }
   }
 
   if (isValidRegion && //If all sub node of the region are valid
-      checkLoopBounds(*SCoP) &&// Find the parameters used in loop bounds
-      mergeSubSCoPs(*SCoP, SubSCoPs)) {// Merge the information from sub SCoPs.
+      checkLoopBounds(*SCoP)) {// Find the parameters used in loop bounds
     // If all above success.
     // Insert the scop to the map.
     RegionToSCoPs.insert(std::make_pair(&(SCoP->R), SCoP));
@@ -597,9 +609,9 @@ void SCoPDetection::print(raw_ostream &OS, const Module *) const {
   else
     // Print all SCoPs.
     for (TempSCoPMapType::const_iterator I = RegionToSCoPs.begin(),
-      E = RegionToSCoPs.end(); I != E; ++I){
-        if(isMaxRegionInSCoP(I->second->getMaxRegion()) || PrintSubSCoPs)
-          I->second->print(OS, SE);
+        E = RegionToSCoPs.end(); I != E; ++I){
+      if(isMaxRegionInSCoP(I->second->getMaxRegion()) || PrintSubSCoPs)
+        I->second->print(OS, SE);
     }
 
   OS << "\n";
@@ -613,3 +625,5 @@ char SCoPDetection::ID = 0;
 
 static RegisterPass<SCoPDetection>
 X("polly-scop-detect", "Polly - Detect SCoPs");
+
+// Do not link this pass? This pass suppose to be only used by SCoPInfo.
