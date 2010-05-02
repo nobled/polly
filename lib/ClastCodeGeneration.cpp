@@ -288,6 +288,7 @@ class ClastCodeGeneration : public RegionPass {
     BasicBlock *SEntry = *succ_begin(region->getEntry());
     BasicBlock *SExit;
 
+    // Find the merge basic block after the region.
     for (pred_iterator PI = pred_begin(region->getExit()),
          PE = pred_end(region->getExit()); PI != PE; ++PI) {
       if (region->contains(*PI))
@@ -296,17 +297,19 @@ class ClastCodeGeneration : public RegionPass {
 
     SplitEdge(region->getEntry(), SEntry, this);
     BasicBlock *branch = *succ_begin(region->getEntry());
-    TerminatorInst *oldT = branch->getTerminator();
+    branch->setName("polly.new_code_branch");
+    TerminatorInst *OldTermInst = branch->getTerminator();
     BranchInst::Create(*succ_begin(branch), SExit,
                        ConstantInt::getFalse(branch->getContext()), branch);
-    oldT->eraseFromParent();
+    OldTermInst->eraseFromParent();
 
-    //TODO: Insert PHI nodes for every Value used outside of region
 
+    // Return the edge on which the new code will be inserted.
     for (succ_iterator SI = succ_begin(branch),
          SE = succ_end(branch); SI != SE; ++SI)
       if (*SI == SExit)
         return SI;
+
     return succ_end(branch);
   }
 
