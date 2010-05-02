@@ -322,12 +322,13 @@ void SCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
-  TempSCoP *TempSCoP =
-    getAnalysis<SCoPDetection>().getTempSCoPFor(R);
+  SCoPDetection &SCoPDetect = getAnalysis<SCoPDetection>();
+
+  TempSCoP *TempSCoP =SCoPDetect.getTempSCoPFor(R);
 
   if (!TempSCoP) return false;
 
-  if (!BuildSubSCoP && !TempSCoP->isMaxSCoP()) return false;
+  if (!BuildSubSCoP && !SCoPDetect.isMaxRegionInSCoP(*R)) return false;
 
   SmallVector<Loop*, 8> NestLoops;
   SmallVector<unsigned, 8> Scatter;

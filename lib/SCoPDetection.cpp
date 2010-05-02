@@ -77,29 +77,50 @@ Loop *polly::getScopeLoop(const Region &R, LoopInfo &LI) {
 }
 
 //===----------------------------------------------------------------------===//
-// SCEVAffFunc Implement
-void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
-  // Print BaseAddr
-  if (BaseAddr) {
-    WriteAsOperand(OS, BaseAddr, false);
-    OS << "[";
+// Helper functions
+
+// Helper function to check parameter
+static bool isParameter(const SCEV *Var, Region &R,
+                        LoopInfo &LI, ScalarEvolution &SE) {
+  assert(Var && "Var can not be null!");
+
+  // The parameter is always loop invariant
+  if (Loop *L = castToLoop(R, LI))
+    if (!Var->isLoopInvariant(L))
+      return false;
+
+  if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)) {
+    // The indvar only expect come from outer loop
+    // Or from a loop whose backend taken count could not compute.
+    assert((AddRec->getLoop()->contains(getScopeLoop(R, LI)) ||
+      isa<SCEVCouldNotCompute>(
+      SE.getBackedgeTakenCount(AddRec->getLoop()))) &&
+      "Where comes the indvar?");
+    return true;
   }
-
-  for (LnrTransSet::const_iterator I = LnrTrans.begin(), E = LnrTrans.end();
-    I != E; ++I)
-      OS << *I->second << " * " << *I->first << " + ";
-
-  if (TransComp)
-    OS << *TransComp;
-
-  if (BaseAddr)
-    OS << "]";
-
+  else if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(Var)) {
+    // Some SCEVUnknown will depend on loop variant:
+    // 1. Phi node depend on conditions
+    if (PHINode *phi = dyn_cast<PHINode>(U->getValue()))
+      // If the phinode contained in the non-entry block of current region,
+      // it is not invariant but depend on conditions.
+      // TODO: maybe we need special analysis for phi node?
+      if (R.contains(phi) && (R.getEntry() != phi->getParent()))
+        return false;
+    // TODO: add others conditions.
+    return true;
+  }
+  // Not a SCEVUnknown.
+  return false;
 }
+
+//===----------------------------------------------------------------------===//
+// SCEVAffFunc Implement
 
 bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
                                   SCEVAffFunc &FuncToBuild,
                                   LoopInfo &LI, ScalarEvolution &SE) {
+  assert(S && "S can not be null!");
   Region &R = SCoP.getMaxRegion();
 
   if (isa<SCEVCouldNotCompute>(S))
@@ -108,77 +129,67 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
   Loop *Scope = getScopeLoop(R, LI);
 
   // Compute S at scope first.
-  //if (ScopeL)
   S = SE.getSCEVAtScope(S, Scope);
 
   // FIXME: Simplify these code.
   for (AffineSCEVIterator I = affine_begin(S, &SE), E = affine_end();
-    I != E; ++I){
-      const SCEV *Var = I->first;
+      I != E; ++I){
+    // The constant part must be a SCEVConstant.
+    // TODO: support sizeof in coefficient.
+    if (!isa<SCEVConstant>(I->second)) return false;
 
-      // Ignore the constant offset.
-      if(isa<SCEVConstant>(Var)) {
-        // Add the translation component
-        FuncToBuild.TransComp = I->second;
+    const SCEV *Var = I->first;
+
+    // Ignore the constant offset.
+    if(isa<SCEVConstant>(Var)) {
+      // Add the translation component
+      FuncToBuild.TransComp = I->second;
+      continue;
+    }
+
+    // Ignore the pointer.
+    if (Var->getType()->isPointerTy()) {
+      DEBUG(dbgs() << "Find pointer: " << *Var <<"\n");
+      assert(I->second->isOne() && "The coefficient of pointer expect is one!");
+      const SCEVUnknown *BaseAddr = dyn_cast<SCEVUnknown>(Var);
+
+      if (!BaseAddr) return false;
+      // Setup the base address
+      FuncToBuild.BaseAddr = BaseAddr->getValue();
+      continue;
+    }
+
+    // Dirty Hack: Some pre-processing for parameter.
+    if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var)) {
+      DEBUG(dbgs() << "Warning: Ignore cast expression: " << *Cast << "\n");
+      // Dirty hack. replace the cast expression by its operand.
+      Var = Cast->getOperand();
+    }
+
+    // Build the affine function.
+    FuncToBuild.LnrTrans.insert(*I);
+
+    // Check if the parameter valid.
+    if (!isParameter(Var, R, LI, SE)) {
+      // If Var not a parameter, it may be the indvar of current loop
+      if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)){
+        // Is the loop with multiple exit that miss by
+        // current "extend region tree"?
+        if (!AddRec->getLoop()->getExitBlock())
+          return false;
+
+        assert(AddRec->getLoop() == Scope && "getAtScope not work?");
         continue;
       }
+      // A bad SCEV found.
+      DEBUG(dbgs() << "Bad SCEV: " << *Var << " in " << *S << " at "
+        << (Scope?Scope->getHeader()->getName():"Top Level")
+        << "\n");
+      return false;
+    }
 
-      // Ignore the pointer.
-      if (Var->getType()->isPointerTy()) {
-        DEBUG(dbgs() << "Find pointer: " << *Var <<"\n");
-        assert(I->second->isOne() && "The coefficient of pointer expect is one!");
-        const SCEVUnknown *BaseAddr = dyn_cast<SCEVUnknown>(Var);
-        //assert(BaseAddr && "Can only handle Unknown Addr!");
-        if (!BaseAddr) return false;
-        // Setup the base address
-        FuncToBuild.BaseAddr = BaseAddr->getValue();
-        continue;
-      }
-
-      // Build the affine function.
-      FuncToBuild.LnrTrans.insert(*I);
-
-      if (!Var->isLoopInvariant(Scope)) {
-        // If var the induction variable of the loop?
-        if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)){
-          // Is the loop with multiple exit?
-          //assert(AddRec->getLoop()->getExitBlock() &&
-          //  "Oop! we need the extended region tree :P");
-          if (!AddRec->getLoop()->getExitBlock()) return false;
-
-          assert(AddRec->getLoop() == Scope && "getAtScope not work?");
-          continue;
-        }
-        // A bad SCEV found.
-        DEBUG(dbgs() << "Bad SCEV: " << *Var << " in " << *S << " at "
-          << (Scope?Scope->getHeader()->getName():"Top Level")
-          << "\n");
-        return false;
-      }
-
-      if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)) {
-        // The indvar only expect come from outer loop
-        // Or from a loop whose backend taken count could not compute.
-        assert((AddRec->getLoop()->contains(Scope) ||
-                isa<SCEVCouldNotCompute>(
-                  SE.getBackedgeTakenCount(AddRec->getLoop()))) &&
-                "Where comes the indvar?");
-      }
-      else if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var)) {
-        DEBUG(dbgs() << "Warning: Ignore cast expression: " << *Cast << "\n");
-        // Dirty hack. replace the cast expression by its operand.
-        FuncToBuild.LnrTrans.erase(FuncToBuild.LnrTrans.find(Var));
-        Var = Cast->getOperand();
-        FuncToBuild.LnrTrans.insert(std::make_pair(Var, I->first));
-      }
-      // TODO: handle the paramer0 * parameter1 case.
-      // A dirty hack
-      else if (!isa<SCEVUnknown>(Var)){
-        DEBUG(dbgs() << "Bad SCEV: "<<*Var << " in " << *S <<"\n");
-        return false;
-      }
-      // Add the loop invariants to parameter lists.
-      SCoP.getParamSet().insert(Var);
+    // Add the loop invariants to parameter lists.
+    SCoP.getParamSet().insert(Var);
   }
 
   return true;
@@ -235,6 +246,24 @@ polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
    return c;
 }
 
+void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
+  // Print BaseAddr
+  if (BaseAddr) {
+    WriteAsOperand(OS, BaseAddr, false);
+    OS << "[";
+  }
+
+  for (LnrTransSet::const_iterator I = LnrTrans.begin(), E = LnrTrans.end();
+    I != E; ++I)
+    OS << *I->second << " * " << *I->first << " + ";
+
+  if (TransComp)
+    OS << *TransComp;
+
+  if (BaseAddr)
+    OS << "]";
+
+}
 
 //===----------------------------------------------------------------------===//
 // LLVMSCoP Implement
@@ -396,28 +425,41 @@ bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
   return true;
 }
 
-void SCoPDetection::mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs){
+bool SCoPDetection::mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs){
   Loop *L = castToLoop(Parent.R, *LI);
   while (!SubSCoPs.empty()) {
     TempSCoP *SubSCoP = SubSCoPs.back();
-    // The scop is not maximum any more.
-    SubSCoP->isMax = false;
     // Merge the parameters.
     for (ParamSetType::iterator I = SubSCoP->Params.begin(),
         E = SubSCoP->Params.end(); I != E; ++I) {
-      if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(*I)) {
+      const SCEV *Param = *I;
+      // The valid parameter in subregion may not valid in its parameter
+      if (isParameter(Param, Parent.getMaxRegion(), *LI, *SE)) {
+        // Param is a valid parameter in Parent, too.
+        Parent.Params.insert(Param);
+        continue;
+      }
+      // Param maybe the indvar of the loop at current level.
+      else if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Param)) {
+        if ( L == AddRec->getLoop())
+          continue;
+        // Else it is a invalid parameter.
         assert((!L || AddRec->getLoop()->contains(L) ||
           isa<SCEVCouldNotCompute>(
             SE->getBackedgeTakenCount(AddRec->getLoop())))
-          &&"Where comes the indvar?");
-        if ( L == AddRec->getLoop()) continue;
+          && "Where comes the indvar?");
       }
-      // TODO: Each parameter must be the loop invariants of top level loop.
-      Parent.Params.insert(*I);
+
+      DEBUG(dbgs() << "Bad parameter in parent: " << *Param
+        << " in " << Parent.getMaxRegion().getNameStr() << " at "
+        << (L?L->getHeader()->getName():"Top Level")
+        << "\n");
+      return false;
     }
     // Discard the merged scop.
     SubSCoPs.pop_back();
   }
+  return true;
 }
 
 TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
@@ -429,7 +471,6 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
   // Visit all sub region node.
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
     I != E; ++I){
-
       if (I->isSubRegion()) {
         Region *SubR = I->getNodeAs<Region>();
         // Dirty hack for calculate temp scop on the fly
@@ -447,8 +488,8 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
           isValidRegion = false;
       }
       else if (isValidRegion) {
-        BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
         // We check the basic blocks only the region is valid.
+        BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
         if (!checkCFG(BB, R) || // Check cfg
           !checkBasicBlock(BB, *SCoP)) {// Check all non terminator instruction
             DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
@@ -493,6 +534,9 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
       isValidRegion = false;
   }
 
+  // Merge the information from sub SCoPs.
+  isValidRegion &= mergeSubSCoPs(*SCoP, SubSCoPs);
+
   if (!isValidRegion) {
     DEBUG(dbgs() << "Bad region found: " << R.getNameStr() << "!\n");
     // Erase the Loop bounds, so it looks better when we are dumping
@@ -504,8 +548,6 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
 
     return 0;
   }
-
-  mergeSubSCoPs(*SCoP, SubSCoPs);
 
   // Insert the scop to the map.
   RegionToSCoPs.insert(std::make_pair(&(SCoP->R), SCoP));
@@ -549,7 +591,7 @@ void SCoPDetection::print(raw_ostream &OS, const Module *) const {
     // Print all SCoPs.
     for (TempSCoPMapType::const_iterator I = RegionToSCoPs.begin(),
       E = RegionToSCoPs.end(); I != E; ++I){
-        if(I->second->isMaxSCoP() || PrintSubSCoPs)
+        if(isMaxRegionInSCoP(I->second->getMaxRegion()) || PrintSubSCoPs)
           I->second->print(OS, SE);
     }
 
