@@ -26,26 +26,21 @@ using namespace llvm;
 
 namespace polly {
 
-ClastParser::ClastParser(CPActions *actions) {
-  act = actions;
+ClastParser::ClastParser(CPActions &actions) {
+  act = &actions;
 }
 
-void ClastParser::parse(clast_stmt *root) {
-  cp_ctx ctx;
-  ctx.dir   = DFS_IN;
-  ctx.depth = 0;
-  ctx.pred  = NULL;
-
-  if (root)
-    dfs(root, ctx);
+void ClastParser::parse(clast_stmt *root, cp_ctx &ctx) {
+  if(root)
+    dfs(root, -1, ctx);
 }
 
 // Traverse the clast with Depth-First-Search and
 // fire in-/out- events when entering/leaving a node.
-void ClastParser::dfs(clast_stmt *stmt, cp_ctx ctx) {
+void ClastParser::dfs(clast_stmt *stmt, int depth, cp_ctx ctx) {
   clast_stmt *next = NULL;
   // Before child-dfs.
-  act->in(stmt, &ctx);
+  act->in(stmt, depth, &ctx);
 
   // Select next child.
   if      (CLAST_STMT_IS_A(stmt, stmt_user))
@@ -60,50 +55,39 @@ void ClastParser::dfs(clast_stmt *stmt, cp_ctx ctx) {
   // DFS to child.
   if(next) {
     cp_ctx nctx = ctx;
-    ++(nctx.depth);
-    nctx.pred = stmt;
-    dfs(next, nctx);
+    dfs(next, depth+1, nctx);
   }
 
   // After child-dfs.
-  act->out(stmt, &ctx);
+  act->out(stmt, depth, &ctx);
 
   // Continue with sibling.
   if(stmt->next)
-    dfs(stmt->next, ctx);
+    dfs(stmt->next, depth, ctx);
 }
 
 void CPActions::eval(clast_expr *expr, cp_ctx ctx) {
   int n = 1;
   clast_expr* next =  NULL;
+  clast_expr_type t = expr->type;
 
   // Before child-dfs.
   in(expr, &ctx);
 
   // Select next child.
-  switch(expr->type) {
-    case clast_expr_term:
-      next = ((clast_term *)expr)->var;
-      break;
-    case clast_expr_bin:
-      next = ((clast_binary *)expr)->LHS;
-      break;
-    case clast_expr_red: {
-	clast_reduction *r = (clast_reduction *)expr;
-	n = r->n;
-	next = r->elts[0];
-      }
-      break;
-    case clast_expr_name:
-      break;
+  if      (t == clast_expr_term)
+    next = ((clast_term *)expr)->var;
+  else if (t == clast_expr_bin)
+    next = ((clast_binary *)expr)->LHS;
+  else if (t == clast_expr_red) {
+    clast_reduction *r = (clast_reduction *)expr;
+    for (int i=0; i < n; i++)
+      eval(r->elts[i], ctx);
   }
 
   // DFS to child.
-  cp_ctx nctx = ctx;
-  ++(nctx.depth);
-  for (int i=0; i < n; i++)
-    if(next)
-      eval(&(next[i]), nctx);
+  if(next)
+    eval(next, ctx);
 
   // After child-dfs.
   out(expr, &ctx);

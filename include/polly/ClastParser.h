@@ -30,8 +30,6 @@ enum cp_dir {
 
 struct cp_ctx {
   cp_dir dir;
-  int depth;
-  clast_stmt *pred;
 };
 
 class CPActions {
@@ -39,10 +37,10 @@ class CPActions {
   void eval(clast_expr *expr, cp_ctx ctx);
 
   public:
-  virtual void in(clast_stmt *s, cp_ctx *ctx) = 0;
+  virtual void in(clast_stmt *s, int depth, cp_ctx *ctx) = 0;
   virtual void in(clast_expr *e, cp_ctx *ctx) = 0;
 
-  virtual void out(clast_stmt *s, cp_ctx *ctx) = 0;
+  virtual void out(clast_stmt *s, int depth, cp_ctx *ctx) = 0;
   virtual void out(clast_expr *e, cp_ctx *ctx) = 0;
 };
 
@@ -50,12 +48,12 @@ class ClastParser {
   CPActions *act;
 
   public:
-  ClastParser(CPActions *actions);
+  ClastParser(CPActions &actions);
 
-  void parse(clast_stmt *root);
+  void parse(clast_stmt *root, cp_ctx &ctx);
 
   protected:
-  void dfs(clast_stmt *stmt, cp_ctx ctx);
+  void dfs(clast_stmt *stmt, int depth, cp_ctx ctx);
 };
 
 llvm::RegionPass* createClastPrinterPass();
