@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "SCoPDetection.h"
+#include "polly/SCoPDetection.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/AffineSCEVIterator.h"
 
