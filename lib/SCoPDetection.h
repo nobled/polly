@@ -148,9 +148,6 @@ class TempSCoP {
   // The max loop depth of this SCoP
   unsigned MaxLoopDepth;
 
-  // The flag to indicate if this SCoP the max one.
-  bool isMax;
-
   // Remember the bounds of loops, to help us build iterate domain of BBs.
   const BoundMapType &LoopBounds;
 
@@ -161,7 +158,7 @@ class TempSCoP {
 
   explicit TempSCoP(Region &r, BoundMapType &loopBounds,
     AccFuncMapType &accFuncMap)
-    : R(r), MaxLoopDepth(0), isMax(true),
+    : R(r), MaxLoopDepth(0),
     LoopBounds(loopBounds), AccFuncMap(accFuncMap) {}
 public:
 
@@ -192,11 +189,6 @@ public:
     BoundMapType::const_iterator at = LoopBounds.find(L);
     return at != LoopBounds.end()? &(at->second) : 0;
   }
-
-  /// @brief Is this SCoP the maximum one?
-  ///
-  /// @return Return true if this SCoP is the maximum one, false otherwise.
-  bool isMaxSCoP() const { return isMax; }
   //@}
 
   /// @brief Print the Temporary SCoP information.
@@ -275,7 +267,7 @@ class SCoPDetection : public FunctionPass {
   bool checkCFG(BasicBlock &BB, Region &R);
 
   // Merge the SCoP information of sub regions
-  void mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs);
+  bool mergeSubSCoPs(TempSCoP &Parent, TempSCoPSetType &SubSCoPs);
 
 public:
   static char ID;
@@ -306,9 +298,6 @@ public:
       const_cast<SCoPDetection*>(this)->getTempSCoP(*const_cast<Region*>(R));
     assert(tempSCoP && "R should be valid if it contains in the map!");
 
-    // Do not believe the "isMax" field.
-    tempSCoP->isMax = at->second->isMaxSCoP();
-
     // Update the map.
     delete at->second;
     const_cast<SCoPDetection*>(this)->RegionToSCoPs[R] = tempSCoP;
@@ -319,6 +308,19 @@ public:
   }
 
   bool isHidden(const Region *R) const { return HiddenRegions.count(R); }
+
+
+  /// @brief Is the region is the maximum region of a SCoP?
+  ///
+  /// @param R The Region to test if it is maximum.
+  ///
+  /// @return Return true if R is the maximum Region in a SCoP, false otherwise.
+  bool isMaxRegionInSCoP(const Region &R) const {
+    assert(RegionToSCoPs.find(&R) != RegionToSCoPs.end() &&
+      "R must be a valid SCoP!");
+    return (R.getParent() == 0) ||
+      RegionToSCoPs.find(R.getParent()) == RegionToSCoPs.end();
+  }
 
   /// @name FunctionPass interface
   //@{
