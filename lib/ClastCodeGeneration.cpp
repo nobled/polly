@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/ClastParser.h"
-#include "polly/LinkAllPasses.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/IRHelper.h"
 #include "polly/CLooG.h"

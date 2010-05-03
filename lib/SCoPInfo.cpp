@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/SCoPDetection.h"
+#include "SCoPDetection.h"
 #include "polly/SCoPInfo.h"
 #include "polly/Support/GmpConv.h"
 

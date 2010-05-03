@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/SCoPDetection.h"
+#include "SCoPDetection.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/AffineSCEVIterator.h"
 
@@ -21,6 +21,7 @@
 #include "llvm/Assembly/Writer.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/ADT/Statistic.h"
 
 #define DEBUG_TYPE "polly-scop-detect"
 #include "llvm/Support/Debug.h"
@@ -32,11 +33,18 @@ using namespace llvm;
 using namespace polly;
 
 static cl::opt<bool>
-PrintSubSCoPs("print-sub-temp-scop", cl::desc("Print out subSCoP."),
+PrintTopSCoPOnly("print-top-scop-only", cl::desc("Print out subSCoP."),
               cl::Hidden);
 
+// This is a Debug option to make the statistics result correct.
+static cl::opt<bool>
+PreCalcTempSCoP("polly-precalc-temp-scop",
+                        cl::desc("DEBUG ONLY: "
+                                 "Do not force compute temp SCoP on the fly."),
+                        cl::ReallyHidden);
+
 //===----------------------------------------------------------------------===//
-// Temporary Hack for extended regiontree.
+// Temporary Hack for extended region tree.
 
 // Cast the region to loop if there is a loop have the same header and exit.
 Loop *polly::castToLoop(const Region &R, LoopInfo &LI) {
@@ -173,11 +181,6 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
     if (!isParameter(Var, R, LI, SE)) {
       // If Var not a parameter, it may be the indvar of current loop
       if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)){
-        // Is the loop with multiple exit that miss by
-        // current "extend region tree"?
-        //if (!AddRec->getLoop()->getExitBlock())
-        //  return false;
-
         assert(AddRec->getLoop() == Scope && "getAtScope not work?");
         continue;
       }
@@ -531,7 +534,7 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
       if (isHidden(SubR))
         continue;
       // Extract information of sub scop and merge them.
-      if (TempSCoP *SubSCoP = getTempSCoP(*SubR)) {
+      else if (TempSCoP *SubSCoP = getTempSCoP(*SubR)) {
         isValidRegion &= mergeSubSCoP(*SCoP, *SubSCoP);
         continue;
       }
@@ -574,6 +577,29 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
   return 0;
 }
 
+TempSCoP *SCoPDetection::getTempSCoPFor(const Region* R) const {
+  TempSCoPMapType::const_iterator at = RegionToSCoPs.find(R);
+  if (at == RegionToSCoPs.end())
+    return 0;
+
+  if (PreCalcTempSCoP)
+    return at->second;
+
+  // Dirty Hack: Force TempSCoP calculate on the fly.
+  // Force recalculate the loop bounds and access functions.
+  const_cast<SCoPDetection*>(this)->LoopBounds.clear();
+  const_cast<SCoPDetection*>(this)->AccFuncMap.clear();
+  // Recalculate the temporary SCoP info.
+  TempSCoP *tempSCoP =
+    const_cast<SCoPDetection*>(this)->getTempSCoP(*const_cast<Region*>(R));
+  assert(tempSCoP && "R should be valid if it contains in the map!");
+
+  // Update the map.
+  delete at->second;
+  const_cast<SCoPDetection*>(this)->RegionToSCoPs[R] = tempSCoP;
+  return tempSCoP;
+  // End dirty hack.
+}
 
 bool SCoPDetection::runOnFunction(llvm::Function &F) {
   SE = &getAnalysis<ScalarEvolution>();
@@ -610,7 +636,7 @@ void SCoPDetection::print(raw_ostream &OS, const Module *) const {
     // Print all SCoPs.
     for (TempSCoPMapType::const_iterator I = RegionToSCoPs.begin(),
         E = RegionToSCoPs.end(); I != E; ++I){
-      if(isMaxRegionInSCoP(I->second->getMaxRegion()) || PrintSubSCoPs)
+      if(!PrintTopSCoPOnly || isMaxRegionInSCoP(I->second->getMaxRegion()))
         I->second->print(OS, SE);
     }
 

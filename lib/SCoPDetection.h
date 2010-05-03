@@ -285,33 +285,9 @@ public:
   ///                     the subSCoPs?
   ///
   /// @return The SCoP information in LLVM IR represent.
-  TempSCoP *getTempSCoPFor(const Region* R) const {
-    // FIXME: Get the temporay scop info for the sub regions of scops.
-    // Or we could create these information on the fly!
-    TempSCoPMapType::const_iterator at = RegionToSCoPs.find(R);
-    if (at == RegionToSCoPs.end())
-      return 0;
-
-    // Dirty Hack: Force TempSCoP calculate on the fly.
-    // Force recalculate the loop bounds and access functions.
-    const_cast<SCoPDetection*>(this)->LoopBounds.clear();
-    const_cast<SCoPDetection*>(this)->AccFuncMap.clear();
-    // Recalculate the temporary SCoP info.
-    TempSCoP *tempSCoP =
-      const_cast<SCoPDetection*>(this)->getTempSCoP(*const_cast<Region*>(R));
-    assert(tempSCoP && "R should be valid if it contains in the map!");
-
-    // Update the map.
-    delete at->second;
-    const_cast<SCoPDetection*>(this)->RegionToSCoPs[R] = tempSCoP;
-    return tempSCoP;
-    // End dirty hack.
-
-    //return at->second;
-  }
+  TempSCoP *getTempSCoPFor(const Region* R) const;
 
   bool isHidden(const Region *R) const { return HiddenRegions.count(R); }
-
 
   /// @brief Is the region is the maximum region of a SCoP?
   ///
