@@ -213,7 +213,6 @@ public:
 };
 
 typedef std::map<const Region*, TempSCoP*> TempSCoPMapType;
-typedef std::vector<TempSCoP*> TempSCoPSetType;
 
 //===----------------------------------------------------------------------===//
 /// @brief The Function Pass to detection Static control part in llvm function.
