@@ -45,22 +45,21 @@ PreCalcTempSCoP("polly-precalc-temp-scop",
 
 //===----------------------------------------------------------------------===//
 // Some statistic
-#define GOODSCOP_STAT(NAME, DESC) STATISTIC(Good##NAME, DESC)
-
-GOODSCOP_STAT(Region,     "The # of regions that a valid part of SCoP");
-
-GOODSCOP_STAT(ValidSCoP,  "The # of valid SCoP");
-
-GOODSCOP_STAT(RichSCoP,   "The # of valid SCoP with loop");
-
-#define STATGOOD(NAME);   DEBUG_WITH_TYPE("polly-scop-detect-stat", ++Good##NAME);
-
 
 #define BADSCOP_STAT(NAME, DESC) STATISTIC(Bad##NAME##ForSCoP, \
-                                          "The # of bad regions for SCoP: " \
-                                          DESC)
+                                           "The # of bad regions for SCoP: "\
+                                           DESC)
 
-#define STATBAD(NAME);    DEBUG_WITH_TYPE("polly-scop-detect-stat", ++Bad##NAME##ForSCoP);
+
+#define STATSCOP(X);      DEBUG_WITH_TYPE("polly-scop-detect-stat", X);
+
+#define STATBAD(NAME);    STATSCOP(++Bad##NAME##ForSCoP);
+
+STATISTIC(ValidRegion,"The # of regions that a valid part of SCoP");
+
+STATISTIC(ValidSCoP,  "The # of valid SCoP");
+
+STATISTIC(RichSCoP,   "The # of valid SCoP with loop");
 
 // Note: This will make loop bounds could not compute,
 // but this is checked before loop bounds.
@@ -567,9 +566,11 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
   TempSCoP *SCoP = new TempSCoP(R, LoopBounds, AccFuncMap);
   bool isValidRegion = true;
 
-  // Compute loop depth, so we could check if we are missed any loops
-  Loop *ScopeLoop = getScopeLoop(R, *LI);
-  unsigned LoopDep = ScopeLoop ? ScopeLoop->getLoopDepth() : 0;
+  // Check if getScopeLoop, if so we could not handle any further
+  if (getScopeLoop(R, *LI) != LI->getLoopFor(R.getEntry())) {
+    STATBAD(LoopNest);
+    isValidRegion = false;
+  }
 
   // Visit all sub region node.
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
@@ -590,17 +591,8 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
     else if (isValidRegion) {
       // We check the basic blocks only the region is valid.
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-
-      // All BasicBlocks not in any sub regions expect to have the same loop
-      // depth as the minimum loop, otherwise we must miss some loop that
-      // have multiple exits.
-      if(LoopDep != LI->getLoopDepth(&BB)) {
-        isValidRegion = false;
-        STATBAD(LoopNest);
-        continue;
-      }
-      else if (!checkCFG(BB, R) || // Check cfg
-               !checkBasicBlock(BB, *SCoP)){// Check all non terminator inst
+      if (!checkCFG(BB, R) || // Check cfg
+          !checkBasicBlock(BB, *SCoP)){// Check all non terminator inst
         DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
         // Clean up the access function map, so we get a clear dump.
         AccFuncMap.erase(&BB);
@@ -614,7 +606,7 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
     // If all above success.
     // Insert the scop to the map.
     RegionToSCoPs.insert(std::make_pair(&(SCoP->R), SCoP));
-    STATGOOD(Region);
+    STATSCOP(++ValidRegion);
     return SCoP;
   }
 
@@ -664,13 +656,13 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   getTempSCoP(*TopRegion);
 
   // Statitstic
-  DEBUG(for (TempSCoPMapType::const_iterator I = RegionToSCoPs.begin(),
+  STATSCOP(for (TempSCoPMapType::const_iterator I = RegionToSCoPs.begin(),
       E = RegionToSCoPs.end(); I != E; ++I){
     TempSCoP *tempSCoP = I->second;
     if(isMaxRegionInSCoP(tempSCoP->getMaxRegion())) {
-      STATGOOD(ValidSCoP);
+      ++ValidSCoP;
       if (tempSCoP->getMaxLoopDepth() > 0)
-        STATGOOD(RichSCoP);
+        ++RichSCoP;
     }
   });
 
