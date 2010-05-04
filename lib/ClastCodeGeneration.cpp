@@ -46,7 +46,7 @@ struct codegenctx : cp_ctx {
   /// Create a loop on a specific edge
   /// @returns An edge on which the loop body can be inserted.
   succ_iterator createLoop(succ_iterator edge, APInt NumLoopIterations,
-                           Pass *P) {
+                           Pass *P, APInt stride) {
     BasicBlock *dest = *edge;
     BasicBlock *src = edge.getSource();
     const IntegerType *LoopIVType = IntegerType::getInt64Ty(src->getContext());
@@ -77,7 +77,8 @@ struct codegenctx : cp_ctx {
     latch->setName("polly.loop.latch");
 
     // Add loop induction variable increment
-    Value *ConstOne = ConstantInt::get(LoopIVType, 1);
+    stride.zext(64);
+    Value *ConstOne = ConstantInt::get(src->getContext(), stride);
     Instruction* IncrementedIV = BinaryOperator::CreateAdd(loopIV, ConstOne);
     IncrementedIV->insertBefore(latch->begin());
     loopIV->replaceUsesOfWith(loopIV,IncrementedIV);
@@ -186,9 +187,7 @@ class CPCodeGenerationActions : public CPActions {
     codegenctx *cg_ctx = (codegenctx*) ctx;
     APInt NumLoopIterations(64, 2047);
     switch(ctx->dir) {
-      case DFS_IN:
-        cg_ctx->edge = createLoop(cg_ctx->edge, NumLoopIterations, cg_ctx->P);
-        cg_ctx->edges.push_back(succ_begin(cg_ctx->edge.getSource()));
+      case DFS_IN: {
 	indent(depth);
 	*ost << "for (" << f->iterator <<"=";
 	eval(f->LB, ctx);
@@ -197,9 +196,14 @@ class CPCodeGenerationActions : public CPActions {
 	eval(f->UB, ctx);
 	*ost << ";";
 	*ost << f->iterator << "+=";
-	APInt_from_MPZ(f->stride).print(*ost, false);
+	APInt stride = APInt_from_MPZ(f->stride);
+        stride.print(*ost, false);
 	*ost << ") {\n";
+        cg_ctx->edge = createLoop(cg_ctx->edge, NumLoopIterations, cg_ctx->P,
+                                  stride);
+        cg_ctx->edges.push_back(succ_begin(cg_ctx->edge.getSource()));
 	break;
+      }
       case DFS_OUT:
         cg_ctx->edge = cg_ctx->edges.back();
         cg_ctx->edges.pop_back();
