@@ -66,7 +66,6 @@ void ClastParser::dfs(clast_stmt *stmt, int depth, cp_ctx *ctx) {
 }
 
 void CPActions::eval(clast_expr *expr, cp_ctx *ctx) {
-  int n = 1;
   clast_expr* next =  NULL;
   clast_expr_type t = expr->type;
 
@@ -79,16 +78,18 @@ void CPActions::eval(clast_expr *expr, cp_ctx *ctx) {
   else if (t == clast_expr_bin)
     next = ((clast_binary *)expr)->LHS;
   else if (t == clast_expr_red) {
-    clast_reduction *r = (clast_reduction *)expr;
-    for (int i=0; i < n; i++)
-      eval(r->elts[i], ctx);
+    // Contract: Implementing actions have to evaluate
+    // the elements of a reduction theirselves (with
+    // calls to eval(..)), as this way the semantics of
+    // a reduction can be captured in a clean way, without
+    // carrying a parent-pointer in the cp_ctx.
   }
+  // After child-dfs.
+  out(expr, ctx);
 
   // DFS to child.
   if(next)
     eval(next, ctx);
 
-  // After child-dfs.
-  out(expr, ctx);
 }
 }
