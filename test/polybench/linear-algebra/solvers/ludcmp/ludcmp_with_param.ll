@@ -1,12 +1,9 @@
-; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s
+; RUN: opt -O3 -indvars -polly-scop-detect  -analyze %s | FileCheck %s
 ; XFAIL: *
-; ModuleID = '<stdin>'
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
-
 %struct._IO_FILE = type { i32, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, %struct._IO_marker*, %struct._IO_FILE*, i32, i32, i64, i16, i8, [1 x i8], i8*, i64, i8*, i8*, i8*, i8*, i64, i32, [20 x i8] }
 %struct._IO_marker = type { %struct._IO_marker*, %struct._IO_FILE*, i32 }
-
 @x = common global [1025 x double] zeroinitializer, align 32 ; <[1025 x double]*> [#uses=7]
 @b = common global [1025 x double] zeroinitializer, align 32 ; <[1025 x double]*> [#uses=4]
 @a = common global [1025 x [1025 x double]] zeroinitializer, align 32 ; <[1025 x [1025 x double]]*> [#uses=17]
@@ -14,94 +11,6 @@ target triple = "x86_64-unknown-linux-gnu"
 @.str = private constant [8 x i8] c"%0.2lf \00", align 1 ; <[8 x i8]*> [#uses=1]
 @w = common global double 0.000000e+00            ; <double*> [#uses=4]
 @y = common global [1025 x double] zeroinitializer, align 32 ; <[1025 x double]*> [#uses=5]
-
-define void @init_array() nounwind inlinehint {
-bb.nph7.split.us:
-  br label %bb.nph.us
-
-bb3.us:                                           ; preds = %bb1.us
-  %indvar.next9 = add i64 %indvar8, 1             ; <i64> [#uses=2]
-  %exitcond10 = icmp eq i64 %indvar.next9, 1025   ; <i1> [#uses=1]
-  br i1 %exitcond10, label %return, label %bb.nph.us
-
-bb1.us:                                           ; preds = %bb.nph.us, %bb1.us
-  %indvar = phi i64 [ 0, %bb.nph.us ], [ %indvar.next, %bb1.us ] ; <i64> [#uses=3]
-  %scevgep = getelementptr [1025 x [1025 x double]]* @a, i64 0, i64 %indvar8, i64 %indvar ; <double*> [#uses=1]
-  %storemerge12.us = trunc i64 %indvar to i32     ; <i32> [#uses=1]
-  %0 = sitofp i32 %storemerge12.us to double      ; <double> [#uses=1]
-  %1 = fmul double %4, %0                         ; <double> [#uses=1]
-  %2 = fadd double %1, 1.000000e+00               ; <double> [#uses=1]
-  %3 = fdiv double %2, 1.024000e+03               ; <double> [#uses=1]
-  store double %3, double* %scevgep, align 8
-  %indvar.next = add i64 %indvar, 1               ; <i64> [#uses=2]
-  %exitcond = icmp eq i64 %indvar.next, 1025      ; <i1> [#uses=1]
-  br i1 %exitcond, label %bb3.us, label %bb1.us
-
-bb.nph.us:                                        ; preds = %bb3.us, %bb.nph7.split.us
-  %indvar8 = phi i64 [ %indvar.next9, %bb3.us ], [ 0, %bb.nph7.split.us ] ; <i64> [#uses=5]
-  %storemerge3.us = trunc i64 %indvar8 to i32     ; <i32> [#uses=1]
-  %scevgep12 = getelementptr [1025 x double]* @b, i64 0, i64 %indvar8 ; <double*> [#uses=1]
-  %scevgep13 = getelementptr [1025 x double]* @x, i64 0, i64 %indvar8 ; <double*> [#uses=1]
-  %4 = sitofp i32 %storemerge3.us to double       ; <double> [#uses=3]
-  %5 = fadd double %4, 1.000000e+00               ; <double> [#uses=1]
-  %6 = fdiv double %5, 1.024000e+03               ; <double> [#uses=1]
-  store double %6, double* %scevgep13, align 8
-  %7 = fadd double %4, 2.000000e+00               ; <double> [#uses=1]
-  %8 = fdiv double %7, 1.024000e+03               ; <double> [#uses=1]
-  store double %8, double* %scevgep12, align 8
-  br label %bb1.us
-
-return:                                           ; preds = %bb3.us
-  ret void
-}
-
-define void @print_array(i32 %argc, i8** %argv) nounwind inlinehint {
-entry:
-  %0 = icmp sgt i32 %argc, 42                     ; <i1> [#uses=1]
-  br i1 %0, label %bb, label %return
-
-bb:                                               ; preds = %entry
-  %1 = load i8** %argv, align 1                   ; <i8*> [#uses=1]
-  %2 = load i8* %1, align 1                       ; <i8> [#uses=1]
-  %3 = icmp eq i8 %2, 0                           ; <i1> [#uses=1]
-  br i1 %3, label %bb2, label %return
-
-bb2:                                              ; preds = %bb4, %bb
-  %indvar = phi i64 [ %indvar.next, %bb4 ], [ 0, %bb ] ; <i64> [#uses=3]
-  %storemerge1 = trunc i64 %indvar to i32         ; <i32> [#uses=1]
-  %scevgep = getelementptr [1025 x double]* @x, i64 0, i64 %indvar ; <double*> [#uses=1]
-  %4 = load double* %scevgep, align 8             ; <double> [#uses=1]
-  %5 = load %struct._IO_FILE** @stderr, align 8   ; <%struct._IO_FILE*> [#uses=1]
-  %6 = tail call i32 (%struct._IO_FILE*, i8*, ...)* @fprintf(%struct._IO_FILE* noalias %5, i8* noalias getelementptr inbounds ([8 x i8]* @.str, i64 0, i64 0), double %4) nounwind ; <i32> [#uses=0]
-  %7 = srem i32 %storemerge1, 80                  ; <i32> [#uses=1]
-  %8 = icmp eq i32 %7, 20                         ; <i1> [#uses=1]
-  br i1 %8, label %bb3, label %bb4
-
-bb3:                                              ; preds = %bb2
-  %9 = load %struct._IO_FILE** @stderr, align 8   ; <%struct._IO_FILE*> [#uses=1]
-  %10 = bitcast %struct._IO_FILE* %9 to i8*       ; <i8*> [#uses=1]
-  %11 = tail call i32 @fputc(i32 10, i8* %10) nounwind ; <i32> [#uses=0]
-  br label %bb4
-
-bb4:                                              ; preds = %bb3, %bb2
-  %indvar.next = add i64 %indvar, 1               ; <i64> [#uses=2]
-  %exitcond = icmp eq i64 %indvar.next, 1025      ; <i1> [#uses=1]
-  br i1 %exitcond, label %bb6, label %bb2
-
-bb6:                                              ; preds = %bb4
-  %12 = load %struct._IO_FILE** @stderr, align 8  ; <%struct._IO_FILE*> [#uses=1]
-  %13 = bitcast %struct._IO_FILE* %12 to i8*      ; <i8*> [#uses=1]
-  %14 = tail call i32 @fputc(i32 10, i8* %13) nounwind ; <i32> [#uses=0]
-  ret void
-
-return:                                           ; preds = %bb, %entry
-  ret void
-}
-
-declare i32 @fprintf(%struct._IO_FILE* noalias nocapture, i8* noalias nocapture, ...) nounwind
-
-declare i32 @fputc(i32, i8* nocapture) nounwind
-
 define void @scop_func(i64 %n) nounwind {
 entry:
   store double 1.000000e+00, double* getelementptr inbounds ([1025 x double]* @b, i64 0, i64 0), align 32
@@ -343,83 +252,4 @@ bb25.return_crit_edge:                            ; preds = %bb24
 
 return:                                           ; preds = %bb20
   ret void
-}
-
-define i32 @main(i32 %argc, i8** %argv) nounwind {
-entry:
-  br label %bb.nph.us.i
-
-bb3.us.i:                                         ; preds = %bb1.us.i
-  %indvar.next9.i = add i64 %indvar8.i, 1         ; <i64> [#uses=2]
-  %exitcond6 = icmp eq i64 %indvar.next9.i, 1025  ; <i1> [#uses=1]
-  br i1 %exitcond6, label %init_array.exit, label %bb.nph.us.i
-
-bb1.us.i:                                         ; preds = %bb.nph.us.i, %bb1.us.i
-  %indvar.i = phi i64 [ 0, %bb.nph.us.i ], [ %indvar.next.i, %bb1.us.i ] ; <i64> [#uses=3]
-  %scevgep.i = getelementptr [1025 x [1025 x double]]* @a, i64 0, i64 %indvar8.i, i64 %indvar.i ; <double*> [#uses=1]
-  %storemerge12.us.i = trunc i64 %indvar.i to i32 ; <i32> [#uses=1]
-  %0 = sitofp i32 %storemerge12.us.i to double    ; <double> [#uses=1]
-  %1 = fmul double %4, %0                         ; <double> [#uses=1]
-  %2 = fadd double %1, 1.000000e+00               ; <double> [#uses=1]
-  %3 = fdiv double %2, 1.024000e+03               ; <double> [#uses=1]
-  store double %3, double* %scevgep.i, align 8
-  %indvar.next.i = add i64 %indvar.i, 1           ; <i64> [#uses=2]
-  %exitcond5 = icmp eq i64 %indvar.next.i, 1025   ; <i1> [#uses=1]
-  br i1 %exitcond5, label %bb3.us.i, label %bb1.us.i
-
-bb.nph.us.i:                                      ; preds = %bb3.us.i, %entry
-  %indvar8.i = phi i64 [ %indvar.next9.i, %bb3.us.i ], [ 0, %entry ] ; <i64> [#uses=5]
-  %scevgep13.i = getelementptr [1025 x double]* @x, i64 0, i64 %indvar8.i ; <double*> [#uses=1]
-  %scevgep12.i = getelementptr [1025 x double]* @b, i64 0, i64 %indvar8.i ; <double*> [#uses=1]
-  %storemerge3.us.i = trunc i64 %indvar8.i to i32 ; <i32> [#uses=1]
-  %4 = sitofp i32 %storemerge3.us.i to double     ; <double> [#uses=3]
-  %5 = fadd double %4, 1.000000e+00               ; <double> [#uses=1]
-  %6 = fdiv double %5, 1.024000e+03               ; <double> [#uses=1]
-  store double %6, double* %scevgep13.i, align 8
-  %7 = fadd double %4, 2.000000e+00               ; <double> [#uses=1]
-  %8 = fdiv double %7, 1.024000e+03               ; <double> [#uses=1]
-  store double %8, double* %scevgep12.i, align 8
-  br label %bb1.us.i
-
-init_array.exit:                                  ; preds = %bb3.us.i
-  tail call void @scop_func(i64 1024) nounwind
-  %9 = icmp sgt i32 %argc, 42                     ; <i1> [#uses=1]
-  br i1 %9, label %bb.i, label %print_array.exit
-
-bb.i:                                             ; preds = %init_array.exit
-  %10 = load i8** %argv, align 1                  ; <i8*> [#uses=1]
-  %11 = load i8* %10, align 1                     ; <i8> [#uses=1]
-  %12 = icmp eq i8 %11, 0                         ; <i1> [#uses=1]
-  br i1 %12, label %bb2.i, label %print_array.exit
-
-bb2.i:                                            ; preds = %bb4.i, %bb.i
-  %indvar.i1 = phi i64 [ %indvar.next.i3, %bb4.i ], [ 0, %bb.i ] ; <i64> [#uses=3]
-  %scevgep.i2 = getelementptr [1025 x double]* @x, i64 0, i64 %indvar.i1 ; <double*> [#uses=1]
-  %storemerge1.i = trunc i64 %indvar.i1 to i32    ; <i32> [#uses=1]
-  %13 = load double* %scevgep.i2, align 8         ; <double> [#uses=1]
-  %14 = load %struct._IO_FILE** @stderr, align 8  ; <%struct._IO_FILE*> [#uses=1]
-  %15 = tail call i32 (%struct._IO_FILE*, i8*, ...)* @fprintf(%struct._IO_FILE* noalias %14, i8* noalias getelementptr inbounds ([8 x i8]* @.str, i64 0, i64 0), double %13) nounwind ; <i32> [#uses=0]
-  %16 = srem i32 %storemerge1.i, 80               ; <i32> [#uses=1]
-  %17 = icmp eq i32 %16, 20                       ; <i1> [#uses=1]
-  br i1 %17, label %bb3.i, label %bb4.i
-
-bb3.i:                                            ; preds = %bb2.i
-  %18 = load %struct._IO_FILE** @stderr, align 8  ; <%struct._IO_FILE*> [#uses=1]
-  %19 = bitcast %struct._IO_FILE* %18 to i8*      ; <i8*> [#uses=1]
-  %20 = tail call i32 @fputc(i32 10, i8* %19) nounwind ; <i32> [#uses=0]
-  br label %bb4.i
-
-bb4.i:                                            ; preds = %bb3.i, %bb2.i
-  %indvar.next.i3 = add i64 %indvar.i1, 1         ; <i64> [#uses=2]
-  %exitcond = icmp eq i64 %indvar.next.i3, 1025   ; <i1> [#uses=1]
-  br i1 %exitcond, label %bb6.i, label %bb2.i
-
-bb6.i:                                            ; preds = %bb4.i
-  %21 = load %struct._IO_FILE** @stderr, align 8  ; <%struct._IO_FILE*> [#uses=1]
-  %22 = bitcast %struct._IO_FILE* %21 to i8*      ; <i8*> [#uses=1]
-  %23 = tail call i32 @fputc(i32 10, i8* %22) nounwind ; <i32> [#uses=0]
-  ret i32 0
-
-print_array.exit:                                 ; preds = %bb.i, %init_array.exit
-  ret i32 0
 }
