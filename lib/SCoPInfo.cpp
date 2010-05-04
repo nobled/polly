@@ -44,7 +44,7 @@ BuildSubSCoP("build-sub-scop", cl::Hidden, cl::desc("Build subSCoPs."));
 //===----------------------------------------------------------------------===//
 SCoPStmt::SCoPStmt(SCoP &parent, BasicBlock &bb,
                    polly_set *domain, polly_map *scat)
-  : Parent(parent), BB(bb), Domain(domain), Scattering(scat) {
+  : Parent(parent), BB(&bb), Domain(domain), Scattering(scat) {
     assert(Domain && Scattering && "Domain and Scattering can not be null!");
 }
 
@@ -54,7 +54,7 @@ SCoPStmt::~SCoPStmt() {
 }
 
 void SCoPStmt::print(raw_ostream &OS) const {
-  OS << "\tStatement " << BB.getNameStr() << ":\n";
+  OS << "\tStatement " << BB->getNameStr() << ":\n";
 
   OS << "\t\tDomain:\n";
   if (Domain) {

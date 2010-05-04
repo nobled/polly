@@ -19,7 +19,7 @@
 
 using namespace llvm;
 
-void polly::createSingleEntryEdge(Region *R, Pass *P) {
+BasicBlock *polly::createSingleEntryEdge(Region *R, Pass *P) {
   BasicBlock *BB = R->getEntry();
 
   BasicBlock::iterator SplitIt = BB->begin();
@@ -48,6 +48,7 @@ void polly::createSingleEntryEdge(Region *R, Pass *P) {
    if (R->contains(*PI))
      (*PI)->getTerminator()->replaceUsesOfWith(BB, newBB);
 
+ return newBB;
 }
 
 void polly::createSingleExitEdge(Region *R, Pass *P) {

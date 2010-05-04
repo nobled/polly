@@ -61,7 +61,7 @@ class SCoPStmt {
   SCoP &Parent;
 
   /// The BasicBlock represented by this SCoPStmt.
-  BasicBlock &BB;
+  BasicBlock *BB;
 
   /// The iteration domain describes the set of iterations for which this
   /// statement is executed.
@@ -100,7 +100,9 @@ public:
   /// @brief Get the BasicBlock represented by this SCoPStmt.
   ///
   /// @return The BasicBlock represented by this SCoPStmt.
-  BasicBlock *getBasicBlock() const { return &BB; }
+  BasicBlock *getBasicBlock() const { return BB; }
+
+  void setBasicBlock(BasicBlock *Block) { BB = Block; }
 
   /// @brief Print the SCoPStmt.
   ///

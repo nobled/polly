@@ -22,6 +22,8 @@
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"
 
+#include <vector>
+
 #ifdef _WINDOWS
 #define snprintf _snprintf
 #endif
@@ -31,11 +33,14 @@ using namespace llvm;
 
 namespace polly {
 
+typedef DenseMap<const Value*, Value*> ValueMapT;
+
 struct codegenctx : cp_ctx {
   succ_iterator edge;
   Pass *P;
-
-  codegenctx (succ_iterator e, Pass *pass): edge(e), P(pass) {}
+  std::vector<succ_iterator> edges;
+  ValueMapT ValueMap;
+  codegenctx(succ_iterator e, Pass *p): edge(e), P(p) {}
 };
 
   /// Create a loop on a specific edge
@@ -85,6 +90,44 @@ struct codegenctx : cp_ctx {
 
     return SI;
    }
+succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
+                     ValueMapT &VMap, Pass *P) {
+  dbgs() << "Copy BB " << BB->getNameStr() << "to edge"
+    << edge.getSource()->getNameStr() << " -> " << (*edge)->getNameStr()
+    << "\n";
+  BasicBlock *dest = *edge;
+  BasicBlock *BBCopy = SplitEdge(edge.getSource(), dest, P);
+
+  if (*succ_begin(BBCopy) != dest) {
+    BBCopy= dest;
+    dest = *succ_begin(dest);
+  }
+
+  /*
+  BBCopy->setName("polly_stmt." + BB->getName());
+  // Loop over all instructions, and copy them over.
+  BasicBlock::iterator it = BBCopy->begin();
+  for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
+       II != IE; ++II) {
+    if (II->isTerminator() || dyn_cast<PHINode>(II))
+      continue;
+
+    Instruction *NewInst = II->clone();
+    VMap[II] = NewInst;
+
+    for (Instruction::op_iterator UI = NewInst->op_begin(),
+         UE = NewInst->op_end(); UI != UE; ++UI) {
+      if (VMap.find(*UI) != VMap.end())
+        NewInst->replaceUsesOfWith(*UI, VMap[*UI]);
+    }
+
+    it = BBCopy->getInstList().insert(it, NewInst);
+    ++it;
+  }
+
+  */
+  return succ_begin(BBCopy);
+}
 class CPCodeGenerationActions : public CPActions {
   private:
     raw_ostream *ost;
@@ -110,10 +153,12 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   void print(struct clast_user_stmt *u, int depth, cp_ctx *ctx) {
+    codegenctx *cg_ctx = (codegenctx*) ctx;
     // Actually we have a list of pointers here. be careful.
     BasicBlock *BB = (BasicBlock*)u->statement->usr;
     switch(ctx->dir) {
       case DFS_IN:
+        cg_ctx->edge = copyBB(cg_ctx->edge, BB, cg_ctx->ValueMap, cg_ctx->P);
 	indent(depth);
 	*ost << BB->getNameStr() << " {\n";
 	break;
@@ -143,6 +188,7 @@ class CPCodeGenerationActions : public CPActions {
     switch(ctx->dir) {
       case DFS_IN:
         cg_ctx->edge = createLoop(cg_ctx->edge, NumLoopIterations, cg_ctx->P);
+        cg_ctx->edges.push_back(succ_begin(cg_ctx->edge.getSource()));
 	indent(depth);
 	*ost << "for (" << f->iterator <<"=";
 	eval(f->LB, ctx);
@@ -155,6 +201,8 @@ class CPCodeGenerationActions : public CPActions {
 	*ost << ") {\n";
 	break;
       case DFS_OUT:
+        cg_ctx->edge = cg_ctx->edges.back();
+        cg_ctx->edges.pop_back();
 	indent(depth);
 	*ost << "}\n";
 	break;
@@ -366,7 +414,12 @@ class ClastCodeGeneration : public RegionPass {
     if(!S)
       return false;
 
-    createSingleEntryEdge(R, this);
+    BasicBlock *newEntry = createSingleEntryEdge(R, this);
+
+    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI)
+      if ((*SI)->getBasicBlock() == R->getEntry())
+        (*SI)->setBasicBlock(newEntry);
+
     createSingleExitEdge(R, this);
     succ_iterator edge = insertNewCodeBranch();
 
