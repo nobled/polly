@@ -93,7 +93,7 @@ void CLooG::buildCloogOptions() {
 CloogLoop *CLooG::buildCloogLoop(SCoPStmt* stmt) {
   CloogStatement *Statement = cloog_statement_malloc(State);
   Statement->number = StatementNumber++;
-  Statement->usr = stmt->getBasicBlock();
+  Statement->usr = stmt;
 
   CloogBlock *Block = cloog_block_alloc(Statement, 0, NULL, 1);
   CloogDomain *Domain =

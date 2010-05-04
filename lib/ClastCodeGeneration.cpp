@@ -34,19 +34,27 @@ using namespace llvm;
 namespace polly {
 
 typedef DenseMap<const Value*, Value*> ValueMapT;
+typedef DenseMap<const char*, Value*> CharMapT;
 
 struct codegenctx : cp_ctx {
   succ_iterator edge;
   Pass *P;
   std::vector<succ_iterator> edges;
   ValueMapT ValueMap;
-  codegenctx(succ_iterator e, Pass *p): edge(e), P(p) {}
+  codegenctx(succ_iterator e, Pass *p, SCoP *scop): edge(e), P(p), S(scop) {}
+  std::vector<Value*> loop_ivs;
+  Value *exprValue;
+  CharMapT CharMap;
+  SCoP *S;
+  SCoPStmt *stmt;
+  BasicBlock *BB;
+  unsigned assignmentCount;
 };
 
   /// Create a loop on a specific edge
   /// @returns An edge on which the loop body can be inserted.
-  succ_iterator createLoop(succ_iterator edge, APInt NumLoopIterations,
-                           Pass *P, APInt stride) {
+  succ_iterator createLoop(succ_iterator edge, Value *UB,
+                           Pass *P, APInt stride, Value **IV) {
     BasicBlock *dest = *edge;
     BasicBlock *src = edge.getSource();
     const IntegerType *LoopIVType = IntegerType::getInt64Ty(src->getContext());
@@ -63,10 +71,11 @@ struct codegenctx : cp_ctx {
     TerminatorInst *oldTerminator = loop->getTerminator();
     PHINode *loopIV = PHINode::Create(LoopIVType, "polly.loopiv",
                                       loop->begin());
+    Value *iv = static_cast<Value*>(loopIV);
+    *IV = iv;
 
     ICmpInst *IS = new ICmpInst(oldTerminator, ICmpInst::ICMP_SGT, loopIV,
-                                ConstantInt::get(src->getContext(),
-                                                 NumLoopIterations));
+                                UB);
     BranchInst::Create(dest, loop, IS, loop);
     loopIV->addIncoming(loopIV, loop);
     loopIV->addIncoming(ConstantInt::get(LoopIVType, 0), src);
@@ -93,9 +102,6 @@ struct codegenctx : cp_ctx {
    }
 succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
                      ValueMapT &VMap, Pass *P) {
-  dbgs() << "Copy BB " << BB->getNameStr() << "to edge"
-    << edge.getSource()->getNameStr() << " -> " << (*edge)->getNameStr()
-    << "\n";
   BasicBlock *dest = *edge;
   BasicBlock *BBCopy = SplitEdge(edge.getSource(), dest, P);
 
@@ -104,7 +110,6 @@ succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
     dest = *succ_begin(dest);
   }
 
-  /*
   BBCopy->setName("polly_stmt." + BB->getName());
   // Loop over all instructions, and copy them over.
   BasicBlock::iterator it = BBCopy->begin();
@@ -118,6 +123,8 @@ succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
 
     for (Instruction::op_iterator UI = NewInst->op_begin(),
          UE = NewInst->op_end(); UI != UE; ++UI) {
+      Value *V = *UI;
+      V->dump();
       if (VMap.find(*UI) != VMap.end())
         NewInst->replaceUsesOfWith(*UI, VMap[*UI]);
     }
@@ -126,7 +133,6 @@ succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
     ++it;
   }
 
-  */
   return succ_begin(BBCopy);
 }
 class CPCodeGenerationActions : public CPActions {
@@ -140,13 +146,25 @@ class CPCodeGenerationActions : public CPActions {
 
   protected:
   void print(struct clast_assignment *a, int depth, cp_ctx *ctx) {
+    codegenctx *cg_ctx = (codegenctx*) ctx;
     switch(ctx->dir) {
       case DFS_IN:
         indent(depth);
 	if(a->LHS)
 	  *ost << a->LHS << "=";
-	  eval(a->RHS, ctx);
-	  *ost << "\n";
+	eval(a->RHS, ctx);
+
+        if(!a->LHS) {
+          PHINode *PN = cg_ctx->stmt->IVS[cg_ctx->assignmentCount];
+          cg_ctx->assignmentCount++;
+          Value *V = PN;
+          if (PN->getNumOperands() == 2) {
+            V = *(PN->use_begin());
+          }
+          cg_ctx->ValueMap[V] = cg_ctx->exprValue;
+        }
+
+	*ost << "\n";
 	break;
       case DFS_OUT:
 	break;
@@ -156,14 +174,19 @@ class CPCodeGenerationActions : public CPActions {
   void print(struct clast_user_stmt *u, int depth, cp_ctx *ctx) {
     codegenctx *cg_ctx = (codegenctx*) ctx;
     // Actually we have a list of pointers here. be careful.
-    BasicBlock *BB = (BasicBlock*)u->statement->usr;
+    SCoPStmt *stmt = (SCoPStmt *)u->statement->usr;
+    BasicBlock *BB = stmt->getBasicBlock();
     switch(ctx->dir) {
       case DFS_IN:
-        cg_ctx->edge = copyBB(cg_ctx->edge, BB, cg_ctx->ValueMap, cg_ctx->P);
+        cg_ctx->BB = BB;
+        cg_ctx->stmt = stmt;
+        cg_ctx->assignmentCount = 0;
 	indent(depth);
 	*ost << BB->getNameStr() << " {\n";
 	break;
       case DFS_OUT:
+        cg_ctx->edge = copyBB(cg_ctx->edge, BB, cg_ctx->ValueMap, cg_ctx->P);
+        cg_ctx->BB = 0;
 	indent(depth);
 	*ost << "}\n";
 	break;
@@ -185,28 +208,34 @@ class CPCodeGenerationActions : public CPActions {
 
   void print(struct clast_for *f, int depth, cp_ctx *ctx) {
     codegenctx *cg_ctx = (codegenctx*) ctx;
-    APInt NumLoopIterations(64, 2047);
     switch(ctx->dir) {
       case DFS_IN: {
+	APInt stride = APInt_from_MPZ(f->stride);
+        Value *IV;
 	indent(depth);
 	*ost << "for (" << f->iterator <<"=";
 	eval(f->LB, ctx);
+        //Value *LB = cg_ctx->exprValue;
 	*ost << ";";
 	*ost << f->iterator <<"<=";
 	eval(f->UB, ctx);
+        Value *UB = cg_ctx->exprValue;
 	*ost << ";";
 	*ost << f->iterator << "+=";
-	APInt stride = APInt_from_MPZ(f->stride);
         stride.print(*ost, false);
-	*ost << ") {\n";
-        cg_ctx->edge = createLoop(cg_ctx->edge, NumLoopIterations, cg_ctx->P,
-                                  stride);
+        cg_ctx->edge = createLoop(cg_ctx->edge, UB, cg_ctx->P,
+                                  stride, &IV);
         cg_ctx->edges.push_back(succ_begin(cg_ctx->edge.getSource()));
+        CharMapT *M = &cg_ctx->CharMap;
+        (*M)[f->iterator] = IV;
+        cg_ctx->loop_ivs.push_back(IV);
+	*ost << ") {\n";
 	break;
       }
       case DFS_OUT:
         cg_ctx->edge = cg_ctx->edges.back();
         cg_ctx->edges.pop_back();
+        cg_ctx->loop_ivs.pop_back();
 	indent(depth);
 	*ost << "}\n";
 	break;
@@ -264,11 +293,21 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   void print(clast_name *e, cp_ctx *ctx) {
-    if(ctx->dir == DFS_IN)
+    if(ctx->dir == DFS_IN) {
       *ost << e->name;
+
+      codegenctx *cg_ctx = (codegenctx*) ctx;
+      CharMapT::iterator I = cg_ctx->CharMap.find(e->name);
+      if (I != cg_ctx->CharMap.end())
+        cg_ctx->exprValue = I->second;
+      else
+        assert(false && "Value not found");
+
+    }
   }
 
   void print(clast_term *e, cp_ctx *ctx) {
+    codegenctx *cg_ctx = (codegenctx*) ctx;
     APInt a = APInt_from_MPZ(e->val);
     if(e->var) {
       static int brkt;
@@ -291,8 +330,13 @@ class CPCodeGenerationActions : public CPActions {
        if (brkt)
          *ost << ")";
       }
-    } else
+    } else {
+      a.zext(64);
+      Value *ConstOne = ConstantInt::get((cg_ctx->edge)->getContext(), a);
+      cg_ctx->exprValue = ConstOne;
+
       a.print(*ost, true);
+    }
   }
 
   void print(clast_binary *e, cp_ctx *ctx) {
@@ -415,7 +459,7 @@ class ClastCodeGeneration : public RegionPass {
     S = getAnalysis<SCoPInfo>().getSCoP();
     DT = &getAnalysis<DominatorTree>();
 
-    if(!S)
+    if (!S)
       return false;
 
     BasicBlock *newEntry = createSingleEntryEdge(R, this);
@@ -430,7 +474,7 @@ class ClastCodeGeneration : public RegionPass {
     CLooG C = CLooG(S);
     CPCodeGenerationActions cpa = CPCodeGenerationActions(dbgs());
     ClastParser cp = ClastParser(cpa);
-    codegenctx ctx (edge, this);
+    codegenctx ctx (edge, this, S);
 
     cp.parse(C.getClast(), &ctx);
     dbgs() << "\n";

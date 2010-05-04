@@ -237,7 +237,7 @@ polly_basic_set *buildIterateDomain(SCoP &SCoP, TempSCoP &TempSCoP,
 void SCoP::buildStmt(TempSCoP &TempSCoP, BasicBlock &BB,
                       SmallVectorImpl<Loop*> &NestLoops,
                       SmallVectorImpl<unsigned> &Scatter,
-                      ScalarEvolution &SE) {
+                      LoopInfo &LI, ScalarEvolution &SE) {
 
   polly_basic_set *bset = buildIterateDomain(*this, TempSCoP, SE, NestLoops);
 
@@ -265,7 +265,35 @@ void SCoP::buildStmt(TempSCoP &TempSCoP, BasicBlock &BB,
   // Access function
 
   // Instert the statement
-  Stmts.insert(new SCoPStmt(*this, BB, Domain, Scattering));
+  SCoPStmt *stmt = new SCoPStmt(*this, BB, Domain, Scattering);
+
+  Region *R = &TempSCoP.getMaxRegion();
+  Loop *L = LI.getLoopFor(&BB);
+  int count = 0;
+
+  while (L && R->contains(L->getHeader()) && R->contains(L->getExitingBlock())
+         && L) {
+    L = L->getParentLoop();
+    count++;
+  }
+
+  int i = 0;
+
+  stmt->IVS.resize(count);
+  L = LI.getLoopFor(&BB);
+  while (L && R->contains(L->getHeader()) && R->contains(L->getExitingBlock())
+         && L) {
+    PHINode *PN = L->getCanonicalInductionVariable();
+    stmt->IVS[count-i-1] = PN;
+    L = L->getParentLoop();
+    i++;
+  }
+
+  Stmts.insert(stmt);
+}
+
+Value *SCoPStmt::getIVatLevel(unsigned L) {
+  return IVS[L];
 }
 
 void SCoP::buildSCoP(TempSCoP &TempSCoP,
@@ -290,7 +318,7 @@ void SCoP::buildSCoP(TempSCoP &TempSCoP,
     else {
       // Build the statement
       buildStmt(TempSCoP, *(I->getNodeAs<BasicBlock>()), NestLoops, Scatter,
-                SE);
+                LI, SE);
       // Increasing the Scattering function is ok for at the moment, because
       // we are using a depth iterator and the program is linear
       ++Scatter[loopDepth];

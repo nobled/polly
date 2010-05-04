@@ -84,6 +84,9 @@ class SCoPStmt {
 
   friend class SCoP;
 public:
+  // The loop IVS.
+  std::vector<PHINode*> IVS;
+
   ~SCoPStmt();
 
   /// @brief Get the iterate domain of this SCoPStmt.
@@ -103,6 +106,7 @@ public:
   BasicBlock *getBasicBlock() const { return BB; }
 
   void setBasicBlock(BasicBlock *Block) { BB = Block; }
+  Value *getIVatLevel(unsigned L);
 
   /// @brief Print the SCoPStmt.
   ///
@@ -173,7 +177,7 @@ class SCoP {
   void buildStmt(TempSCoP &TempSCoP, BasicBlock &BB,
                   SmallVectorImpl<Loop*> &NestLoops,
                   SmallVectorImpl<unsigned> &Scatter,
-                  ScalarEvolution &SE);
+                  LoopInfo &LI, ScalarEvolution &SE);
 
   /// Helper function for printing the SCoP.
   void printContext(raw_ostream &OS) const;

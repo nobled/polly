@@ -19,6 +19,8 @@
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"
 
+struct clast_name;
+
 namespace polly {
 class CLooG {
   SCoP *S;
@@ -71,6 +73,8 @@ public:
   int *buildScaldims(CloogProgram *Program) const;
 
   CloogBlockList *buildCloogBlockList(CloogLoop *LL);
+
+  int getLoopIVfor(clast_name *name);
 
   void buildCloogProgram();
 };
