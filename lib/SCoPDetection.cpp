@@ -16,10 +16,12 @@
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/AffineSCEVIterator.h"
 
+#include "llvm/Intrinsics.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Assembly/Writer.h"
 #include "llvm/Support/CFG.h"
+#include "llvm/Support/CallSite.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/Statistic.h"
 
@@ -363,7 +365,8 @@ static bool isPreHeader(BasicBlock *BB, LoopInfo *LI) {
     LI->isLoopHeader(TI->getSuccessor(0));
 }
 
-bool SCoPDetection::checkCFG(BasicBlock &BB, Region &R) {
+bool SCoPDetection::checkCFG(BasicBlock &BB, TempSCoP &SCoP) {
+  Region &R = SCoP.getMaxRegion();
   TerminatorInst *TI = BB.getTerminator();
 
   unsigned int numSucc = TI->getNumSuccessors();
@@ -410,18 +413,57 @@ bool SCoPDetection::checkCFG(BasicBlock &BB, Region &R) {
   // TODO: handle the branch condition
 }
 
+static bool isPureIntrinsic(unsigned ID) {
+  switch (ID) {
+  default:
+    return false;
+  case Intrinsic::sqrt:
+  case Intrinsic::powi:
+  case Intrinsic::sin:
+  case Intrinsic::cos:
+  case Intrinsic::pow:
+  case Intrinsic::log:
+  case Intrinsic::log10:
+  case Intrinsic::log2:
+  case Intrinsic::exp:
+  case Intrinsic::exp2:
+    return true;
+  }
+}
+
+bool SCoPDetection::checkCallInst(CallInst &CI, TempSCoP &SCoP) {
+  if (CI.mayThrow() || // And not break the cfg
+      CI.doesNotReturn()) {
+      return false;
+  }
+  // If the call not access memory
+  if (CI.doesNotAccessMemory())
+    return true;
+  // Unfortunately some memory access information are true for intrinisic
+  // function, e.g. line 239 in Intrinsics.td
+  unsigned IntrID = CI.getCalledFunction()->getIntrinsicID();
+  if (IntrID != Intrinsic::not_intrinsic)
+    return isPureIntrinsic(IntrID);
+
+  // Try to get the aa result?
+  return false;
+}
+
 bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
   // Iterate over the BB to check its instructions, dont visit terminator
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I){
     Instruction &Inst = *I;
 
-    DEBUG(dbgs() << Inst <<"\n");
     // Function call is not allowed in SCoP at the moment.
-    if (/*CallInst *CI = */dyn_cast<CallInst>(&Inst)) {
-      // TODO: Handle CI
-      DEBUG(dbgs() << "Bad call Inst!\n");
-      STATBAD(FuncCall);
-      return false;
+    // We only check the call instruction but not invoke instruction.
+    if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
+      if (!checkCallInst(*CI, SCoP)) {
+        DEBUG(dbgs() << "Bad call Inst!\n");
+        STATBAD(FuncCall);
+        return false;
+      }
+      // Otherwise this call instruction is ok.
+      continue;
     }
 
     if (!Inst.mayWriteToMemory() && !Inst.mayReadFromMemory()) {
@@ -431,7 +473,6 @@ bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
         STATBAD(Other);
         return false;
       }
-
       continue;
     }
 
@@ -591,7 +632,7 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
     else if (isValidRegion) {
       // We check the basic blocks only the region is valid.
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-      if (!checkCFG(BB, R) || // Check cfg
+      if (!checkCFG(BB, *SCoP) || // Check cfg
           !checkBasicBlock(BB, *SCoP)){// Check all non terminator inst
         DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
         // Clean up the access function map, so we get a clear dump.
