@@ -80,7 +80,8 @@ class SCoPStmt {
   /// TODO: access functions.
 
   /// Create the SCoPStmt from a BasicBlock.
-  SCoPStmt(SCoP &parent, BasicBlock &bb, polly_set *domain, polly_map *scat);
+  SCoPStmt(SCoP &parent, BasicBlock &bb, polly_set *domain, polly_map *scat,
+           const SmallVectorImpl<Loop*> &NestLoops);
 
   friend class SCoP;
 public:
@@ -106,7 +107,13 @@ public:
   BasicBlock *getBasicBlock() const { return BB; }
 
   void setBasicBlock(BasicBlock *Block) { BB = Block; }
-  Value *getIVatLevel(unsigned L);
+
+  /// @brief Get the induction variable of the loop a given level.
+  ///
+  /// @param L The level of loop for the induction variable.
+  ///
+  /// @return The induction variable of the Loop at level L.
+  PHINode *getIVatLevel(unsigned L);
 
   /// @brief Print the SCoPStmt.
   ///
@@ -171,13 +178,17 @@ class SCoP {
 
   /// Build the SCoP and Statement with precalculate scop information.
   void buildSCoP(TempSCoP &TempSCoP, const Region &CurRegion,
+                  // Loops in SCoP containing CurRegion
                   SmallVectorImpl<Loop*> &NestLoops,
+                  // The scattering numbers
                   SmallVectorImpl<unsigned> &Scatter,
                   LoopInfo &LI, ScalarEvolution &SE);
   void buildStmt(TempSCoP &TempSCoP, BasicBlock &BB,
+                  // Loops in SCoP containing BB
                   SmallVectorImpl<Loop*> &NestLoops,
+                  // The scattering numbers
                   SmallVectorImpl<unsigned> &Scatter,
-                  LoopInfo &LI, ScalarEvolution &SE);
+                  ScalarEvolution &SE);
 
   /// Helper function for printing the SCoP.
   void printContext(raw_ostream &OS) const;
