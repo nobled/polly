@@ -38,10 +38,10 @@ for.end19:                                        ; preds = %for.inc16.us
   ret i32 %tmp23
 }
 ; CHECK: for (s1=0;s1<=99;s1++) {
-; CHECK:   S{{[0-3]}}(s1);
+; CHECK:   S{{[0-4]}}(s1);
 ; CHECK:   for (s3=0;s3<=199;s3++) {
-; CHECK:     S{{[[0-3]}}(s1,s3);
+; CHECK:     S{{[[0-4]}}(s1,s3);
 ; CHECK:   }
-; CHECK:   S{{[0-3]}}(s1);
+; CHECK:   S{{[0-4]}}(s1);
 ; CHECK: }
 
