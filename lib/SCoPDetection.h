@@ -82,7 +82,8 @@ public:
   /// @param S            The SCEV expression to be converted to affine
   ///                     function.
   /// @param SCoP         The Scope of this expression.
-  /// @param FuncToBuild  The SCEVAffFunc to hold the result.
+  /// @param FuncToBuild  The SCEVAffFunc to hold the result, you can pass 0 if
+  ///                     you only want to check if S is affine.
   /// @param LI           The LoopInfo to help to build the affine function.
   /// @param SE           The ScalarEvolution to help to build the affine
   ///                     function.
@@ -90,7 +91,7 @@ public:
   /// @return             Return true if S could be convert to affine function,
   ///                     false otherwise.
   static bool buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
-    SCEVAffFunc &FuncToBuild, LoopInfo &LI, ScalarEvolution &SE);
+    SCEVAffFunc *FuncToBuild, LoopInfo &LI, ScalarEvolution &SE);
 
   /// @brief Build a loop bound constrain from an affine function.
   ///
@@ -244,6 +245,8 @@ class SCoPDetection : public FunctionPass {
   // Access function of bbs.
   AccFuncMapType AccFuncMap;
 
+  bool checkSCoPOnly;
+
   // SCoPs in the function
   TempSCoPMapType RegionToSCoPs;
 
@@ -276,7 +279,7 @@ class SCoPDetection : public FunctionPass {
 
 public:
   static char ID;
-  explicit SCoPDetection() : FunctionPass(&ID) {}
+  explicit SCoPDetection() : FunctionPass(&ID), checkSCoPOnly(false) {}
   ~SCoPDetection();
 
   /// @brief Get the temporay SCoP information in LLVM IR represent

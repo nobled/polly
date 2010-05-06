@@ -38,9 +38,6 @@ static cl::opt<bool>
 PrintLoopBound("print-loop-bounds", cl::Hidden,
             cl::desc("Print the bounds of loops."));
 
-static cl::opt<bool>
-BuildSubSCoP("build-sub-scop", cl::Hidden, cl::desc("Build subSCoPs."));
-
 //===----------------------------------------------------------------------===//
 SCoPStmt::SCoPStmt(SCoP &parent, BasicBlock &bb,
                    polly_set *domain, polly_map *scat,
@@ -336,17 +333,15 @@ void SCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
 bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   SCoPDetection &SCoPDetect = getAnalysis<SCoPDetection>();
 
-  TempSCoP *TempSCoP =SCoPDetect.getTempSCoPFor(R);
+  TempSCoP *tempSCoP =SCoPDetect.getTempSCoPFor(R);
 
-  if (!TempSCoP) return false;
-
-  if (!BuildSubSCoP && !SCoPDetect.isMaxRegionInSCoP(*R)) return false;
+  if (!tempSCoP) return false;
 
   SmallVector<Loop*, 8> NestLoops;
   SmallVector<unsigned, 8> Scatter;
 
-  ParamSetType &Params = TempSCoP->getParamSet();
-  unsigned maxLoopDepth = TempSCoP->getMaxLoopDepth();
+  ParamSetType &Params = tempSCoP->getParamSet();
+  unsigned maxLoopDepth = tempSCoP->getMaxLoopDepth();
   // Create the scop.
   scop = new SCoP(*R, maxLoopDepth, Params.begin(), Params.end());
 
@@ -354,7 +349,7 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   // Initialize the scattering function
   Scatter.assign(numScatter, 0);
 
-  scop->buildSCoP(*TempSCoP, scop->getRegion(), NestLoops, Scatter,
+  scop->buildSCoP(*tempSCoP, scop->getRegion(), NestLoops, Scatter,
                   getAnalysis<LoopInfo>(), getAnalysis<ScalarEvolution>());
 
   assert(NestLoops.empty() && "NestLoops not empty at top level!");
