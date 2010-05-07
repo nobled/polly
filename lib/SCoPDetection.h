@@ -87,6 +87,11 @@ public:
   /// @brief Create a new SCEV affine function.
   explicit SCEVAffFunc() : TransComp(0), BaseAddr(0, SCEVAffFunc::None) {}
 
+  /// @brief Create a new SCEV affine function with memory access type.
+
+  explicit SCEVAffFunc(AccessType Type)
+    : TransComp(0), BaseAddr(0, Type) {}
+
   /// @brief Build an affine function from a SCEV expression.
   ///
   /// @param S            The SCEV expression to be converted to affine
@@ -118,9 +123,17 @@ public:
                                   const SmallVectorImpl<const SCEV*> &Params,
                                   bool isLower) const;
 
+  polly_constraint *toAccessFunction(polly_ctx *ctx, polly_dim* dim,
+                            const SmallVectorImpl<Loop*> &NestLoops,
+                            const SmallVectorImpl<const SCEV*> &Params,
+                            ScalarEvolution &SE) const;
+
+
   bool isDataRef() const { return BaseAddr.getInt() != SCEVAffFunc::None; }
 
   bool isRead() const { return BaseAddr.getInt() == SCEVAffFunc::Read; }
+
+  const Value *getBaseAddr() const { return BaseAddr.getPointer(); }
 
   /// @brief Print the affine function.
   ///
@@ -198,9 +211,14 @@ public:
   /// @param L The loop to get the bounds.
   ///
   // @return The bounds of the loop L in { Lower bound, Upper bound } form.
-  const AffBoundType *getLoopBound(const Loop *L) {
+  const AffBoundType *getLoopBound(const Loop *L) const {
     BoundMapType::const_iterator at = LoopBounds.find(L);
     return at != LoopBounds.end()? &(at->second) : 0;
+  }
+
+  const AccFuncSetType *getAccessFunctions(const BasicBlock* BB) const {
+    AccFuncMapType::const_iterator at = AccFuncMap.find(BB);
+    return at != AccFuncMap.end()? &(at->second) : 0;
   }
   //@}
 

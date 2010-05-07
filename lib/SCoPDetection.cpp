@@ -255,12 +255,12 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
     PtrExist;
 }
 
-static void setCoefficient(const SCEV *Coeff, mpz_t v, bool isLower) {
+static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative) {
   if (Coeff) { // If the coefficient exist
     const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
     const APInt &CI = C->getValue()->getValue();
     // Convert i >= expr to i - expr >= 0
-    MPZ_from_APInt(v, isLower?(-CI):CI);
+    MPZ_from_APInt(v, negative ?(-CI):CI);
   }
   else
     isl_int_set_si(v, 0);
@@ -302,6 +302,39 @@ polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
    // Free v
    isl_int_clear(v);
    return c;
+}
+
+polly_constraint *SCEVAffFunc::toAccessFunction(polly_ctx *ctx, polly_dim* dim,
+                                    const SmallVectorImpl<Loop*> &NestLoops,
+                                    const SmallVectorImpl<const SCEV*> &Params,
+                                    ScalarEvolution &SE) const {
+  polly_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+  isl_int v;
+  isl_int_init(v);
+
+  isl_int_set_si(v, 1);
+  isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
+
+  // Dont touch the current iterator.
+  for (unsigned i = 0, e = NestLoops.size(); i != e; ++i) {
+    Loop *L = NestLoops[i];
+    Value *IndVar = L->getCanonicalInductionVariable();
+    setCoefficient(getCoeff(SE.getSCEV(IndVar)), v, true);
+    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
+  }
+
+  // Setup the coefficient of parameters
+  for (unsigned i = 0, e = Params.size(); i != e; ++i) {
+    setCoefficient(getCoeff(Params[i]), v, true);
+    isl_constraint_set_coefficient(c, isl_dim_param, i, v);
+  }
+
+  // Set the const.
+  setCoefficient(TransComp, v, true);
+  isl_constraint_set_constant(c, v);
+
+  isl_int_clear(v);
+  return c;
 }
 
 void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
@@ -524,7 +557,7 @@ bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
       // Get the function set
       AccFuncSetType &AccFuncSet = AccFuncMap[&BB];
       // Make the access function.
-      AccFuncSet.push_back(SCEVAffFunc());
+      AccFuncSet.push_back(SCEVAffFunc(AccType));
       func = &AccFuncSet.back();
     }
 

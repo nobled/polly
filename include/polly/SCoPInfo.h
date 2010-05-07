@@ -21,6 +21,7 @@
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/ADT/PointerIntPair.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 
@@ -34,6 +35,48 @@ namespace polly {
 //===----------------------------------------------------------------------===//
 class SCoP;
 class SCoPInfo;
+
+//===----------------------------------------------------------------------===//
+/// @brief Represent memory accesses in statements.
+///
+class MemoryAccess {
+  //===-------------------------------------------------------------------===//
+  // DO NOT IMPLEMENT
+  MemoryAccess(const MemoryAccess &);
+  // DO NOT IMPLEMENT
+  const MemoryAccess &operator=(const MemoryAccess &);
+
+public:
+  enum AccessType {
+    Read, // Or we could call it "Use"
+    Write // Or define
+  };
+
+private:
+  // The access function map iterate domain to memory location.
+  polly_map *AccFunc;
+
+  // Base address and access type.
+  // Value? or SCEV?
+  PointerIntPair<const Value*, 1, AccessType> BaseAddr;
+
+public:
+  MemoryAccess(const Value *Base, AccessType AccType, polly_map *accFunc)
+    : AccFunc(accFunc), BaseAddr(Base, AccType) {}
+
+  ~MemoryAccess();
+
+  bool isRead() const { return BaseAddr.getInt() == MemoryAccess::Read; }
+
+  /// @brief Print the MemoryAccess.
+  ///
+  /// @param OS The output stream the MemoryAccess is printed to.
+  void print(raw_ostream &OS) const;
+
+  /// @brief Print the MemoryAccess to stderr.
+  void dump() const;
+
+};
 
 //===----------------------------------------------------------------------===//
 /// @brief Statement in Static control part.
@@ -77,11 +120,18 @@ class SCoPStmt {
   /// a look at cloog.org to find a complete description.
   polly_map *Scattering;
 
-  /// TODO: access functions.
+  typedef SmallVector<MemoryAccess*, 8> MemAccVec;
+  MemAccVec MemAccs;
 
   /// Create the SCoPStmt from a BasicBlock.
   SCoPStmt(SCoP &parent, BasicBlock &bb, polly_set *domain, polly_map *scat,
            const SmallVectorImpl<Loop*> &NestLoops);
+
+  ///
+  void addMemoryAccess(MemoryAccess *MemAcc) {
+    assert(MemAcc && "Can insert null MemoryAccess!");
+    MemAccs.push_back(MemAcc);
+  }
 
   friend class SCoP;
 public:

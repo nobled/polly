@@ -39,6 +39,21 @@ PrintLoopBound("print-loop-bounds", cl::Hidden,
             cl::desc("Print the bounds of loops."));
 
 //===----------------------------------------------------------------------===//
+MemoryAccess::~MemoryAccess() {
+  isl_map_free(AccFunc);
+}
+
+void MemoryAccess::print(raw_ostream &OS) const {
+   // Print BaseAddr
+  OS << (isRead() ? "Reads" : "Writes") << " ";
+  WriteAsOperand(OS, BaseAddr.getPointer(), false);
+  OS << " at:\n";
+  isl_map_print(AccFunc, stderr, 20, ISL_FORMAT_ISL);
+  DEBUG(OS << "\n");
+  DEBUG(isl_map_dump(AccFunc, stderr, 20));
+}
+
+//===----------------------------------------------------------------------===//
 SCoPStmt::SCoPStmt(SCoP &parent, BasicBlock &bb,
                    polly_set *domain, polly_map *scat,
                    const SmallVectorImpl<Loop*> &NestLoops)
@@ -53,6 +68,11 @@ SCoPStmt::SCoPStmt(SCoP &parent, BasicBlock &bb,
 }
 
 SCoPStmt::~SCoPStmt() {
+  while (!MemAccs.empty()) {
+    delete MemAccs.back();
+    MemAccs.pop_back();
+  }
+
   isl_set_free(Domain);
   isl_map_free(Scattering);
 }
@@ -78,6 +98,15 @@ void SCoPStmt::print(raw_ostream &OS) const {
     DEBUG(isl_map_dump(Scattering, stderr, 20));
   } else
     OS << "\t\t\tn/a\n";
+
+  OS << "\n";
+
+  for (MemAccVec::const_iterator I = MemAccs.begin(), E = MemAccs.end();
+      I != E; ++I) {
+    (*I)->print(OS);
+    OS << "\n";
+  }
+
 }
 
 void SCoPStmt::dump() const { print(dbgs()); }
@@ -266,10 +295,39 @@ void SCoP::buildStmt(TempSCoP &TempSCoP, BasicBlock &BB,
   DEBUG(std::cerr << "\nScattering:\n");
   DEBUG(isl_map_print(Scattering, stderr, 20, ISL_FORMAT_ISL));
   DEBUG(std::cerr << std::endl);
-  // Access function
 
   // Instert the statement
   SCoPStmt *stmt = new SCoPStmt(*this, BB, Domain, Scattering, NestLoops);
+
+  // Access function
+  if (const AccFuncSetType *AccFuncs = TempSCoP.getAccessFunctions(&BB)) {
+    // At this moment, getelementptr translate multiple dimension to
+    // one dimension.
+    polly_dim *dim = isl_dim_alloc(ctx,
+                                   Parameters.size(), NestLoops.size(), 1);
+    for (AccFuncSetType::const_iterator I=AccFuncs->begin(), E=AccFuncs->end();
+        I != E; ++I) {
+      const SCEVAffFunc &AffFunc = *I;
+      polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+
+      bmap = isl_basic_map_add_constraint(bmap,
+        AffFunc.toAccessFunction(ctx, dim, NestLoops, Parameters, SE));
+
+      polly_map *map = isl_map_from_basic_map(bmap);
+
+      MemoryAccess *access = new MemoryAccess(AffFunc.getBaseAddr(),
+        AffFunc.isRead() ? MemoryAccess::Read : MemoryAccess::Write, map);
+
+      DEBUG(dbgs() << "Translate access function:\n");
+      DEBUG(AffFunc.print(dbgs(), &SE));
+      DEBUG(dbgs() << "\nto:\n");
+      DEBUG(isl_map_print(map, stderr, 20, ISL_FORMAT_ISL));
+      DEBUG(std::cerr << std::endl);
+
+      stmt->addMemoryAccess(access);
+    }
+
+  }
 
   Stmts.insert(stmt);
 }
