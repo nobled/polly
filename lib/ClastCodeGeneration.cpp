@@ -123,8 +123,6 @@ succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
 
     for (Instruction::op_iterator UI = NewInst->op_begin(),
          UE = NewInst->op_end(); UI != UE; ++UI) {
-      Value *V = *UI;
-      V->dump();
       if (VMap.find(*UI) != VMap.end())
         NewInst->replaceUsesOfWith(*UI, VMap[*UI]);
     }
@@ -309,33 +307,15 @@ class CPCodeGenerationActions : public CPActions {
   void print(clast_term *e, cp_ctx *ctx) {
     codegenctx *cg_ctx = (codegenctx*) ctx;
     APInt a = APInt_from_MPZ(e->val);
-    if(e->var) {
-      static int brkt;
-      brkt = (e->var->type == clast_expr_red) &&
-             ((struct clast_reduction*) e->var)->n > 1;
-      if (ctx->dir == DFS_IN) {
-        if (a == 1)
-          ;
-        else if (a == -1)
-          *ost << "-";
-        else {
-          a.print(*ost, true);
-          *ost << " *";
-        }
-        if (brkt)
-          *ost << "(";
-
-      }
-      else {
-       if (brkt)
-         *ost << ")";
-      }
-    } else {
+    if (ctx->dir == DFS_IN) {
       a.zext(64);
       Value *ConstOne = ConstantInt::get((cg_ctx->edge)->getContext(), a);
       cg_ctx->exprValue = ConstOne;
-
+      *ost << "(";
       a.print(*ost, true);
+      *ost << ")";
+      if(e->var)
+        *ost << "*";
     }
   }
 
@@ -362,12 +342,25 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   void print(clast_reduction *r, cp_ctx *ctx) {
-    if (r->n > 1) {
-      if (ctx->dir == DFS_IN)
-        print_red_name(r, ctx);
+    if (ctx->dir == DFS_IN) {
+      const char *delim = NULL;
+      print_red_name(r, ctx);
+
+      if (r->type == clast_red_min)
+        delim = ",";
+      else if (r->type == clast_red_max)
+        delim = ",";
       else
-        *ost << ")";
+        delim = "";
+
+      eval(r->elts[0], ctx);
+      for (int i=1; i < r->n; ++i) {
+        *ost << delim;
+        eval(r->elts[i], ctx);
+      }
     }
+    else
+      *ost << ")";
   }
 
   void print(clast_expr *e, cp_ctx *ctx) {
