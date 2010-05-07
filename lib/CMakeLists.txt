@@ -12,3 +12,7 @@ add_polly_library(LLVMPolly
   Support/IRHelper.cpp
   Support/AffSCEVItTester.cpp
   )
+
+if (SCOPLIB_FOUND)
+  target_link_libraries (LLVMPolly LLVMSCoPExchange)
+endif (SCOPLIB_FOUND)
