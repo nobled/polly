@@ -294,6 +294,10 @@ class SCoPDetection : public FunctionPass {
   // Check if the instruction calling the valid function for SCoP.
   bool checkCallInst(CallInst &CI, TempSCoP &SCoP);
 
+  // Check if the Instruction is a valid part of SCoP, return true and extract
+  // the corresponding information, return false otherwise.
+  bool checkInstruction(Instruction &I, TempSCoP &SCoP);
+
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
   bool checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP);

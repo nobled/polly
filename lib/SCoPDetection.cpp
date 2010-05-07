@@ -486,88 +486,92 @@ static bool isPureIntrinsic(unsigned ID) {
 }
 
 bool SCoPDetection::checkCallInst(CallInst &CI, TempSCoP &SCoP) {
-  if (CI.mayThrow() || // And not break the cfg
-      CI.doesNotReturn()) {
+  if (CI.mayThrow() || CI.doesNotReturn())
       return false;
-  }
-  // If the call not access memory
+
   if (CI.doesNotAccessMemory())
     return true;
+
   // Unfortunately some memory access information are true for intrinisic
   // function, e.g. line 239 in Intrinsics.td
   unsigned IntrID = CI.getCalledFunction()->getIntrinsicID();
+
   if (IntrID != Intrinsic::not_intrinsic)
     return isPureIntrinsic(IntrID);
 
-  // Try to get the aa result?
+  // XXX: Get the alias analysis result?
   return false;
 }
 
-bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
-  // Iterate over the BB to check its instructions, dont visit terminator
-  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I){
-    Instruction &Inst = *I;
+bool SCoPDetection::checkInstruction(Instruction &Inst, TempSCoP &SCoP) {
+  // We only check the call instruction but not invoke instruction.
+  if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
+    if (checkCallInst(*CI, SCoP))
+      return true;
 
-    // Function call is not allowed in SCoP at the moment.
-    // We only check the call instruction but not invoke instruction.
-    if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
-      if (!checkCallInst(*CI, SCoP)) {
-        DEBUG(dbgs() << "Bad call Inst!\n");
-        STATBAD(FuncCall);
-        return false;
-      }
-      // Otherwise this call instruction is ok.
-      continue;
-    }
+    DEBUG(dbgs() << "Bad call Inst!\n");
+    STATBAD(FuncCall);
+    return false;
+  }
 
-    if (!Inst.mayWriteToMemory() && !Inst.mayReadFromMemory()) {
-      // Handle cast instruction
-      if (isa<IntToPtrInst>(I) || isa<BitCastInst>(I)) {
-        DEBUG(dbgs() << "Bad cast Inst!\n");
-        STATBAD(Other);
-        return false;
-      }
-      continue;
-    }
-
-    // Try to handle the load/store.
-    Value *Pointer = 0;
-    SCEVAffFunc::AccessType AccType = SCEVAffFunc::Read;
-
-    if (LoadInst *load = dyn_cast<LoadInst>(&Inst)) {
-      Pointer = load->getPointerOperand();
-      DEBUG(dbgs() << "Read Addr " << *SE->getSCEV(Pointer) << "\n");
-    }
-    else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
-      Pointer = store->getPointerOperand();
-      DEBUG(dbgs() << "Write Addr " << *SE->getSCEV(Pointer) << "\n");
-      AccType = SCEVAffFunc::Write;
-    }
-
-    // Can we get the pointer?
-    if (!Pointer) {
-      DEBUG(dbgs() << "Bad Inst accessing memory!\n");
+  if (!Inst.mayWriteToMemory() && !Inst.mayReadFromMemory()) {
+    // Handle cast instruction
+    if (isa<IntToPtrInst>(Inst) || isa<BitCastInst>(Inst)) {
+      DEBUG(dbgs() << "Bad cast Inst!\n");
       STATBAD(Other);
       return false;
     }
 
-    SCEVAffFunc *func = 0;
+    return true;
+  }
 
-    if (!checkSCoPOnly) {
-      // Get the function set
-      AccFuncSetType &AccFuncSet = AccFuncMap[&BB];
-      // Make the access function.
-      AccFuncSet.push_back(SCEVAffFunc(AccType));
-      func = &AccFuncSet.back();
-    }
+  // Try to handle the load/store.
+  Value *Pointer = 0;
+  SCEVAffFunc::AccessType AccType = SCEVAffFunc::Read;
 
-    // Is the access function affine?
-    const SCEV *Addr = SE->getSCEV(Pointer);
-    if (!SCEVAffFunc::buildAffineFunc(Addr, SCoP, func, *LI, *SE, AccType)) {
-      DEBUG(dbgs() << "Bad memory addr " << *Addr << "\n");
-      STATBAD(AffFunc);
+  if (LoadInst *load = dyn_cast<LoadInst>(&Inst)) {
+    Pointer = load->getPointerOperand();
+    DEBUG(dbgs() << "Read Addr " << *SE->getSCEV(Pointer) << "\n");
+  } else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
+    Pointer = store->getPointerOperand();
+    DEBUG(dbgs() << "Write Addr " << *SE->getSCEV(Pointer) << "\n");
+    AccType = SCEVAffFunc::Write;
+  }
+
+  // Can we get the pointer?
+  if (!Pointer) {
+    DEBUG(dbgs() << "Bad Inst accessing memory!\n");
+    STATBAD(Other);
+    return false;
+  }
+
+  SCEVAffFunc *func = 0;
+
+  if (!checkSCoPOnly) {
+    // Get the function set
+    AccFuncSetType &AccFuncSet = AccFuncMap[Inst.getParent()];
+    // Make the access function.
+    AccFuncSet.push_back(SCEVAffFunc(AccType));
+    func = &AccFuncSet.back();
+  }
+
+  // Is the access function affine?
+  const SCEV *Addr = SE->getSCEV(Pointer);
+
+  if (!SCEVAffFunc::buildAffineFunc(Addr, SCoP, func, *LI, *SE, AccType)) {
+    DEBUG(dbgs() << "Bad memory addr " << *Addr << "\n");
+    STATBAD(AffFunc);
+    return false;
+  }
+
+  return true;
+}
+
+bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
+  // Check all instructions, except the terminator instruction.
+  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
+    if (!checkInstruction(*I, SCoP))
       return false;
-    }
   }
 
   return true;
