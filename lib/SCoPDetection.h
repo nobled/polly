@@ -22,6 +22,7 @@
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/ADT/PointerIntPair.h"
 #include "llvm/Transforms/Scalar.h"
 
 using namespace llvm;
@@ -64,8 +65,17 @@ class SCEVAffFunc {
   typedef std::map<const SCEV*, const SCEV*> LnrTransSet;
   LnrTransSet LnrTrans;
 
-  // The base address of the address SCEV.
-  const Value *BaseAddr;
+public:
+  enum AccessType {
+    None = 0,
+    Read = 1, // Or we could call it "Use"
+    Write = 2 // Or define
+  };
+private:
+  // The base address of the address SCEV, if the Value is a pointer, this is
+  // an array access, otherwise, this is a value access.
+  // And the Write/Read modifier
+  PointerIntPair<const Value *, 2, AccessType> BaseAddr;
 
   // getCoeff - Get the Coefficient of a given variable.
   const SCEV *getCoeff(const SCEV *Var) const {
@@ -75,7 +85,7 @@ class SCEVAffFunc {
 
 public:
   /// @brief Create a new SCEV affine function.
-  explicit SCEVAffFunc() : TransComp(0), BaseAddr(0) {}
+  explicit SCEVAffFunc() : TransComp(0), BaseAddr(0, SCEVAffFunc::None) {}
 
   /// @brief Build an affine function from a SCEV expression.
   ///
@@ -91,7 +101,8 @@ public:
   /// @return             Return true if S could be convert to affine function,
   ///                     false otherwise.
   static bool buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
-    SCEVAffFunc *FuncToBuild, LoopInfo &LI, ScalarEvolution &SE);
+    SCEVAffFunc *FuncToBuild, LoopInfo &LI, ScalarEvolution &SE,
+    AccessType AccType = SCEVAffFunc::None);
 
   /// @brief Build a loop bound constrain from an affine function.
   ///
@@ -106,6 +117,10 @@ public:
                                   const SmallVectorImpl<const SCEV*> &IndVars,
                                   const SmallVectorImpl<const SCEV*> &Params,
                                   bool isLower) const;
+
+  bool isDataRef() const { return BaseAddr.getInt() != SCEVAffFunc::None; }
+
+  bool isRead() const { return BaseAddr.getInt() == SCEVAffFunc::Read; }
 
   /// @brief Print the affine function.
   ///
@@ -123,10 +138,7 @@ typedef std::pair<SCEVAffFunc, SCEVAffFunc> AffBoundType;
 /// Mapping loops to its bounds.
 typedef std::map<const Loop*, AffBoundType> BoundMapType;
 
-// The access function of basic block (or region)
-// { address, isStore }
-typedef std::pair<SCEVAffFunc, bool> AccessFuncType;
-typedef std::vector<AccessFuncType> AccFuncSetType;
+typedef std::vector<SCEVAffFunc> AccFuncSetType;
 typedef std::map<const BasicBlock*, AccFuncSetType> AccFuncMapType;
 
 typedef std::set<const SCEV*> ParamSetType;

@@ -128,4 +128,4 @@ bb.nph25:                                         ; preds = %bb16.preheader
 return:                                           ; preds = %bb.nph25, %bb15, %bb16.preheader, %entry
   ret void
 }
-; CHECK: SCoP: entry => <Function Return>        Parameters: (%nj, %nk, %ni, %nl, ), Max Loop Depth: 3
+; CHECK: SCoP: entry => <Function Return>        Parameters: (%n{{[i-l]}}, %n{{[i-l]}}, %n{{[i-l]}}, %n{{[i-l]}}, ), Max Loop Depth: 3

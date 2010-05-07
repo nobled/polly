@@ -168,8 +168,12 @@ static bool isParameter(const SCEV *Var, Region &R,
 
 bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
                                   SCEVAffFunc *FuncToBuild,
-                                  LoopInfo &LI, ScalarEvolution &SE) {
+                                  LoopInfo &LI, ScalarEvolution &SE,
+                                  AccessType AccType) {
   assert(S && "S can not be null!");
+
+  bool PtrExist = false;
+
   Region &R = SCoP.getMaxRegion();
 
   if (isa<SCEVCouldNotCompute>(S))
@@ -199,14 +203,20 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
 
     // Ignore the pointer.
     if (Var->getType()->isPointerTy()) {
+      // If this is not expect a memory access
+      if (AccType == SCEVAffFunc::None)
+        return false;
+
       DEBUG(dbgs() << "Find pointer: " << *Var <<"\n");
       assert(I->second->isOne() && "The coefficient of pointer expect is one!");
       const SCEVUnknown *BaseAddr = dyn_cast<SCEVUnknown>(Var);
 
       if (!BaseAddr) return false;
+
+      PtrExist = true;
       // Setup the base address
       if (FuncToBuild)
-        FuncToBuild->BaseAddr = BaseAddr->getValue();
+        FuncToBuild->BaseAddr.setPointer(BaseAddr->getValue());
       continue;
     }
 
@@ -239,7 +249,10 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
     SCoP.getParamSet().insert(Var);
   }
 
-  return true;
+  // The SCEV is valid if it is not a memory access
+  return AccType == SCEVAffFunc::None ||
+    // Otherwise, there must a pointer in exist in the expression.
+    PtrExist;
 }
 
 static void setCoefficient(const SCEV *Coeff, mpz_t v, bool isLower) {
@@ -293,8 +306,9 @@ polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
 
 void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
   // Print BaseAddr
-  if (BaseAddr) {
-    WriteAsOperand(OS, BaseAddr, false);
+  if (isDataRef()) {
+    OS << (isRead() ? "Reads" : "Writes") << " ";
+    WriteAsOperand(OS, BaseAddr.getPointer(), false);
     OS << "[";
   }
 
@@ -305,7 +319,7 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
   if (TransComp)
     OS << *TransComp;
 
-  if (BaseAddr)
+  if (isDataRef())
     OS << "]";
 
 }
@@ -336,8 +350,7 @@ void TempSCoP::printAccFunc(llvm::raw_ostream &OS, ScalarEvolution *SE) const {
       OS << "BB: " << I->first->getName() << "{\n";
       for (AccFuncSetType::const_iterator FI = I->second.begin(),
           FE = I->second.end(); FI != FE; ++FI) {
-        OS << (FI->second?"Writes ":"Reads ");
-        FI->first.print(OS,SE);
+        FI->print(OS,SE);
         OS << "\n";
       }
       OS << "}\n";
@@ -486,7 +499,7 @@ bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
 
     // Try to handle the load/store.
     Value *Pointer = 0;
-    bool isStore = false;
+    SCEVAffFunc::AccessType AccType = SCEVAffFunc::Read;
 
     if (LoadInst *load = dyn_cast<LoadInst>(&Inst)) {
       Pointer = load->getPointerOperand();
@@ -495,7 +508,7 @@ bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
     else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
       Pointer = store->getPointerOperand();
       DEBUG(dbgs() << "Write Addr " << *SE->getSCEV(Pointer) << "\n");
-      isStore = true;
+      AccType = SCEVAffFunc::Write;
     }
 
     // Can we get the pointer?
@@ -511,13 +524,13 @@ bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
       // Get the function set
       AccFuncSetType &AccFuncSet = AccFuncMap[&BB];
       // Make the access function.
-      AccFuncSet.push_back(std::make_pair(SCEVAffFunc(), isStore));
-      func = &AccFuncSet.back().first;
+      AccFuncSet.push_back(SCEVAffFunc());
+      func = &AccFuncSet.back();
     }
 
     // Is the access function affine?
     const SCEV *Addr = SE->getSCEV(Pointer);
-    if (!SCEVAffFunc::buildAffineFunc(Addr, SCoP, func, *LI, *SE)) {
+    if (!SCEVAffFunc::buildAffineFunc(Addr, SCoP, func, *LI, *SE, AccType)) {
       DEBUG(dbgs() << "Bad memory addr " << *Addr << "\n");
       STATBAD(AffFunc);
       return false;
