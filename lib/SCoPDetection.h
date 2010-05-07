@@ -294,6 +294,9 @@ class SCoPDetection : public FunctionPass {
   // Check if the instruction calling the valid function for SCoP.
   bool isValidCallInst(CallInst &CI, TempSCoP &SCoP);
 
+  // Check is a memory access is valid.
+  bool isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP);
+
   // Check if the Instruction is a valid part of SCoP, return true and extract
   // the corresponding information, return false otherwise.
   bool isValidInstruction(Instruction &I, TempSCoP &SCoP);

@@ -415,8 +415,8 @@ void TempSCoP::printBounds(raw_ostream &OS, ScalarEvolution *SE) const {
 // TODO: Move to LoopInfo?
 static bool isPreHeader(BasicBlock *BB, LoopInfo *LI) {
   TerminatorInst *TI = BB->getTerminator();
-  return (TI->getNumSuccessors() == 1) &&
-    LI->isLoopHeader(TI->getSuccessor(0));
+  return (TI->getNumSuccessors() == 1)
+    && LI->isLoopHeader(TI->getSuccessor(0));
 }
 
 bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
@@ -436,8 +436,8 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
     if (L->isLoopExiting(&BB))
       return true;
 
-    assert(L->getExitingBlock() &&
-      "The Loop return from getScopeLoop will always have 1 exit!");
+    assert(L->getExitingBlock()
+           && "The Loop return from getScopeLoop will always have 1 exit!");
 
     // Now bb is not the exit block of the loop.
     // Is BB branching to inner loop?
@@ -487,7 +487,7 @@ static bool isPureIntrinsic(unsigned ID) {
 
 bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
   if (CI.mayThrow() || CI.doesNotReturn())
-      return false;
+    return false;
 
   if (CI.doesNotAccessMemory())
     return true;
@@ -503,27 +503,8 @@ bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
   return false;
 }
 
-bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
-  // We only check the call instruction but not invoke instruction.
-  if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
-    if (isValidCallInst(*CI, SCoP))
-      return true;
-
-    DEBUG(dbgs() << "Bad call Inst!\n");
-    STATBAD(FuncCall);
-    return false;
-  }
-
-  if (!Inst.mayWriteToMemory() && !Inst.mayReadFromMemory()) {
-    // Handle cast instruction
-    if (isa<IntToPtrInst>(Inst) || isa<BitCastInst>(Inst)) {
-      DEBUG(dbgs() << "Bad cast Inst!\n");
-      STATBAD(Other);
-      return false;
-    }
-
-    return true;
-  }
+bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
+  assert(dyn_cast<LoadInst>(&Inst) || dyn_cast<StoreInst>(&Inst));
 
   // Try to handle the load/store.
   Value *Pointer = 0;
@@ -567,12 +548,40 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
   return true;
 }
 
+bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
+  // We only check the call instruction but not invoke instruction.
+  if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
+    if (isValidCallInst(*CI, SCoP))
+      return true;
+
+    DEBUG(dbgs() << "Bad call Inst!\n");
+    STATBAD(FuncCall);
+    return false;
+  }
+
+  if (!Inst.mayWriteToMemory() && !Inst.mayReadFromMemory()) {
+    // Handle cast instruction
+    if (isa<IntToPtrInst>(Inst) || isa<BitCastInst>(Inst)) {
+      DEBUG(dbgs() << "Bad cast Inst!\n");
+      STATBAD(Other);
+      return false;
+    }
+
+    return true;
+  }
+
+  if (dyn_cast<LoadInst>(&Inst) || dyn_cast<StoreInst>(&Inst))
+    return isValidMemoryAccess(Inst, SCoP);
+
+  // We do not know this instruction, therefore we assume it is invalid.
+  return false;
+}
+
 bool SCoPDetection::isValidBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
   // Check all instructions, except the terminator instruction.
-  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
+  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I)
     if (!isValidInstruction(*I, SCoP))
       return false;
-  }
 
   return true;
 }
