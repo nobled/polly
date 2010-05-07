@@ -292,21 +292,21 @@ class SCoPDetection : public FunctionPass {
   TempSCoP *getTempSCoP(Region &R);
 
   // Check if the instruction calling the valid function for SCoP.
-  bool checkCallInst(CallInst &CI, TempSCoP &SCoP);
+  bool isValidCallInst(CallInst &CI, TempSCoP &SCoP);
 
   // Check if the Instruction is a valid part of SCoP, return true and extract
   // the corresponding information, return false otherwise.
-  bool checkInstruction(Instruction &I, TempSCoP &SCoP);
+  bool isValidInstruction(Instruction &I, TempSCoP &SCoP);
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
-  bool checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP);
+  bool isValidBasicBlock(BasicBlock &BB, TempSCoP &SCoP);
 
   // Check if the CFG is valid for SCoP.
-  bool checkCFG(BasicBlock &BB, TempSCoP &SCoP);
+  bool isValidCFG(BasicBlock &BB, TempSCoP &SCoP);
 
   // Check if the loop bounds in SCoP is valid.
-  bool checkLoopBounds(TempSCoP &SCoP);
+  bool hasValidLoopBounds(TempSCoP &SCoP);
 
   // Merge the SCoP information of sub regions
   bool mergeSubSCoP(TempSCoP &Parent, TempSCoP &SubSCoP);

@@ -419,7 +419,7 @@ static bool isPreHeader(BasicBlock *BB, LoopInfo *LI) {
     LI->isLoopHeader(TI->getSuccessor(0));
 }
 
-bool SCoPDetection::checkCFG(BasicBlock &BB, TempSCoP &SCoP) {
+bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
   Region &R = SCoP.getMaxRegion();
   TerminatorInst *TI = BB.getTerminator();
 
@@ -485,7 +485,7 @@ static bool isPureIntrinsic(unsigned ID) {
   }
 }
 
-bool SCoPDetection::checkCallInst(CallInst &CI, TempSCoP &SCoP) {
+bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
   if (CI.mayThrow() || CI.doesNotReturn())
       return false;
 
@@ -503,10 +503,10 @@ bool SCoPDetection::checkCallInst(CallInst &CI, TempSCoP &SCoP) {
   return false;
 }
 
-bool SCoPDetection::checkInstruction(Instruction &Inst, TempSCoP &SCoP) {
+bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
   // We only check the call instruction but not invoke instruction.
   if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
-    if (checkCallInst(*CI, SCoP))
+    if (isValidCallInst(*CI, SCoP))
       return true;
 
     DEBUG(dbgs() << "Bad call Inst!\n");
@@ -567,17 +567,17 @@ bool SCoPDetection::checkInstruction(Instruction &Inst, TempSCoP &SCoP) {
   return true;
 }
 
-bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
+bool SCoPDetection::isValidBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
   // Check all instructions, except the terminator instruction.
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
-    if (!checkInstruction(*I, SCoP))
+    if (!isValidInstruction(*I, SCoP))
       return false;
   }
 
   return true;
 }
 
-bool SCoPDetection::checkLoopBounds(TempSCoP &SCoP) {
+bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP) {
   Region &R = SCoP.getMaxRegion();
 
   // Find the parameters used in loop bounds
@@ -715,8 +715,8 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
     } else if (isValidRegion) {
       // We check the basic blocks only the region is valid.
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-      if (!checkCFG(BB, *SCoP) // Check CFG.
-          || !checkBasicBlock(BB, *SCoP)){ // Check all non terminator inst
+      if (!isValidCFG(BB, *SCoP) // Check CFG.
+          || !isValidBasicBlock(BB, *SCoP)){ // Check all non terminator inst
         DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
         // Clean up the access function map, so we get a clear dump.
         AccFuncMap.erase(&BB);
@@ -725,7 +725,7 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
     }
   }
 
-  if (isValidRegion && checkLoopBounds(*SCoP)) {
+  if (isValidRegion && hasValidLoopBounds(*SCoP)) {
     // Insert the SCoP into the map, if all the above was successful
     // and we are not only checking SCoPs.
     RegionToSCoPs[&(SCoP->R)] = checkSCoPOnly ? 0 : SCoP;
