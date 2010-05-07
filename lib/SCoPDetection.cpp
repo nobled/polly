@@ -569,7 +569,7 @@ bool SCoPDetection::checkBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
       return false;
     }
   }
-  // All instruction is ok.
+
   return true;
 }
 
@@ -583,21 +583,21 @@ bool SCoPDetection::checkLoopBounds(TempSCoP &SCoP) {
       << " also is a loop: " <<(L ? L->getHeader()->getName() : "Not a loop")
       << "\n");
 
-    // We can only handle loops whose indvar in canonical form.
+    // We can only handle loops whose induction variables in are in canonical
+    // form.
     if (L->getCanonicalInductionVariable() == 0) {
       DEBUG(dbgs() << "No CanIV for loop : " << L->getHeader()->getName() <<"?\n");
       STATBAD(IndVar);
       return false;
     }
 
-    // Increase the max loop depth
     ++SCoP.MaxLoopDepth;
 
     const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
 
     DEBUG(dbgs() << "Backedge taken count: "<< *LoopCount <<"\n");
 
-    // We can handle the loop if its loop bounds could not compute.
+    // We can not handle the loop if its loop bounds can not be computed.
     if (isa<SCEVCouldNotCompute>(LoopCount)) {
       STATBAD(LoopBound);
       return false;
@@ -618,13 +618,12 @@ bool SCoPDetection::checkLoopBounds(TempSCoP &SCoP) {
     }
 
     // Build the lower bound.
-    if (!SCEVAffFunc::buildAffineFunc(LB, SCoP, lb, *LI, *SE)||
-        !SCEVAffFunc::buildAffineFunc(UB, SCoP, ub, *LI, *SE)) {
+    if (!SCEVAffFunc::buildAffineFunc(LB, SCoP, lb, *LI, *SE)
+        || !SCEVAffFunc::buildAffineFunc(UB, SCoP, ub, *LI, *SE)) {
       STATBAD(AffFunc);
       return false;
     }
   }
-
 
   return true;
 }
@@ -672,13 +671,14 @@ bool SCoPDetection::mergeSubSCoP(TempSCoP &Parent, TempSCoP &SubSCoP){
 TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
 
   if (!checkSCoPOnly) {
-    // Are we already compute the scop for R?
+    // Did we already compute the SCoP for R?
     TempSCoPMapType::const_iterator at = RegionToSCoPs.find(&R);
     if (at != RegionToSCoPs.end() && at->second != 0)
       return at->second;
   }
 
   TempSCoP *SCoP = new TempSCoP(R, LoopBounds, AccFuncMap);
+
   bool isValidRegion = true;
 
   // Check if getScopeLoop, if so we could not handle any further
@@ -693,26 +693,26 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
     if (I->isSubRegion()) {
       Region *SubR = I->getNodeAs<Region>();
       // Dirty hack for calculate temp scop on the fly
-      // Dont extract the information for a hidden region.
+      // Do not extract the information for a hidden region.
       if (isHidden(SubR))
         continue;
       // Extract information of sub scop and merge them.
       else if (TempSCoP *SubSCoP = getTempSCoP(*SubR)) {
         isValidRegion &= mergeSubSCoP(*SCoP, *SubSCoP);
+
         if (checkSCoPOnly) {
-          // Dont do any thing if we only check the SCoP.
+          // Do not do any thing if we only check the SCoP.
           delete SubSCoP;
         }
 
         continue;
       }
       isValidRegion = false;
-    }
-    else if (isValidRegion) {
+    } else if (isValidRegion) {
       // We check the basic blocks only the region is valid.
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-      if (!checkCFG(BB, *SCoP) || // Check cfg
-          !checkBasicBlock(BB, *SCoP)){// Check all non terminator inst
+      if (!checkCFG(BB, *SCoP) // Check CFG.
+          || !checkBasicBlock(BB, *SCoP)){ // Check all non terminator inst
         DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
         // Clean up the access function map, so we get a clear dump.
         AccFuncMap.erase(&BB);
@@ -721,17 +721,15 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
     }
   }
 
-  if (isValidRegion && //If all sub node of the region are valid
-      checkLoopBounds(*SCoP)) {// Find the parameters used in loop bounds
-    // If all above success.
-    // Insert the scop to the map, if we are not checking SCoP.
+  if (isValidRegion && checkLoopBounds(*SCoP)) {
+    // Insert the SCoP into the map, if all the above was successful
+    // and we are not only checking SCoPs.
     RegionToSCoPs[&(SCoP->R)] = checkSCoPOnly ? 0 : SCoP;
     STATSCOP(++ValidRegion);
     return SCoP;
   }
 
   DEBUG(dbgs() << "Bad region found: " << R.getNameStr() << "!\n");
-  // discard the SCoP
   delete SCoP;
 
   return 0;
@@ -756,18 +754,19 @@ TempSCoP *SCoPDetection::getTempSCoPFor(const Region* R) const {
 bool SCoPDetection::runOnFunction(llvm::Function &F) {
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
-
   RI = &getAnalysis<RegionInfo>();
 
   Region *TopRegion = RI->getTopLevelRegion();
 
   checkSCoPOnly = true;
+
   if (TempSCoP *tempSCoP = getTempSCoP(*TopRegion)) {
     RegionToSCoPs[TopRegion] = 0;
     delete tempSCoP;
   }
+
 #if 0
-  // Statitstic
+  // Statistic
   STATSCOP(for (TempSCoPMapType::const_iterator I = RegionToSCoPs.begin(),
     E = RegionToSCoPs.end(); I != E; ++I){
       TempSCoP *tempSCoP = I->second;
@@ -778,6 +777,7 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
       }
   });
 #endif
+
   checkSCoPOnly = false;
 
   return false;
