@@ -505,7 +505,7 @@ bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
 }
 
 bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
-  assert(dyn_cast<LoadInst>(&Inst) || dyn_cast<StoreInst>(&Inst)
+  assert((isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst))
     && "What else instruction access memory?");
 
   // Try to handle the load/store.
