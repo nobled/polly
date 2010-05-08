@@ -396,7 +396,7 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   if (!tempSCoP) return false;
 
   // Only analyse the maximal SCoPs.
-  if (R->getParent() && SCoPDetect.getTempSCoPFor(R->getParent()))
+  if (!SCoPDetect.isMaxRegionInSCoP(*R))
     return false;
 
   SmallVector<Loop*, 8> NestLoops;

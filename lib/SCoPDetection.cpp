@@ -38,12 +38,10 @@ static cl::opt<bool>
 PrintTopSCoPOnly("print-top-scop-only", cl::desc("Print out subSCoP."),
               cl::Hidden);
 
-// This is a Debug option to make the statistics result correct.
 static cl::opt<bool>
-PreCalcTempSCoP("polly-precalc-temp-scop",
-                        cl::desc("DEBUG ONLY: "
-                                 "Do not force compute temp SCoP on the fly."),
-                        cl::ReallyHidden);
+PrintTempSCoPInDetail("polly-print-temp-scop-in-detail",
+                    cl::desc("Print the temporary scop information in detail"),
+                    cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 // Some statistic
@@ -369,6 +367,9 @@ void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE) const {
 
   OS << "), Max Loop Depth: "<< MaxLoopDepth <<"\n";
 
+  if (!PrintTempSCoPInDetail)
+    return;
+
   printBounds(OS, SE);
 
   printAccFunc(OS, SE);
@@ -504,7 +505,8 @@ bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
 }
 
 bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
-  assert(dyn_cast<LoadInst>(&Inst) || dyn_cast<StoreInst>(&Inst));
+  assert(dyn_cast<LoadInst>(&Inst) || dyn_cast<StoreInst>(&Inst)
+    && "What else instruction access memory?");
 
   // Try to handle the load/store.
   Value *Pointer = 0;
@@ -570,10 +572,11 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
     return true;
   }
 
-  if (dyn_cast<LoadInst>(&Inst) || dyn_cast<StoreInst>(&Inst))
+  if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst))
     return isValidMemoryAccess(Inst, SCoP);
 
   // We do not know this instruction, therefore we assume it is invalid.
+  STATBAD(Other);
   return false;
 }
 
@@ -694,7 +697,8 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
 
   bool isValidRegion = true;
 
-  // Check if getScopeLoop, if so we could not handle any further
+  // Check if getScopeLoop work on the current loop nest and region tree,
+  // if it not work, we could not handle any further
   if (getScopeLoop(R, *LI) != LI->getLoopFor(R.getEntry())) {
     STATBAD(LoopNest);
     isValidRegion = false;
@@ -760,7 +764,6 @@ TempSCoP *SCoPDetection::getTempSCoPFor(const Region* R) const {
 
   // Update the map.
   const_cast<SCoPDetection*>(this)->RegionToSCoPs[R] = tempSCoP;
-  DEBUG(dbgs() << "Get scop: " << tempSCoP->R.getNameStr() << "\n");
   return tempSCoP;
 }
 
@@ -839,4 +842,4 @@ char SCoPDetection::ID = 0;
 static RegisterPass<SCoPDetection>
 X("polly-scop-detect", "Polly - Detect SCoPs");
 
-// Do not link this pass? This pass suppose to be only used by SCoPInfo.
+// Do not link this pass. This pass suppose to be only used by SCoPInfo.
