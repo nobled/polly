@@ -106,10 +106,16 @@ add_subdirectory(lib)
 # Add the Scoplib export/import library if the Scoplib is available.
 if (SCOPLIB_FOUND)
   add_subdirectory(lib/Exchange)
+  option( _POLLY_WITH_OPENSCOP "Enable OpenSCoP import/export support" ON )
+else (SCOPLIB_FOUND)
+  option( _POLLY_WITH_OPENSCOP "Enable OpenSCoP import/export support" OFF )
 endif(SCOPLIB_FOUND)
 
 add_subdirectory(tools)
-
+add_subdirectory(test)
 # TODO: docs.
 
-add_subdirectory(test)
+
+configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/include/polly/config.h.cmake
+                ${LLVM_BINARY_DIR}/include/polly/config.h )
+

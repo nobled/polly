@@ -15,6 +15,7 @@
 #ifndef POLLY_LINKALLPASSES_H
 #define POLLY_LINKALLPASSES_H
 
+#include "polly/config.h"
 #include "polly/SCoPInfo.h"
 #include "polly/ClastParser.h"
 #include "polly/Support/AffineSCEVIterator.h"
