@@ -16,10 +16,11 @@
 #define POLLY_LINKALLPASSES_H
 
 #include "polly/config.h"
-#include "polly/SCoPInfo.h"
 #include "polly/ClastParser.h"
-#include "polly/Support/AffineSCEVIterator.h"
+#include "polly/ScalarDataRef.h"
 #include "polly/SCoPExchange.h"
+#include "polly/SCoPInfo.h"
+#include "polly/Support/AffineSCEVIterator.h"
 /// TODO: Place the headers that containing pass you want to force link here.
 
 #include <cstdlib>
@@ -39,6 +40,7 @@ namespace {
       (void) polly::createAffSCEVItTesterPass();
       (void) polly::createClastPrinterPass();
       (void) polly::createClastCodeGenerationPass();
+      (void) polly::createScalarDataRefPass();
 
 #ifdef _POLLY_WITH_OPENSCOP
       (void) polly::createSCoPExporterPass();

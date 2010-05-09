@@ -96,7 +96,6 @@ return:                                           ; preds = %bb2.preheader, %bb1
 ; CHECK: SCoP: bb.nph16 => bb10.loopexit Parameters: ({0,+,1}<%bb2.preheader>, %n, ), Max Loop Depth: 2
 ; CHECK: SCoP: bb1 => bb8.loopexit       Parameters: ({0,+,1}<%bb2.preheader>, %n, ), Max Loop Depth: 1
 
-; INDVAR: Printing analysis 'Polly - Detect SCoPs' for function 'f':
 ; INDVAR: SCoP: bb1 => bb8.loopexit       Parameters: ({0,+,1}<%bb2.preheader>, %n, ), Max Loop Depth: 1
 ; INDVAR: SCoP: bb.nph16 => bb10.loopexit Parameters: ({0,+,1}<%bb2.preheader>, %n, ), Max Loop Depth: 2
 ; INDVAR: SCoP: bb5 => bb8.loopexit12     Parameters: ({0,+,1}<%bb2.preheader>, %n, {0,+,1}<%bb.nph16>, ), Max Loop Depth: 1

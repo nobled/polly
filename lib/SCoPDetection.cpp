@@ -550,6 +550,13 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
   return true;
 }
 
+void SCoPDetection::captureScalarDR(Instruction &I) {
+  // Only capture scalar data reference if we are not checking
+  // SCoP.
+  if (!checkSCoPOnly)
+    return;
+}
+
 bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
   // We only check the call instruction but not invoke instruction.
   if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
@@ -797,6 +804,13 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   checkSCoPOnly = false;
 
   return false;
+}
+
+void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<LoopInfo>();
+  AU.addRequired<RegionInfo>();
+  AU.addRequired<ScalarEvolution>();
+  AU.setPreservesAll();
 }
 
 void SCoPDetection::clear() {

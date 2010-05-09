@@ -1,4 +1,4 @@
-//===- polly/SCoP/SCoPInfo.h - Create SCoPs from LLVM IR --------*- C++ -*-===//
+//===------ polly/SCoPInfo.h - Create SCoPs from LLVM IR --------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -39,6 +39,7 @@ class SCoPInfo;
 //===----------------------------------------------------------------------===//
 /// @brief Represent memory accesses in statements.
 ///
+/// XXX: Or call it DataReference?
 class MemoryAccess {
   //===-------------------------------------------------------------------===//
   // DO NOT IMPLEMENT

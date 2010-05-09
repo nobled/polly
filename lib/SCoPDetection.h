@@ -17,6 +17,7 @@
 
 #include "polly/PollyType.h"
 
+#include "llvm/Analysis/LiveValues.h"
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/ScalarEvolution.h"
@@ -102,6 +103,8 @@ public:
   /// @param LI           The LoopInfo to help to build the affine function.
   /// @param SE           The ScalarEvolution to help to build the affine
   ///                     function.
+  /// @param AccType      If S is a pointer value, use AccType to indicate that
+  ///                     is this a memory read or a memory write.
   ///
   /// @return             Return true if S could be convert to affine function,
   ///                     false otherwise.
@@ -269,6 +272,9 @@ class SCoPDetection : public FunctionPass {
   // RegionInfo for regiontrees
   RegionInfo *RI;
 
+  //// LiveValues for capture scalar data reference.
+  //LiveValues *LV;
+
   // Remember the bounds of loops, to help us build iterate domain of BBs.
   BoundMapType LoopBounds;
 
@@ -300,6 +306,9 @@ class SCoPDetection : public FunctionPass {
   // Check if the Instruction is a valid part of SCoP, return true and extract
   // the corresponding information, return false otherwise.
   bool isValidInstruction(Instruction &I, TempSCoP &SCoP);
+
+  // Capture scalar data reference.
+  void captureScalarDR(Instruction &I);
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
@@ -345,12 +354,7 @@ public:
 
   /// @name FunctionPass interface
   //@{
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-    AU.addRequired<LoopInfo>();
-    AU.addRequired<RegionInfo>();
-    AU.addRequired<ScalarEvolution>();
-    AU.setPreservesAll();
-  }
+  virtual void getAnalysisUsage(AnalysisUsage &AU) const;
   virtual void releaseMemory() { clear(); }
   virtual bool runOnFunction(Function &F);
   virtual void print(raw_ostream &OS, const Module *) const;
