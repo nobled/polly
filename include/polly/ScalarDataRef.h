@@ -87,6 +87,13 @@ public:
   /// @return True if there is any valid data reference, false otherwise.
   bool computeDataRefForScalar(Instruction &I);
 
+  /// @brief Remove the data reference for scalar use directly or indirectly used
+  ///        by Instruction I
+  ///
+  /// @param I The Instruction.
+  ///
+  void killAllUseOf(Instruction &I);
+
   /// @name FunctionPass interface
   //@{
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;

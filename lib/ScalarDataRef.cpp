@@ -103,6 +103,10 @@ bool ScalarDataRef::computeDataRefForScalar(Instruction &Inst) {
   return true;
 }
 
+void ScalarDataRef::killAllUseOf(Instruction &I) {
+  return;
+}
+
 bool ScalarDataRef::runOnFunction(Function &F) {
   LI = &getAnalysis<LoopInfo>();
   DT = &getAnalysis<DominatorTree>();
@@ -116,7 +120,7 @@ void ScalarDataRef::releaseMemory() {
 
 void ScalarDataRef::print(raw_ostream &OS, const Module *) const {
   for (inst_iterator I = inst_begin(Func), E = inst_end(Func); I != E; ++I)
-    (void) computeDataRefForScalar(*I);
+    (void) const_cast<ScalarDataRef*>(this)->computeDataRefForScalar(*I);
 
   for (DataRefMapTy::const_iterator I = DataRefs.begin(), E = DataRefs.end();
       I != E; ++I) {
