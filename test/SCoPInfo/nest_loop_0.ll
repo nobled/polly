@@ -1,5 +1,6 @@
 ; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s
 ; RUN: opt -polly-scop-detect  -analyze %s | FileCheck %s
+; RUN: opt -O3 -indvars -polly-scop-detect -polly-print-temp-scop-in-detail -print-top-scop-only -analyze %s | FileCheck %s -check-prefix=WITHAF
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;
@@ -41,3 +42,10 @@ return:                                           ; preds = %bb3, %entry
 }
 
 ; CHECK: SCoP: entry => <Function Return>        Parameters: (%N, %M, )
+; WITHAF: SCoP: entry => <Function Return>        Parameters: (%N, %M, ), Max Loop Depth: 2
+; WITHAF: Bounds of Loop: bb1:    { 0, 1 * %N + -1}
+; WITHAF: Bounds of Loop: bb2.preheader:  { 0, 1 * %M + -1}
+; WITHAF: BB: bb1{
+; WITHAF: Writes %a[1024 * {0,+,1}<%bb1> + 8 * {0,+,1}<%bb2.preheader> + 0]
+; WITHAF: Reads %N[]
+; WITHAF: }
