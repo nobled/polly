@@ -17,14 +17,16 @@
 #include "llvm/Use.h"
 #include "llvm/Assembly/Writer.h"
 #include "llvm/Support/InstIterator.h"
+#include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/SmallPtrSet.h"
 
 #define DEBUG_TYPE "polly-scalar-data-ref"
 #include "llvm/Support/Debug.h"
 
+
 using namespace llvm;
 using namespace polly;
-
 
 //===----------------------------------------------------------------------===//
 /// ScalarDataRef implement
@@ -43,74 +45,132 @@ void ScalarDataRef::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
 }
 
-bool ScalarDataRef::computeDataRefForScalar(Instruction &Inst) {
-  // There is no read/write for void type.
-  // And Pointers and Boolean values will be handle by "NoScalarDataRef" logic.
-  if (Inst.getType()->isVoidTy()
-    || Inst.getType()->isPointerTy())
+bool ScalarDataRef::isCyclicUse(const Instruction* def,
+                                const Instruction* use) const {
+  assert(def && use && "Expect def and use not be null");
+
+  const BasicBlock *defBB = def->getParent(),
+             *useBB = use->getParent();
+
+  return (DT->dominates(useBB, defBB)) && isa<PHINode>(use);
+}
+
+int &ScalarDataRef::getDataRefFor(const Instruction &Inst){
+  if (!DataRefs.count(&Inst))
+    DataRefs.insert(std::make_pair(&Inst, Inst.getNumUses()));
+
+  int &ret = DataRefs[&Inst];
+  assert(ret >=0 && "DataRefs broken!");
+
+  return ret;
+}
+
+bool ScalarDataRef::killedAsTempVal(const Instruction &Inst) const {
+  SDRDataRefMapTy::const_iterator at = DataRefs.find(&Inst);
+  return at != DataRefs.end() && at->second == 0;
+}
+
+void ScalarDataRef::getAllUsing(Instruction &Inst,
+                                SmallVectorImpl<const Value*> &Defs) {
+  // XXX: temporary value not using anything?
+#if 1
+  if (killedAsTempVal(Inst))
+    return;
+#endif
+
+  DEBUG(dbgs() << "get the reading values of :" << Inst << "\n");
+  Value *Ptr = 0;
+  if (LoadInst *Ld = dyn_cast<LoadInst>(&Inst))
+    Ptr = Ld->getPointerOperand();
+  else if (StoreInst *St = dyn_cast<StoreInst>(&Inst))
+    Ptr = St->getPointerOperand();
+
+  BasicBlock *useBB = Inst.getParent();
+
+  for (Instruction::op_iterator I = Inst.op_begin(), E = Inst.op_end();
+      I != E; ++I) {
+    Value *V = *I;
+
+    // The pointer of load/Store instruction will not consider as "scalar".
+    if (Ptr == V)
+      continue;
+    // An argument is always read by an instruction.
+    else if (isa<Argument>(V))
+      Defs.push_back(V);
+    else if (Instruction *opInst = dyn_cast<Instruction>(*I)) {
+      // Ignore the temporary values.
+      if (killedAsTempVal(*opInst))
+        continue;
+
+      // If operand is from others BBs, we need to read it explicitly
+      if (useBB != opInst->getParent())
+        Defs.push_back(opInst);
+      // Or the loop carry variable
+      else if (isCyclicUse(opInst, &Inst))
+        Defs.push_back(opInst);
+    }
+  }
+
+  for (SmallVector<const Value*, 4>::iterator VI = Defs.begin(),
+      VE = Defs.end(); VI != VE; ++VI)
+    DEBUG(dbgs() << "get read: " << **VI << "\n");
+  DEBUG(dbgs() << "\n");
+}
+
+bool ScalarDataRef::isDefExported(Instruction &Inst) const {
+  // A instruction have void type never exported
+  if (Inst.getType()->isVoidTy())
     return false;
 
-  if (const IntegerType *Ty = dyn_cast<IntegerType>(Inst.getType())) {
-    if (Ty->getBitWidth() == 1)
-      return false;
-  }
+  SDRDataRefMapTy::const_iterator at = DataRefs.find(&Inst);
+
+  // if all use of DataDefs is reduced, it is not export.
+  if (killedAsTempVal(Inst))
+    return false;
 
   BasicBlock *defBB = Inst.getParent();
 
-  Loop *L = LI->getLoopFor(defBB);
-
-  // Do not need to remember the reference for Induction variable.
-  if (L && ((&Inst) == L->getCanonicalInductionVariable()
-         || (&Inst) == L->getCanonicalInductionVariableIncrement()))
-    return false;
-
-  SmallPtrSet<const BasicBlock *, 8> BBs;
-  BBs.insert(defBB);
-
-  bool hasLoopCarryDep = false;
-
-  for (Value::use_iterator I = Inst.use_begin(), E = Inst.use_end(); I != E; ++I) {
-    Instruction *U = cast<Instruction>(*I);
-    // Ignore the use in conditions.
-    if (const IntegerType *Ty = dyn_cast<IntegerType>(U->getType()))
-      if (Ty->getBitWidth() == 1)
+  for (Value::use_iterator I = Inst.use_begin(), E = Inst.use_end();
+    I != E; ++I) {
+      Instruction *U = cast<Instruction>(*I);
+      // Just ignore it if the Instruction using Inst had been kill as temporary value
+      if(killedAsTempVal(*U))
         continue;
 
-    const BasicBlock *UseBB = U->getParent();
+      if (defBB != U->getParent())
+        return true;
 
-    // Check for loop carry dependence.
-    hasLoopCarryDep |= isa<PHINode>(U) && (DT->dominates(UseBB, defBB));
-
-    BBs.insert(UseBB);
+      if (isCyclicUse(&Inst, U))
+        return true;
   }
 
-  unsigned useFound = BBs.size()-1;
-
-  // Is Inst "killed" in defBB?
-  if (useFound == 0 && !hasLoopCarryDep)
-    return false;
-
-
-  for (SmallPtrSet<const BasicBlock *, 8>::const_iterator I = BBs.begin(),
-      E = BBs.end(); I != E; ++I) {
-    const BasicBlock *BB = *I;
-    bool isDefBB = (BB == defBB);
-    DataRefs[BB].push_back(RefRec(&Inst,
-                                  hasLoopCarryDep && isDefBB,
-                                  isDefBB ? useFound : 0));
-  }
-
-  return true;
+  return false;
 }
 
-void ScalarDataRef::killAllUseOf(Instruction &I) {
-  return;
+void ScalarDataRef::reduceTempRefFor(const Instruction &Inst) {
+  assert(Inst.hasNUsesOrMore(1) && "The instruction have no use cant be reduced!");
+
+  DEBUG(dbgs() << " Try to reduce: " << Inst << " use left: "
+               << getDataRefFor(Inst) << "\n");
+  // Only reduce the operand of Inst if it is reduced.
+  if (--getDataRefFor(Inst) > 0)
+    return;
+
+  // XXX: Stop when we reach a parameter.
+
+  for (Instruction::const_op_iterator I = Inst.op_begin(), E = Inst.op_end();
+       I != E; ++I) {
+    if (const Instruction *opInst = dyn_cast<Instruction>(*I)) {
+      if (!isCyclicUse(&Inst, opInst))
+        reduceTempRefFor(*opInst);
+    }
+  }
 }
 
 bool ScalarDataRef::runOnFunction(Function &F) {
   LI = &getAnalysis<LoopInfo>();
   DT = &getAnalysis<DominatorTree>();
-  Func = &F;
+
   return false;
 }
 
@@ -119,42 +179,9 @@ void ScalarDataRef::releaseMemory() {
 }
 
 void ScalarDataRef::print(raw_ostream &OS, const Module *) const {
-  for (inst_iterator I = inst_begin(Func), E = inst_end(Func); I != E; ++I)
-    (void) const_cast<ScalarDataRef*>(this)->computeDataRefForScalar(*I);
-
-  for (DataRefMapTy::const_iterator I = DataRefs.begin(), E = DataRefs.end();
-      I != E; ++I) {
-    WriteAsOperand(OS, I->first, false);
-    OS << " {\n";
-   const  SmallVectorImpl<RefRec> &Vector = I->second;
-    for (SmallVectorImpl<RefRec>::const_iterator VI = Vector.begin(),
-        VE = Vector.end(); VI != VE; ++VI) {
-       (*VI).print(OS.indent(2));
-       OS << "\n";
-    }
-    OS << "}\n";
-  }
-
-}
-
-void ScalarDataRef::RefRec::print(raw_ostream &OS) const {
-  if (isCyclic()) {
-    WriteAsOperand(OS, getValue(), false);
-    OS << " = ... previous ";
-    WriteAsOperand(OS, getValue(), false);
-    OS << " ...";
-    return;
-  }
-
-  if (!isDef())
-    OS << "... = ... ";
-
-  WriteAsOperand(OS, getValue(), false);
-
-  if (isDef())
-    OS << " =";
-
-  OS << " ... ";
+  for (SDRDataRefMapTy::const_iterator I = DataRefs.begin(), E = DataRefs.end();
+      I != E; ++I)
+    OS << *(I->first) << " use left " << I->second << "\n";
 }
 
 char ScalarDataRef::ID = 0;

@@ -20,6 +20,7 @@
 #include "llvm/Pass.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/Dominators.h"
+#include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/PointerIntPair.h"
 
@@ -27,6 +28,15 @@
 using namespace llvm;
 
 namespace polly {
+
+typedef DenseMap<const Instruction*, int> SDRDataRefMapTy;
+
+typedef std::set<const Instruction*> SDRInstSetTy;
+
+typedef std::vector<const Instruction*> SDRInstVecTy;
+
+typedef std::set<const BasicBlock*> SDRBBSetTy;
+
 //===----------------------------------------------------------------------===//
 /// @brief Scalar data reference - Analysis that provides scalar data
 ///        read/write reference in BasicBlocks or Regions.
@@ -38,32 +48,8 @@ class ScalarDataRef : public FunctionPass {
   // DO NOT IMPLEMENT
   const ScalarDataRef &operator=(const ScalarDataRef &);
 
-  /// Reference Record
-  class RefRec {
-    // { Value, isCyclic }
-    PointerIntPair<const Value *, 1, bool> Val;
-    //
-    unsigned UseNum;
-
-  public:
-    RefRec(const Value *v, bool cyclic, unsigned useNum)
-      : Val(v, cyclic), UseNum(useNum) {
-        assert(getValue() && "Value can not be null!");
-    }
-
-    const Value *getValue() const { return Val.getPointer(); }
-
-    bool isCyclic() const { return Val.getInt(); }
-
-    bool isDef() const { return UseNum != 0; }
-
-    void print(raw_ostream &OS) const;
-  };
-
-  typedef DenseMap<const BasicBlock*, SmallVector<RefRec, 4> > DataRefMapTy;
-
-  // Data referenced in each BasicBlock.
-  DataRefMapTy DataRefs;
+  // Data definition
+  SDRDataRefMapTy DataRefs;
 
   // LoopInfo to compute canonical induction variable
   LoopInfo *LI;
@@ -74,25 +60,24 @@ class ScalarDataRef : public FunctionPass {
 
   void clear();
 
+  int &getDataRefFor(const Instruction &Inst);
+
+  bool killedAsTempVal(const Instruction &Inst) const;
+
 public:
   static char ID;
 
-  ScalarDataRef() : FunctionPass(&ID) {}
+  explicit ScalarDataRef() : FunctionPass(&ID) {}
   ~ScalarDataRef();
 
-  /// @brief Compute the data reference for scalar define by Instruction I
-  ///
-  /// @param I The Instruction to compute data Reference.
-  ///
-  /// @return True if there is any valid data reference, false otherwise.
-  bool computeDataRefForScalar(Instruction &I);
+  bool isCyclicUse(const Instruction* def, const Instruction* use) const;
 
-  /// @brief Remove the data reference for scalar use directly or indirectly used
-  ///        by Instruction I
-  ///
-  /// @param I The Instruction.
-  ///
-  void killAllUseOf(Instruction &I);
+  bool isDefExported(Instruction &I) const;
+
+  void getAllUsing(Instruction &Inst, SmallVectorImpl<const Value*> &Defs);
+
+  void reduceTempRefFor(const Instruction& Inst);
+
 
   /// @name FunctionPass interface
   //@{

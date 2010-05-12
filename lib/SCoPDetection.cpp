@@ -429,13 +429,23 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
   // Return and unconditional branch is ok.
   if (numSucc < 2) return true;
 
+  BranchInst *Br = dyn_cast<BranchInst>(TI);
+  // We dose not support switch at the moment.
+  if (!Br) return false;
+
+  Instruction *Cond = dyn_cast<Instruction>(Br->getCondition());
+  // And we only support instruction as condition now
+  if (!Cond) return false;
+
   if (Loop *L = getScopeLoop(R, *LI)) {
     // Only allow branches that are loop exits. This stops anything
     // except loops that have just one exit and are detected by our LoopInfo
     // analysis
     // It is ok if BB is branching out of the loop
-    if (L->isLoopExiting(&BB))
+    if (L->isLoopExiting(&BB)) {
+      killAllTempValFor(*Cond);
       return true;
+    }
 
     assert(L->getExitingBlock()
            && "The Loop return from getScopeLoop will always have 1 exit!");
@@ -451,7 +461,7 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
           STATBAD(CFG);
           return false;
         }
-
+        killAllTempValFor(*Cond);
         return true;
       }
     }
@@ -463,6 +473,7 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
     return false;
   }
 
+  killAllTempValFor(*Cond);
   // BB is not in any loop.
   return true;
   // TODO: handle the branch condition
@@ -547,14 +558,29 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
     return false;
   }
 
+  // Try to remove the temporary value for address computation
+  // Do this in the Checking phase, so we will get the final result
+  // when we try to get SCoP by "getTempSCoPFor";
+  if (Instruction *GEP = dyn_cast<Instruction>(Pointer)) {
+    killAllTempValFor(*GEP);
+  }
+
   return true;
 }
 
-void SCoPDetection::captureScalarDR(Instruction &I) {
+void SCoPDetection::captureScalarDataRef(Instruction &Inst,
+                                    AccFuncSetType &ScalarAccs) {
   // Only capture scalar data reference if we are not checking
   // SCoP.
-  if (!checkSCoPOnly)
-    return;
+  SmallVector<const Value*, 4> Defs;
+  SDR->getAllUsing(Inst, Defs);
+
+  for (SmallVector<const Value*, 4>::iterator VI = Defs.begin(),
+    VE = Defs.end(); VI != VE; ++VI)
+      ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::Read, *VI));
+
+  if (SDR->isDefExported(Inst))
+    ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::Write, &Inst));
 }
 
 bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
@@ -588,10 +614,21 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
 }
 
 bool SCoPDetection::isValidBasicBlock(BasicBlock &BB, TempSCoP &SCoP) {
+  AccFuncSetType ScalarAccs;
+
   // Check all instructions, except the terminator instruction.
-  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I)
+  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
     if (!isValidInstruction(*I, SCoP))
       return false;
+    // XXX: this seems make things complex
+    if (!checkSCoPOnly)
+      captureScalarDataRef(*I, ScalarAccs);
+  }
+
+  if (!ScalarAccs.empty()) {
+    AccFuncSetType &Accs = AccFuncMap[&BB];
+    Accs.insert(Accs.end(), ScalarAccs.begin(), ScalarAccs.end());
+  }
 
   return true;
 }
@@ -608,11 +645,18 @@ bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP) {
 
     // We can only handle loops whose induction variables in are in canonical
     // form.
-    if (L->getCanonicalInductionVariable() == 0) {
+    PHINode *IndVar = L->getCanonicalInductionVariable();
+    Instruction *IndVarInc = L->getCanonicalInductionVariableIncrement();
+
+    if ((IndVar == 0) || (IndVarInc == 0)) {
       DEBUG(dbgs() << "No CanIV for loop : " << L->getHeader()->getName() <<"?\n");
       STATBAD(IndVar);
       return false;
     }
+
+    // Take away the Induction Variable and its increment
+    killAllTempValFor(*IndVar);
+    killAllTempValFor(*IndVarInc);
 
     ++SCoP.MaxLoopDepth;
 
@@ -778,7 +822,7 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   RI = &getAnalysis<RegionInfo>();
-
+  SDR = &getAnalysis<ScalarDataRef>();
   Region *TopRegion = RI->getTopLevelRegion();
 
   checkSCoPOnly = true;
@@ -807,9 +851,10 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
 }
 
 void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<LoopInfo>();
-  AU.addRequired<RegionInfo>();
-  AU.addRequired<ScalarEvolution>();
+  AU.addRequiredTransitive<LoopInfo>();
+  AU.addRequiredTransitive<RegionInfo>();
+  AU.addRequiredTransitive<ScalarEvolution>();
+  AU.addRequiredTransitive<ScalarDataRef>();
   AU.setPreservesAll();
 }
 

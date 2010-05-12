@@ -16,8 +16,8 @@
 #define POLLY_SCOP_DETECTION_H
 
 #include "polly/PollyType.h"
+#include "polly/ScalarDataRef.h"
 
-#include "llvm/Analysis/LiveValues.h"
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/ScalarEvolution.h"
@@ -90,8 +90,8 @@ public:
 
   /// @brief Create a new SCEV affine function with memory access type.
 
-  explicit SCEVAffFunc(AccessType Type)
-    : TransComp(0), BaseAddr(0, Type) {}
+  explicit SCEVAffFunc(AccessType Type, const Value* baseAddr = 0)
+    : TransComp(0), BaseAddr(baseAddr, Type) {}
 
   /// @brief Build an affine function from a SCEV expression.
   ///
@@ -272,8 +272,8 @@ class SCoPDetection : public FunctionPass {
   // RegionInfo for regiontrees
   RegionInfo *RI;
 
-  //// LiveValues for capture scalar data reference.
-  //LiveValues *LV;
+  // Capture scalar data reference.
+  ScalarDataRef *SDR;
 
   // Remember the bounds of loops, to help us build iterate domain of BBs.
   BoundMapType LoopBounds;
@@ -308,7 +308,7 @@ class SCoPDetection : public FunctionPass {
   bool isValidInstruction(Instruction &I, TempSCoP &SCoP);
 
   // Capture scalar data reference.
-  void captureScalarDR(Instruction &I);
+  void captureScalarDataRef(Instruction &I, AccFuncSetType &ScalarAccs);
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
@@ -322,6 +322,12 @@ class SCoPDetection : public FunctionPass {
 
   // Merge the SCoP information of sub regions
   bool mergeSubSCoP(TempSCoP &Parent, TempSCoP &SubSCoP);
+
+  // Kill all temporary value for computing Instruction I.
+  void killAllTempValFor(Instruction &I) {
+    if (checkSCoPOnly)
+      SDR->reduceTempRefFor(I);
+  }
 
 public:
   static char ID;
