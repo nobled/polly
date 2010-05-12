@@ -73,10 +73,8 @@ bool ScalarDataRef::killedAsTempVal(const Instruction &Inst) const {
 void ScalarDataRef::getAllUsing(Instruction &Inst,
                                 SmallVectorImpl<const Value*> &Defs) {
   // XXX: temporary value not using anything?
-#if 1
   if (killedAsTempVal(Inst))
     return;
-#endif
 
   DEBUG(dbgs() << "get the reading values of :" << Inst << "\n");
   Value *Ptr = 0;
@@ -94,9 +92,10 @@ void ScalarDataRef::getAllUsing(Instruction &Inst,
     // The pointer of load/Store instruction will not consider as "scalar".
     if (Ptr == V)
       continue;
-    // An argument is always read by an instruction.
-    else if (isa<Argument>(V))
-      Defs.push_back(V);
+    // An argument will never be changed in SSA form, so we could just treat
+    // them as a constant.
+    else if (isa<Argument>(V) || isa<GlobalValue>(V))
+      continue;
     else if (Instruction *opInst = dyn_cast<Instruction>(*I)) {
       // Ignore the temporary values.
       if (killedAsTempVal(*opInst))
@@ -105,7 +104,7 @@ void ScalarDataRef::getAllUsing(Instruction &Inst,
       // If operand is from others BBs, we need to read it explicitly
       if (useBB != opInst->getParent())
         Defs.push_back(opInst);
-      // Or the loop carry variable
+      // Or the loop carried variable
       else if (isCyclicUse(opInst, &Inst))
         Defs.push_back(opInst);
     }
@@ -150,19 +149,28 @@ bool ScalarDataRef::isDefExported(Instruction &Inst) const {
 void ScalarDataRef::reduceTempRefFor(const Instruction &Inst) {
   assert(Inst.hasNUsesOrMore(1) && "The instruction have no use cant be reduced!");
 
-  DEBUG(dbgs() << " Try to reduce: " << Inst << " use left: "
-               << getDataRefFor(Inst) << "\n");
+  // And the value of load instruction is not "temporary value"
+  if (isa<LoadInst>(Inst))
+    return;
+
+  DEBUG(dbgs() << "Try to reduce: " << Inst << " use left: ");
+  DEBUG(dbgs() << getDataRefFor(Inst) << "\n");
   // Only reduce the operand of Inst if it is reduced.
   if (--getDataRefFor(Inst) > 0)
     return;
+
 
   // XXX: Stop when we reach a parameter.
 
   for (Instruction::const_op_iterator I = Inst.op_begin(), E = Inst.op_end();
        I != E; ++I) {
     if (const Instruction *opInst = dyn_cast<Instruction>(*I)) {
-      if (!isCyclicUse(&Inst, opInst))
+      // Do reduce cyclic use, it will cause a dead loop
+      if (!isCyclicUse(&Inst, opInst)) {
+        DEBUG(dbgs().indent(4) << "Going to reduce: " << *opInst << " use left: ");
+        DEBUG(dbgs().indent(4) << getDataRefFor(*opInst) << "\n");
         reduceTempRefFor(*opInst);
+      }
     }
   }
 }

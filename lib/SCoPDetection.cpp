@@ -233,7 +233,10 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
     if (!isParameter(Var, R, LI, SE)) {
       // If Var not a parameter, it may be the indvar of current loop
       if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)){
-        assert(AddRec->getLoop() == Scope && "getAtScope not work?");
+        assert((AddRec->getLoop() == Scope ||
+          isa<SCEVCouldNotCompute>(
+            SE.getBackedgeTakenCount(AddRec->getLoop())))
+          && "getAtScope not work?");
         continue;
       }
       // A bad SCEV found.
@@ -504,9 +507,15 @@ bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
   if (CI.doesNotAccessMemory())
     return true;
 
+  Function *CalledFunction = CI.getCalledFunction();
+
+  // Indirect call is not support now.
+  if (CalledFunction == 0)
+    return false;
+
   // Unfortunately some memory access information are true for intrinisic
   // function, e.g. line 239 in Intrinsics.td
-  unsigned IntrID = CI.getCalledFunction()->getIntrinsicID();
+  unsigned IntrID = CalledFunction->getIntrinsicID();
 
   if (IntrID != Intrinsic::not_intrinsic)
     return isPureIntrinsic(IntrID);
@@ -557,7 +566,10 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
     STATBAD(AffFunc);
     return false;
   }
+  // FIXME: Why expression like int *j = **k; where k has int ** type can pass
+  //        affine function check?
 
+  DEBUG(dbgs() << "Reduce ptr of " << Inst << "\n");
   // Try to remove the temporary value for address computation
   // Do this in the Checking phase, so we will get the final result
   // when we try to get SCoP by "getTempSCoPFor";
