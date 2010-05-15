@@ -17,13 +17,13 @@
 #include "polly/Support/AffineSCEVIterator.h"
 
 #include "llvm/Intrinsics.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Assembly/Writer.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/ADT/Statistic.h"
 
 #define DEBUG_TYPE "polly-scop-detect"
 #include "llvm/Support/Debug.h"
@@ -51,20 +51,9 @@ PrintTempSCoPInDetail("polly-print-temp-scop-in-detail",
                                            DESC)
 
 
-#define STATSCOP(X);      \
-  do { if (::llvm::DebugFlag && checkSCoPOnly &&\
-           ::llvm::isCurrentDebugType("polly-scop-detect-stat")) { X; } \
+#define STATSCOP(NAME);              \
+  do { if (checkSCoPOnly) { ++Bad##NAME##ForSCoP; }  \
   } while (0)
-
-#define STATBAD(NAME);    STATSCOP(++Bad##NAME##ForSCoP);
-
-STATISTIC(ValidRegion,"The # of regions that a valid part of SCoP");
-
-#if 0
-STATISTIC(ValidSCoP,  "The # of valid SCoP");
-
-STATISTIC(RichSCoP,   "The # of valid SCoP with loop");
-#endif
 
 // Note: This will make loop bounds could not compute,
 // but this is checked before loop bounds.
@@ -461,7 +450,7 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
         // If branching to inner loop
         // FIXME: We can only handle a bb branching to preheader or not.
         if (numSucc > 2) {
-          STATBAD(CFG);
+          STATSCOP(CFG);
           return false;
         }
         killAllTempValFor(*Cond);
@@ -472,7 +461,7 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
     // Now bb is not branching to inner loop.
     // FIXME: Handle the branch condition
     DEBUG(dbgs() << "Bad BB in cfg: " << BB.getName() << "\n");
-    STATBAD(CFG);
+    STATSCOP(CFG);
     return false;
   }
 
@@ -544,7 +533,7 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
   // Can we get the pointer?
   if (!Pointer) {
     DEBUG(dbgs() << "Bad Inst accessing memory!\n");
-    STATBAD(Other);
+    STATSCOP(Other);
     return false;
   }
 
@@ -563,7 +552,7 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
 
   if (!SCEVAffFunc::buildAffineFunc(Addr, SCoP, func, *LI, *SE, AccType)) {
     DEBUG(dbgs() << "Bad memory addr " << *Addr << "\n");
-    STATBAD(AffFunc);
+    STATSCOP(AffFunc);
     return false;
   }
   // FIXME: Why expression like int *j = **k; where k has int ** type can pass
@@ -602,7 +591,7 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
       return true;
 
     DEBUG(dbgs() << "Bad call Inst!\n");
-    STATBAD(FuncCall);
+    STATSCOP(FuncCall);
     return false;
   }
 
@@ -610,7 +599,7 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
     // Handle cast instruction
     if (isa<IntToPtrInst>(Inst) || isa<BitCastInst>(Inst)) {
       DEBUG(dbgs() << "Bad cast Inst!\n");
-      STATBAD(Other);
+      STATSCOP(Other);
       return false;
     }
 
@@ -621,7 +610,7 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
     return isValidMemoryAccess(Inst, SCoP);
 
   // We do not know this instruction, therefore we assume it is invalid.
-  STATBAD(Other);
+  STATSCOP(Other);
   return false;
 }
 
@@ -662,7 +651,7 @@ bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP) {
 
     if ((IndVar == 0) || (IndVarInc == 0)) {
       DEBUG(dbgs() << "No CanIV for loop : " << L->getHeader()->getName() <<"?\n");
-      STATBAD(IndVar);
+      STATSCOP(IndVar);
       return false;
     }
 
@@ -678,7 +667,7 @@ bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP) {
 
     // We can not handle the loop if its loop bounds can not be computed.
     if (isa<SCEVCouldNotCompute>(LoopCount)) {
-      STATBAD(LoopBound);
+      STATSCOP(LoopBound);
       return false;
     }
 
@@ -699,7 +688,7 @@ bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP) {
     // Build the lower bound.
     if (!SCEVAffFunc::buildAffineFunc(LB, SCoP, lb, *LI, *SE)
         || !SCEVAffFunc::buildAffineFunc(UB, SCoP, ub, *LI, *SE)) {
-      STATBAD(AffFunc);
+      STATSCOP(AffFunc);
       return false;
     }
   }
@@ -736,7 +725,7 @@ bool SCoPDetection::mergeSubSCoP(TempSCoP &Parent, TempSCoP &SubSCoP){
       << (L?L->getHeader()->getName():"Top Level")
       << "\n");
     // Bad parameter occur in expression
-    STATBAD(AffFunc);
+    STATSCOP(AffFunc);
     return false;
   }
 
@@ -763,7 +752,7 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
   // Check if getScopeLoop work on the current loop nest and region tree,
   // if it not work, we could not handle any further
   if (getScopeLoop(R, *LI) != LI->getLoopFor(R.getEntry())) {
-    STATBAD(LoopNest);
+    STATSCOP(LoopNest);
     isValidRegion = false;
   }
 
@@ -805,7 +794,6 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
     // Insert the SCoP into the map, if all the above was successful
     // and we are not only checking SCoPs.
     RegionToSCoPs[&(SCoP->R)] = checkSCoPOnly ? 0 : SCoP;
-    STATSCOP(++ValidRegion);
     return SCoP;
   }
 

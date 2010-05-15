@@ -15,6 +15,7 @@
 #include "polly/SCoPInfo.h"
 #include "polly/Support/GmpConv.h"
 
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Assembly/Writer.h"
@@ -29,14 +30,11 @@
 using namespace llvm;
 using namespace polly;
 
+STATISTIC(ValidRegion,"The # of regions that a valid part of SCoP");
 
-static cl::opt<bool>
-PrintAccessFunctions("print-access-functions", cl::Hidden,
-               cl::desc("Print the access functions of BBs."));
+STATISTIC(SCoPFound,  "The # of valid SCoP");
 
-static cl::opt<bool>
-PrintLoopBound("print-loop-bounds", cl::Hidden,
-            cl::desc("Print the bounds of loops."));
+STATISTIC(RichSCoPFound,   "The # of valid SCoP has loop inside");
 
 //===----------------------------------------------------------------------===//
 MemoryAccess::~MemoryAccess() {
@@ -395,9 +393,18 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
 
   if (!tempSCoP) return false;
 
+  // A valid region for SCoP found.
+  ++ValidRegion;
+
   // Only analyse the maximal SCoPs.
   if (!SCoPDetect.isMaxRegionInSCoP(*R))
     return false;
+
+  // A SCoP found
+  ++SCoPFound;
+
+  if (tempSCoP->getMaxLoopDepth() > 0) ++RichSCoPFound;
+
 
   SmallVector<Loop*, 8> NestLoops;
   SmallVector<unsigned, 8> Scatter;
