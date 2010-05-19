@@ -13,6 +13,6 @@
 #ifndef POLLY_CONFIG_H
 #define POLLY_CONFIG_H
 
-#cmakedefine _POLLY_WITH_OPENSCOP
+#cmakedefine OPENSCOP_FOUND
 
 #endif

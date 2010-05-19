@@ -42,7 +42,7 @@ namespace {
       (void) polly::createClastCodeGenerationPass();
       (void) polly::createScalarDataRefPass();
 
-#ifdef _POLLY_WITH_OPENSCOP
+#ifdef OPENSCOP_FOUND
       (void) polly::createSCoPExporterPass();
       (void) polly::createSCoPImporterPass();
 #endif

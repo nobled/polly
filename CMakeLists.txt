@@ -16,16 +16,16 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${POLLY_SOURCE_DIR}/cmake")
 FIND_PACKAGE(Cloog REQUIRED)
 FIND_PACKAGE(Isl REQUIRED)
 FIND_PACKAGE(Gmp REQUIRED)
-FIND_PACKAGE(Scoplib)
+FIND_PACKAGE(OpenScop)
 
 INCLUDE_DIRECTORIES( ${CLOOG_INCLUDE_DIR} )
 INCLUDE_DIRECTORIES( ${ISL_INCLUDE_DIR} )
 INCLUDE_DIRECTORIES( ${GMP_INCLUDE_DIR} )
 
-# Support Scoplib export/import if the library is available.
-if (SCOPLIB_FOUND)
-  INCLUDE_DIRECTORIES( ${SCOPLIB_INCLUDE_DIR} )
-endif(SCOPLIB_FOUND)
+# Support OpenScop export/import if the library is available.
+if (OPENSCOP_FOUND)
+  INCLUDE_DIRECTORIES( ${OPENSCOP_INCLUDE_DIR} )
+endif(OPENSCOP_FOUND)
 
 macro(add_polly_library name)
   set(srcs ${ARGN})
@@ -54,9 +54,9 @@ macro(add_polly_library name)
   endif( LLVM_USED_LIBS )
 
   target_link_libraries( ${name} ${CLOOG_LIBRARY} ${ISL_LIBRARY} ${GMP_LIBRARY})
-  if (SCOPLIB_FOUND)
-    target_link_libraries( ${name} ${SCOPLIB_LIBRARY})
-  endif(SCOPLIB_FOUND)
+  if (OPENSCOP_FOUND)
+    target_link_libraries( ${name} ${OPENSCOP_LIBRARY})
+  endif(OPENSCOP_FOUND)
 
   if( LLVM_LINK_COMPONENTS )
     llvm_config(${name} ${LLVM_LINK_COMPONENTS})
@@ -104,12 +104,9 @@ add_subdirectory(include)
 add_subdirectory(lib)
 
 # Add the Scoplib export/import library if the Scoplib is available.
-if (SCOPLIB_FOUND)
+if (OPENSCOP_FOUND)
   add_subdirectory(lib/Exchange)
-  option( _POLLY_WITH_OPENSCOP "Enable OpenSCoP import/export support" ON )
-else (SCOPLIB_FOUND)
-  option( _POLLY_WITH_OPENSCOP "Enable OpenSCoP import/export support" OFF )
-endif(SCOPLIB_FOUND)
+endif(OPENSCOP_FOUND)
 
 add_subdirectory(tools)
 add_subdirectory(test)

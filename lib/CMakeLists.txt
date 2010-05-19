@@ -14,6 +14,6 @@ add_polly_library(LLVMPolly
   Support/AffSCEVItTester.cpp
   )
 
-if (SCOPLIB_FOUND)
+if (OPENSCOP_FOUND)
   target_link_libraries (LLVMPolly LLVMSCoPExchange)
-endif (SCOPLIB_FOUND)
+endif (OPENSCOP_FOUND)
