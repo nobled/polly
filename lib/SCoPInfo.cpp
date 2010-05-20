@@ -337,7 +337,7 @@ void SCoP::buildStmt(TempSCoP &TempSCoP, BasicBlock &BB,
 
   }
 
-  Stmts.insert(stmt);
+  Stmts.push_back(stmt);
 }
 
 PHINode *SCoPStmt::getIVatLevel(unsigned L) {

@@ -366,9 +366,18 @@ openscop_scop_p	ScopToOpenScop(SCoP *S) {
         strcpy(OpenSCoP->arrays[i], name.c_str());
       }
 
+  // Set the scattering dimensions
+  OpenSCoP->nb_scattdims = S->getScatterDim();
+  OpenSCoP->scattdims = new char*[OpenSCoP->nb_scattdims];
+
+  for (int i = 0; i < OpenSCoP->nb_scattdims; ++i) {
+    OpenSCoP->scattdims[i] = new char[20];
+    sprintf(OpenSCoP->scattdims[i], "s_%d", i);
+  }
 
   // Initialize the statements.
-  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+  for (SCoP::reverse_iterator SI = S->rbegin(), SE = S->rend(); SI != SE;
+       ++SI) {
     openscop_statement_p stmt = SCoPStmtToOpenSCoPStmt(*SI, &ArrayMap);
     stmt->next = OpenSCoP->statement;
     OpenSCoP->statement = stmt;

@@ -153,6 +153,7 @@ public:
   ///
   /// @return The scattering function of this SCoPStmt.
   polly_map *getScattering() const { return Scattering; }
+  void setScattering(polly_map *scattering) { Scattering = scattering; }
 
   /// @brief Get the BasicBlock represented by this SCoPStmt.
   ///
@@ -167,6 +168,7 @@ public:
 
   unsigned getNumParams();
   unsigned getNumIterators();
+  SCoP *getParent() { return &Parent; }
 
   /// @brief Get the induction variable of the loop a given level.
   ///
@@ -217,7 +219,7 @@ class SCoP {
   /// Max loop depth.
   unsigned MaxLoopDepth;
 
-  typedef std::set<SCoPStmt*> StmtSet;
+  typedef std::vector<SCoPStmt*> StmtSet;
   /// The Statments in this SCoP.
   StmtSet Stmts;
 
@@ -315,6 +317,14 @@ public:
   iterator end()   { return Stmts.end();   }
   const_iterator begin() const { return Stmts.begin(); }
   const_iterator end()   const { return Stmts.end();   }
+
+  typedef StmtSet::reverse_iterator reverse_iterator;
+  typedef StmtSet::const_reverse_iterator const_reverse_iterator;
+
+  reverse_iterator rbegin() { return Stmts.rbegin(); }
+  reverse_iterator rend()   { return Stmts.rend();   }
+  const_reverse_iterator rbegin() const { return Stmts.rbegin(); }
+  const_reverse_iterator rend()   const { return Stmts.rend();   }
   //@}
 
   /// @brief Print the static control part.
