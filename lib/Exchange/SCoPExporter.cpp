@@ -228,8 +228,15 @@ openscop_statement_p SCoPStmtToOpenSCoPStmt(SCoPStmt *S) {
     std::string str = S->getBasicBlock()->getNameStr();
     Stmt->body = new char[str.size() + 1];
     strcpy(Stmt->body, str.c_str());
-    // XXX: This would require us to give iterator names
-    // Stmt->nb_iterators = isl_set_n_dim(S->getDomain());
+
+    // Set iterator names
+    Stmt->nb_iterators = isl_set_n_dim(S->getDomain());
+    Stmt->iterators = new char*[Stmt->nb_iterators];
+    for (int i = 0; i < Stmt->nb_iterators; ++i) {
+      Stmt->iterators[i] = new char[20];
+      sprintf(Stmt->iterators[i], "i_%d", i);
+    }
+
     return Stmt;
 }
 
