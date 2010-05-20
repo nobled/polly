@@ -69,6 +69,9 @@ public:
 
   bool isRead() const { return BaseAddr.getInt() == MemoryAccess::Read; }
 
+  polly_map *getAccessFunction() { return AccFunc; }
+  const Value *getBaseAddr() { return BaseAddr.getPointer(); }
+
   /// @brief Print the MemoryAccess.
   ///
   /// @param OS The output stream the MemoryAccess is printed to.
@@ -151,13 +154,19 @@ public:
   /// @return The scattering function of this SCoPStmt.
   polly_map *getScattering() const { return Scattering; }
 
-
   /// @brief Get the BasicBlock represented by this SCoPStmt.
   ///
   /// @return The BasicBlock represented by this SCoPStmt.
   BasicBlock *getBasicBlock() const { return BB; }
 
   void setBasicBlock(BasicBlock *Block) { BB = Block; }
+
+  typedef MemAccVec::iterator memacc_iterator;
+  memacc_iterator memacc_begin() { return MemAccs.begin(); }
+  memacc_iterator memacc_end() { return MemAccs.end(); }
+
+  unsigned getNumParams();
+  unsigned getNumIterators();
 
   /// @brief Get the induction variable of the loop a given level.
   ///

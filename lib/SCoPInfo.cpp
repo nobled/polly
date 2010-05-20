@@ -51,6 +51,9 @@ void MemoryAccess::print(raw_ostream &OS) const {
   DEBUG(isl_map_dump(AccFunc, stderr, 20));
 }
 
+void MemoryAccess::dump() const {
+  print(errs());
+}
 //===----------------------------------------------------------------------===//
 SCoPStmt::SCoPStmt(SCoP &parent, BasicBlock &bb,
                    polly_set *domain, polly_map *scat,
@@ -64,6 +67,13 @@ SCoPStmt::SCoPStmt(SCoP &parent, BasicBlock &bb,
       IVS[i] = PN;
     }
 }
+unsigned SCoPStmt::getNumParams() {
+  return isl_set_n_param(Domain);
+}
+unsigned SCoPStmt::getNumIterators() {
+  return isl_set_n_dim(Domain);
+}
+
 
 SCoPStmt::~SCoPStmt() {
   while (!MemAccs.empty()) {
