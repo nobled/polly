@@ -79,7 +79,7 @@ int domainToMatrix_constraint(isl_constraint *c, void *user) {
   isl_constraint_get_constant(c, &v);
   isl_int_set(vec->p[nb_params + nb_vars + 1], v);
 
-  openscop_matrix_insert_vector(m, vec, 0);
+  openscop_matrix_insert_vector(m, vec, m->NbRows);
 
   return 0;
 }
@@ -173,7 +173,7 @@ int scatteringToMatrix_constraint(isl_constraint *c, void *user) {
   isl_constraint_get_constant(c, &v);
   isl_int_set(vec->p[nb_out + nb_in + nb_params + 1], v);
 
-  openscop_matrix_insert_vector(m, vec, 0);
+  openscop_matrix_insert_vector(m, vec, m->NbRows);
 
   return 0;
 }
