@@ -409,9 +409,3 @@ static RegisterPass<SCoPExporter> A("polly-export-scop",
 Pass *polly::createSCoPExporterPass() {
   return new SCoPExporter();
 }
-
-// Dirty hack
-
-Pass *polly::createSCoPImporterPass() {
-  return new SCoPExporter();
-}
