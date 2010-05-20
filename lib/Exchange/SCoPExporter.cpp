@@ -43,11 +43,14 @@ char SCoPExporter::ID = 0;
 ///
 /// @param user The matrix
 /// @param c The constraint
-int extract_constraint (isl_constraint *c, void *user) {
+int domainToMatrix_constraint(isl_constraint *c, void *user) {
   openscop_matrix_p m = (openscop_matrix_p) user;
 
   int nb_params = isl_constraint_dim(c, isl_dim_param);
   int nb_vars = isl_constraint_dim(c, isl_dim_set);
+  int nb_div = isl_constraint_dim(c, isl_dim_div);
+
+  assert(!nb_div && "Existentially quantified variables not yet supported");
 
   openscop_vector_p vec = openscop_vector_malloc(nb_params + nb_vars + 2);
 
@@ -89,11 +92,11 @@ int extract_constraint (isl_constraint *c, void *user) {
 /// XXX: At the moment this function expects just a matrix, as support
 /// for matrix lists is currently not available in OpenSCoP. So union of
 /// polyhedron are not yet supported
-int extract_matrix(isl_basic_set *bset, void *user) {
+int domainToMatrix_basic_set(isl_basic_set *bset, void *user) {
   openscop_matrix_p m = (openscop_matrix_p) user;
   assert(!m->NbRows && "Union of polyhedron not yet supported");
 
-  isl_basic_set_foreach_constraint(bset, &extract_constraint, user);
+  isl_basic_set_foreach_constraint(bset, &domainToMatrix_constraint, user);
   return 0;
 }
 
@@ -115,9 +118,104 @@ openscop_matrix_p domainToMatrix(polly_set *PS) {
   openscop_matrix_p matrix = openscop_matrix_malloc(NbRows, NbColumns);
 
   // Copy the content into the matrix.
-  isl_set_foreach_basic_set(set, &extract_matrix, matrix);
+  isl_set_foreach_basic_set(set, &domainToMatrix_basic_set, matrix);
 
   isl_set_free(set);
+
+  return matrix;
+}
+
+/// Add an isl constraint to an OpenSCoP matrix.
+///
+/// @param user The matrix
+/// @param c The constraint
+int scatteringToMatrix_constraint(isl_constraint *c, void *user) {
+  openscop_matrix_p m = (openscop_matrix_p) user;
+
+  int nb_params = isl_constraint_dim(c, isl_dim_param);
+  int nb_in = isl_constraint_dim(c, isl_dim_in);
+  int nb_out = isl_constraint_dim(c, isl_dim_out);
+  int nb_div = isl_constraint_dim(c, isl_dim_div);
+
+  assert(!nb_div && "Existentially quantified variables not yet supported");
+
+  openscop_vector_p vec =
+    openscop_vector_malloc(nb_params + nb_in + nb_out + 2);
+
+  // Assign type
+  if (isl_constraint_is_equality(c))
+    openscop_vector_tag_equality(vec);
+  else
+    openscop_vector_tag_inequality(vec);
+
+  isl_int v;
+  isl_int_init(v);
+
+  // Assign scattering
+  for (int i = 0; i < nb_out; ++i) {
+    isl_constraint_get_coefficient(c, isl_dim_out, i, &v);
+    isl_int_set(vec->p[i + 1], v);
+  }
+
+  // Assign variables
+  for (int i = 0; i < nb_in; ++i) {
+    isl_constraint_get_coefficient(c, isl_dim_in, i, &v);
+    isl_int_set(vec->p[nb_out + i + 1], v);
+  }
+
+  // Assign parameters
+  for (int i = 0; i < nb_params; ++i) {
+    isl_constraint_get_coefficient(c, isl_dim_param, i, &v);
+    isl_int_set(vec->p[nb_out + nb_in + i + 1], v);
+  }
+
+  // Assign constant
+  isl_constraint_get_constant(c, &v);
+  isl_int_set(vec->p[nb_out + nb_in + nb_params + 1], v);
+
+  openscop_matrix_insert_vector(m, vec, 0);
+
+  return 0;
+}
+
+/// Add an isl basic map to a OpenSCoP matrix_list
+///
+/// @param bmap The basic map to add
+/// @param user The matrix list we should add the basic map to
+///
+/// XXX: At the moment this function expects just a matrix, as support
+/// for matrix lists is currently not available in OpenSCoP. So union of
+/// polyhedron are not yet supported
+int scatteringToMatrix_basic_map(isl_basic_map *bmap, void *user) {
+  openscop_matrix_p m = (openscop_matrix_p) user;
+  assert(!m->NbRows && "Union of polyhedron not yet supported");
+
+  isl_basic_map_foreach_constraint(bmap, &scatteringToMatrix_constraint, user);
+  return 0;
+}
+
+/// Translate a isl_map to a OpenSCoP matrix.
+///
+/// @param map The map to be translated
+/// @return A OpenSCoP Matrix
+openscop_matrix_p scatteringToMatrix(polly_map *pmap) {
+
+  // Create a canonical copy of this set.
+  polly_map *map = isl_map_copy(pmap);
+  map = isl_map_compute_divs (map);
+  map = isl_map_align_divs (map);
+
+  // Initialize the matrix.
+  unsigned NbRows, NbColumns;
+  NbRows = 0;
+  NbColumns = isl_map_n_in(pmap) + isl_map_n_out(pmap) + isl_map_n_param(pmap)
+    + 2;
+  openscop_matrix_p matrix = openscop_matrix_malloc(NbRows, NbColumns);
+
+  // Copy the content into the matrix.
+  isl_map_foreach_basic_map(map, &scatteringToMatrix_basic_map, matrix);
+
+  isl_map_free(map);
 
   return matrix;
 }
@@ -126,6 +224,7 @@ openscop_matrix_p domainToMatrix(polly_set *PS) {
 openscop_statement_p SCoPStmtToOpenSCoPStmt(SCoPStmt *S) {
     openscop_statement_p Stmt = openscop_statement_malloc();
     Stmt->domain = domainToMatrix(S->getDomain());
+    Stmt->schedule = scatteringToMatrix(S->getScattering());
     std::string str = S->getBasicBlock()->getNameStr();
     Stmt->body = new char[str.size() + 1];
     strcpy(Stmt->body, str.c_str());
