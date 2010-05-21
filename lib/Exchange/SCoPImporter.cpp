@@ -40,74 +40,115 @@ struct SCoPImporter : public RegionPass {
 
 char SCoPImporter::ID = 0;
 
-isl_map *scattering_to_map(openscop_matrix_p m, SCoPStmt *PollyStmt,
-                           unsigned nb_scatt) {
+/// @brief Create an isl constraint from a row of OpenSCoP integers.
+///
+/// @param row An array of isl/OpenSCoP integers.
+/// @param dim An isl dim object, describing how to spilt the dimensions.
+///
+/// @return An isl constraint representing this integer array.
+isl_constraint *constraintFromMatrixRow(isl_int *row, isl_dim *dim) {
+  polly_constraint *c;
 
-  unsigned nb_param = PollyStmt->getNumParams();
-  unsigned nb_iterators = PollyStmt->getNumIterators();
-  unsigned nb_scat = m->NbColumns - 2 - nb_param - nb_iterators;
+  unsigned NbOut = isl_dim_size(dim, isl_dim_out);
+  unsigned NbIn = isl_dim_size(dim, isl_dim_in);
+  unsigned NbParam = isl_dim_size(dim, isl_dim_param);
 
-  isl_ctx *ctx = PollyStmt->getParent()->getCtx();
-  polly_dim *dim = isl_dim_alloc(ctx, nb_param, nb_iterators, nb_scatt);
+  if (row[0])
+    c = isl_equality_alloc(isl_dim_copy(dim));
+  else
+    c = isl_inequality_alloc(isl_dim_copy(dim));
+
+  unsigned current_column = 1;
+
+  for (unsigned j = 0; j < NbOut; ++j)
+    isl_constraint_set_coefficient(c, isl_dim_out, j, row[current_column++]);
+
+  for (unsigned j = 0; j < NbIn; ++j)
+    isl_constraint_set_coefficient(c, isl_dim_in, j, row[current_column++]);
+
+  for (unsigned j = 0; j < NbParam; ++j)
+    isl_constraint_set_coefficient(c, isl_dim_param, j, row[current_column++]);
+
+  isl_constraint_set_constant(c, row[current_column]);
+
+  return c;
+}
+
+/// @brief Create an isl map from a OpenSCoP matrix.
+///
+/// @param m The OpenSCoP matrix to translate.
+/// @param dim The dimensions that are contained in the OpenSCoP matrix.
+///
+/// @return An isl map representing m.
+isl_map *mapFromMatrix(openscop_matrix_p m, isl_dim *dim) {
   polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
-  isl_int v;
-  isl_int_init(v);
 
   for (unsigned i = 0; i < m->NbRows; ++i) {
     polly_constraint *c;
 
-    if (m->p[i][0])
-      c = isl_equality_alloc(isl_dim_copy(dim));
-    else
-      c = isl_inequality_alloc(isl_dim_copy(dim));
-
-    for (unsigned j = 0; j < nb_scat; ++j)
-      isl_constraint_set_coefficient(c, isl_dim_out, j, m->p[i][1 + j]);
-
-    for (unsigned j = 0; j < nb_iterators; ++j)
-      isl_constraint_set_coefficient(c, isl_dim_in, j,
-                                          m->p[i][nb_scat + 1 + j]);
-
-    for (unsigned j = 0; j < nb_param; ++j)
-      isl_constraint_set_coefficient(c, isl_dim_param, j,
-                                     m->p[i][nb_scat + nb_iterators + 1 + j]);
-
-    isl_constraint_set_constant(c,
-                                m->p[i][nb_scat + nb_iterators + nb_param + 1]);
-
+    c = constraintFromMatrixRow(m->p[i], dim);
     bmap = isl_basic_map_add_constraint(bmap, c);
   }
 
-  isl_dim_free(dim);
   return isl_map_from_basic_map(bmap);
 }
 
-void updateScattering(SCoPStmt *PollyStmt, openscop_statement_p OStmt,
-                      unsigned nb_scatt) {
+/// @brief Create a new scattering for PollyStmt.
+///
+/// @param m The matrix describing the new scattering.
+/// @param PollyStmt The statement to create the scattering for.
+///
+/// @return An isl_map describing the scattering.
+isl_map *scatteringForStmt(openscop_matrix_p m, SCoPStmt *PollyStmt) {
+
+  unsigned NbParam = PollyStmt->getNumParams();
+  unsigned NbIterators = PollyStmt->getNumIterators();
+  unsigned NbScattering = m->NbColumns - 2 - NbParam - NbIterators;
+
+  isl_ctx *ctx = PollyStmt->getParent()->getCtx();
+  polly_dim *dim = isl_dim_alloc(ctx, NbParam, NbIterators, NbScattering);
+  isl_map *map = mapFromMatrix(m, dim);
+  isl_dim_free(dim);
+
+  return map;
+}
+
+/// @brief Update the scattering in PollyStmt.
+///
+/// @param PollyStmt The statement to update.
+/// @param OStmt The OpenSCoP statement describing the new scattering.
+void updateScattering(SCoPStmt *PollyStmt, openscop_statement_p OStmt) {
   assert(OStmt && "No openscop statement available");
-  isl_map *m = scattering_to_map (OStmt->schedule, PollyStmt, nb_scatt);
+  isl_map *m = scatteringForStmt(OStmt->schedule, PollyStmt);
   PollyStmt->setScattering(m);
 }
 
-void updateScattering(SCoP *S, openscop_scop_p OSCoP) {
-
+/// @brief Update the scattering in a SCoP using the OpenSCoP description of
+/// the scattering.
+///
+/// @S The SCoP to update
+/// @OSCoP The OpenSCoP data structure describing the new scattering.
+/// @return Returns false, if the update failed.
+bool updateScattering(SCoP *S, openscop_scop_p OSCoP) {
   openscop_statement_p stmt = OSCoP->statement;
-  unsigned max_scattering = 0;
-  // Initialize the statements.
-  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-    unsigned nb_scattering = stmt->schedule->NbColumns - 2
-      - (*SI)->getNumParams() - (*SI)->getNumIterators();
 
-    max_scattering = std::max(max_scattering, nb_scattering);
+  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+
+    if (!stmt) {
+      errs() << "Not enough statements available in OpenSCoP file\n";
+      return false;
+    }
+
+    updateScattering(*SI, stmt);
     stmt = stmt->next;
   }
 
-  stmt = OSCoP->statement;
-  // Initialize the statements.
-  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-    updateScattering(*SI, stmt, max_scattering);
-    stmt = stmt->next;
+  if (stmt) {
+    errs() << "Too many statements in OpenSCoP file\n";
+    return false;
   }
+
+  return true;
 }
 
 bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
@@ -126,7 +167,11 @@ bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
   openscop_scop_p scop = openscop_scop_read(F);
   fclose(F);
 
-  updateScattering(S, scop);
+  bool UpdateSuccessfull = updateScattering(S, scop);
+
+  if (!UpdateSuccessfull) {
+    errs() << "Update failed" << "\n";
+  }
 
   return false;
 }
