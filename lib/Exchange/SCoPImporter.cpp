@@ -116,16 +116,16 @@ bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
   if (!S)
     return false;
 
-  std::string exit = R->getExit() ? R->getExit()->getNameStr()
-    : "FunctionReturn";
-  std::string Filename = R->getEntry()->getParent()->getNameStr() + "-"
-    + R->getEntry()->getNameStr() + "_to_" + exit
-    + ".scop";
-  errs() << "Reading '" << Filename << "'...\n";
+  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
+  std::string Filename = FunctionName + "_-_" + R->getNameStr() + ".scop";
+
+  errs() << "Reading SCoP '" << R->getNameStr() << "' in function '"
+    << FunctionName << "' from '" << Filename << "'...\n";
 
   FILE *F = fopen(Filename.c_str(), "r");
   openscop_scop_p scop = openscop_scop_read(F);
   fclose(F);
+
   updateScattering(S, scop);
 
   return false;
@@ -136,8 +136,10 @@ void SCoPImporter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<SCoPInfo>();
 }
 
-static RegisterPass<SCoPImporter> A("polly-import-scop",
-                                    "Polly - Import SCoPs with openscop library");
+static RegisterPass<SCoPImporter> A("polly-import",
+                                    "Polly - Import SCoPs with OpenSCoP library"
+                                    " (Reads a .scop file for each SCoP)"
+                                    );
 
 Pass *polly::createSCoPImporterPass() {
   return new SCoPImporter();

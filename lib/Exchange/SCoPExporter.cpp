@@ -393,15 +393,17 @@ bool SCoPExporter::runOnRegion(Region *R, RGPassManager &RGM) {
   if (!S)
     return false;
 
-  std::string exit = R->getExit() ? R->getExit()->getNameStr()
-    : "FunctionReturn";
-  std::string Filename = R->getEntry()->getParent()->getNameStr() + "-"
-    + R->getEntry()->getNameStr() + "_to_" + exit
-    + ".scop";
-  errs() << "Writing '" << Filename << "'...\n";
+  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
+  std::string Filename = FunctionName + "_-_" + R->getNameStr() + ".scop";
+
+  errs() << "Writing SCoP '" << R->getNameStr() << "' in function '"
+    << FunctionName << "' to '" << Filename << "'...\n";
 
   FILE *F = fopen(Filename.c_str(), "w");
-  openscop_scop_print_dot_scop(F, ScopToOpenScop(S));
+  openscop_scop_p OpenSCoP = ScopToOpenScop(S);
+
+  openscop_scop_print_dot_scop(F, OpenSCoP);
+
   fclose(F);
 
   return false;
@@ -412,8 +414,10 @@ void SCoPExporter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<SCoPInfo>();
 }
 
-static RegisterPass<SCoPExporter> A("polly-export-scop",
-                                    "Polly - Export SCoPs with openscop library");
+static RegisterPass<SCoPExporter> A("polly-export",
+                                    "Polly - Export SCoPs with OpenSCoP library"
+                                    " (Writes a .scop file for each SCoP)"
+                                    );
 
 Pass *polly::createSCoPExporterPass() {
   return new SCoPExporter();

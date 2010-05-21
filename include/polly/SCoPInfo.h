@@ -306,7 +306,7 @@ public:
   /// @return The constraint on parameter of this SCoP.
   inline polly_set *getContext() const { return Context; }
 
-  /// @name Statments Iterators
+  /// @name Statements Iterators
   ///
   /// These iterators iterate over all statements of this SCoP.
   //@{
