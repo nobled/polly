@@ -39,11 +39,156 @@ struct SCoPExporter : public RegionPass {
 
 char SCoPExporter::ID = 0;
 
+class OpenSCoP {
+  SCoP *PollySCoP;
+  openscop_scop_p openscop;
+
+  std::map<const Value*, int> ArrayMap;
+
+  void initializeArrays();
+  void initializeScattering();
+  void initializeStatements();
+  openscop_statement_p initializeStatement(SCoPStmt *stmt);
+  void freeStatement(openscop_statement_p stmt);
+  static int accessToMatrix_constraint(isl_constraint *c, void *user);
+  static int accessToMatrix_basic_map(isl_basic_map *bmap, void *user);
+  openscop_matrix_p createAccessMatrix(SCoPStmt *S, bool isRead);
+  static int domainToMatrix_constraint(isl_constraint *c, void *user);
+  static int domainToMatrix_basic_set(isl_basic_set *bset, void *user);
+  openscop_matrix_p domainToMatrix(polly_set *PS);
+  static int scatteringToMatrix_constraint(isl_constraint *c, void *user);
+  static int scatteringToMatrix_basic_map(isl_basic_map *bmap, void *user);
+  openscop_matrix_p scatteringToMatrix(polly_map *pmap);
+
+public:
+  OpenSCoP(SCoP *S);
+  ~OpenSCoP();
+  void print(FILE *F);
+
+};
+
+OpenSCoP::OpenSCoP(SCoP *S) : PollySCoP(S) {
+  openscop = openscop_scop_malloc();
+
+  openscop->nb_parameters = PollySCoP->getNumParams();
+
+  initializeArrays();
+  initializeScattering();
+  initializeStatements();
+}
+
+void OpenSCoP::initializeArrays() {
+  int nb_arrays = 0;
+
+  for (SCoP::iterator SI = PollySCoP->begin(), SE = PollySCoP->end(); SI != SE;
+       ++SI)
+    for (SCoPStmt::memacc_iterator MI = (*SI)->memacc_begin(),
+         ME = (*SI)->memacc_end(); MI != ME; ++MI) {
+      const Value *BaseAddr = (*MI)->getBaseAddr();
+      if (ArrayMap.find(BaseAddr) == ArrayMap.end()) {
+        ArrayMap.insert(std::make_pair(BaseAddr, nb_arrays));
+        ++nb_arrays;
+      }
+    }
+
+  openscop->nb_arrays = nb_arrays;
+  openscop->arrays = new char*[nb_arrays];
+
+  for (int i = 0; i < nb_arrays; ++i)
+    for (std::map<const Value*, int>::iterator VI = ArrayMap.begin(),
+         VE = ArrayMap.end(); VI != VE; ++VI)
+      if ((*VI).second == i) {
+        const Value *V = (*VI).first;
+        std::string name = V->getNameStr();
+        openscop->arrays[i] = new char[name.size() + 1];
+        strcpy(openscop->arrays[i], name.c_str());
+      }
+}
+
+void OpenSCoP::initializeScattering() {
+  openscop->nb_scattdims = PollySCoP->getScatterDim();
+  openscop->scattdims = new char*[openscop->nb_scattdims];
+
+  for (int i = 0; i < openscop->nb_scattdims; ++i) {
+    openscop->scattdims[i] = new char[20];
+    sprintf(openscop->scattdims[i], "s_%d", i);
+  }
+}
+
+openscop_statement_p OpenSCoP::initializeStatement(SCoPStmt *stmt) {
+  openscop_statement_p Stmt = openscop_statement_malloc();
+
+  // Domain & Schedule
+  Stmt->domain = domainToMatrix(stmt->getDomain());
+  Stmt->schedule = scatteringToMatrix(stmt->getScattering());
+
+  // Statement name
+  std::string str = stmt->getBasicBlock()->getNameStr();
+  Stmt->body = new char[str.size() + 1];
+  strcpy(Stmt->body, str.c_str());
+
+  // Iterator names
+  Stmt->nb_iterators = isl_set_n_dim(stmt->getDomain());
+  Stmt->iterators = new char*[Stmt->nb_iterators];
+
+  for (int i = 0; i < Stmt->nb_iterators; ++i) {
+    Stmt->iterators[i] = new char[20];
+    sprintf(Stmt->iterators[i], "i_%d", i);
+  }
+
+  // Memory Accesses
+  Stmt->read = createAccessMatrix(stmt, true);
+  Stmt->write = createAccessMatrix(stmt, false);
+
+  return Stmt;
+}
+
+void OpenSCoP::initializeStatements() {
+  for (SCoP::reverse_iterator SI = PollySCoP->rbegin(), SE = PollySCoP->rend();
+       SI != SE; ++SI) {
+    openscop_statement_p stmt = initializeStatement(*SI);
+    stmt->next = openscop->statement;
+    openscop->statement = stmt;
+  }
+}
+
+void OpenSCoP::freeStatement(openscop_statement_p stmt) {
+
+  if (stmt->read)
+    openscop_matrix_free(stmt->read);
+  stmt->read = NULL;
+
+  if (stmt->write)
+    openscop_matrix_free(stmt->write);
+  stmt->write = NULL;
+
+  if (stmt->domain)
+    openscop_matrix_free(stmt->domain);
+  stmt->domain = NULL;
+
+  if (stmt->schedule)
+    openscop_matrix_free(stmt->schedule);
+  stmt->schedule = NULL;
+
+  for (int i = 0; i < stmt->nb_iterators; ++i)
+    delete[](stmt->iterators[i]);
+
+  delete[](stmt->iterators);
+  stmt->iterators = NULL;
+  stmt->nb_iterators = 0;
+
+  openscop_statement_free(stmt);
+}
+
+void OpenSCoP::print(FILE *F) {
+  openscop_scop_print_dot_scop(F, openscop);
+}
+
 /// Add an isl constraint to an OpenSCoP matrix.
 ///
 /// @param user The matrix
 /// @param c The constraint
-int domainToMatrix_constraint(isl_constraint *c, void *user) {
+int OpenSCoP::domainToMatrix_constraint(isl_constraint *c, void *user) {
   openscop_matrix_p m = (openscop_matrix_p) user;
 
   int nb_params = isl_constraint_dim(c, isl_dim_param);
@@ -92,7 +237,7 @@ int domainToMatrix_constraint(isl_constraint *c, void *user) {
 /// XXX: At the moment this function expects just a matrix, as support
 /// for matrix lists is currently not available in OpenSCoP. So union of
 /// polyhedron are not yet supported
-int domainToMatrix_basic_set(isl_basic_set *bset, void *user) {
+int OpenSCoP::domainToMatrix_basic_set(isl_basic_set *bset, void *user) {
   openscop_matrix_p m = (openscop_matrix_p) user;
   assert(!m->NbRows && "Union of polyhedron not yet supported");
 
@@ -104,7 +249,7 @@ int domainToMatrix_basic_set(isl_basic_set *bset, void *user) {
 ///
 /// @param PS The set to be translated
 /// @return A OpenSCoP Matrix
-openscop_matrix_p domainToMatrix(polly_set *PS) {
+openscop_matrix_p OpenSCoP::domainToMatrix(polly_set *PS) {
 
   // Create a canonical copy of this set.
   polly_set *set = isl_set_copy(PS);
@@ -129,7 +274,7 @@ openscop_matrix_p domainToMatrix(polly_set *PS) {
 ///
 /// @param user The matrix
 /// @param c The constraint
-int scatteringToMatrix_constraint(isl_constraint *c, void *user) {
+int OpenSCoP::scatteringToMatrix_constraint(isl_constraint *c, void *user) {
   openscop_matrix_p m = (openscop_matrix_p) user;
 
   int nb_params = isl_constraint_dim(c, isl_dim_param);
@@ -186,7 +331,7 @@ int scatteringToMatrix_constraint(isl_constraint *c, void *user) {
 /// XXX: At the moment this function expects just a matrix, as support
 /// for matrix lists is currently not available in OpenSCoP. So union of
 /// polyhedron are not yet supported
-int scatteringToMatrix_basic_map(isl_basic_map *bmap, void *user) {
+int OpenSCoP::scatteringToMatrix_basic_map(isl_basic_map *bmap, void *user) {
   openscop_matrix_p m = (openscop_matrix_p) user;
   assert(!m->NbRows && "Union of polyhedron not yet supported");
 
@@ -198,7 +343,7 @@ int scatteringToMatrix_basic_map(isl_basic_map *bmap, void *user) {
 ///
 /// @param map The map to be translated
 /// @return A OpenSCoP Matrix
-openscop_matrix_p scatteringToMatrix(polly_map *pmap) {
+openscop_matrix_p OpenSCoP::scatteringToMatrix(polly_map *pmap) {
 
   // Create a canonical copy of this set.
   polly_map *map = isl_map_copy(pmap);
@@ -224,7 +369,7 @@ openscop_matrix_p scatteringToMatrix(polly_map *pmap) {
 ///
 /// @param user The matrix
 /// @param c The constraint
-int accessToMatrix_constraint(isl_constraint *c, void *user) {
+int OpenSCoP::accessToMatrix_constraint(isl_constraint *c, void *user) {
   openscop_matrix_p m = (openscop_matrix_p) user;
 
   int nb_params = isl_constraint_dim(c, isl_dim_param);
@@ -260,6 +405,7 @@ int accessToMatrix_constraint(isl_constraint *c, void *user) {
   return 0;
 }
 
+
 /// Add an isl basic map to a OpenSCoP matrix_list
 ///
 /// @param bmap The basic map to add
@@ -268,7 +414,7 @@ int accessToMatrix_constraint(isl_constraint *c, void *user) {
 /// XXX: At the moment this function expects just a matrix, as support
 /// for matrix lists is currently not available in OpenSCoP. So union of
 /// polyhedron are not yet supported
-int accessToMatrix_basic_map(isl_basic_map *bmap, void *user) {
+int OpenSCoP::accessToMatrix_basic_map(isl_basic_map *bmap, void *user) {
   isl_basic_map_foreach_constraint(bmap, &accessToMatrix_constraint, user);
   return 0;
 }
@@ -281,8 +427,7 @@ int accessToMatrix_basic_map(isl_basic_map *bmap, void *user) {
 /// indeces
 ///
 /// @return The memory access matrix, as it is required by openscop.
-openscop_matrix_p createAccessMatrix(SCoPStmt *S, bool isRead,
-                                     std::map<const Value*, int> *ArrayMap) {
+openscop_matrix_p OpenSCoP::createAccessMatrix(SCoPStmt *S, bool isRead) {
 
   unsigned NbColumns = S->getNumIterators() + S->getNumParams() + 2;
   openscop_matrix_p m = openscop_matrix_malloc(0, NbColumns);
@@ -296,95 +441,45 @@ openscop_matrix_p createAccessMatrix(SCoPStmt *S, bool isRead,
 
       // Set the index of the memory access base element.
       std::map<const Value*, int>::iterator BA =
-        ArrayMap->find((*MI)->getBaseAddr());
+        ArrayMap.find((*MI)->getBaseAddr());
       isl_int_set_si(m->p[m->NbRows - 1][0], (*BA).second + 1);
     }
 
   return m;
 }
 
-/// Create an openscop statement from a polly statement.
-openscop_statement_p SCoPStmtToOpenSCoPStmt(SCoPStmt *S,
-  std::map<const Value*, int> *ArrayMap) {
-    openscop_statement_p Stmt = openscop_statement_malloc();
+OpenSCoP::~OpenSCoP() {
+  // Free array names.
+  for (int i = 0; i < openscop->nb_arrays; ++i)
+    delete[](openscop->arrays[i]);
 
-    // Domain & Schedule
-    Stmt->domain = domainToMatrix(S->getDomain());
-    Stmt->schedule = scatteringToMatrix(S->getScattering());
+  delete[](openscop->arrays);
+  openscop->arrays = NULL;
+  openscop->nb_arrays = 0;
 
-    // Statement name
-    std::string str = S->getBasicBlock()->getNameStr();
-    Stmt->body = new char[str.size() + 1];
-    strcpy(Stmt->body, str.c_str());
+  // Free scattering names.
+  for (int i = 0; i < openscop->nb_scattdims; ++i)
+    delete[](openscop->scattdims[i]);
 
-    // Iterator names
-    Stmt->nb_iterators = isl_set_n_dim(S->getDomain());
-    Stmt->iterators = new char*[Stmt->nb_iterators];
-    for (int i = 0; i < Stmt->nb_iterators; ++i) {
-      Stmt->iterators[i] = new char[20];
-      sprintf(Stmt->iterators[i], "i_%d", i);
-    }
+  delete[](openscop->scattdims);
+  openscop->scattdims = NULL;
+  openscop->nb_scattdims = 0;
 
-    // Memory Accesses
-    Stmt->read = createAccessMatrix(S, true, ArrayMap);
-    Stmt->write = createAccessMatrix(S, false, ArrayMap);
+  openscop->nb_parameters = 0;
 
-    return Stmt;
-}
+  openscop_statement_p stmt = openscop->statement;
 
-/// Create an openscop scop from a polly SCoP.
-openscop_scop_p	ScopToOpenScop(SCoP *S) {
-  openscop_scop_p OpenSCoP = openscop_scop_malloc();
-  OpenSCoP->nb_parameters = S->getNumParams();
-
-  std::map<const Value*, int> ArrayMap;
-
-
-  // Initialize the referenced arrays.
-  int nb_arrays = 0;
-
-  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI)
-    for (SCoPStmt::memacc_iterator MI = (*SI)->memacc_begin(),
-         ME = (*SI)->memacc_end(); MI != ME; ++MI) {
-      const Value *BaseAddr = (*MI)->getBaseAddr();
-      if (ArrayMap.find(BaseAddr) == ArrayMap.end()) {
-        ArrayMap.insert(std::make_pair(BaseAddr, nb_arrays));
-        ++nb_arrays;
-      }
-    }
-
-  OpenSCoP->nb_arrays = nb_arrays;
-  OpenSCoP->arrays = new char*[nb_arrays];
-
-  for (int i = 0; i < nb_arrays; ++i)
-    for (std::map<const Value*, int>::iterator VI = ArrayMap.begin(),
-         VE = ArrayMap.end(); VI != VE; ++VI)
-      if ((*VI).second == i) {
-        const Value *V = (*VI).first;
-        std::string name = V->getNameStr();
-        OpenSCoP->arrays[i] = new char[name.size() + 1];
-        strcpy(OpenSCoP->arrays[i], name.c_str());
-      }
-
-  // Set the scattering dimensions
-  OpenSCoP->nb_scattdims = S->getScatterDim();
-  OpenSCoP->scattdims = new char*[OpenSCoP->nb_scattdims];
-
-  for (int i = 0; i < OpenSCoP->nb_scattdims; ++i) {
-    OpenSCoP->scattdims[i] = new char[20];
-    sprintf(OpenSCoP->scattdims[i], "s_%d", i);
+  // Free Statements
+  while (stmt) {
+    openscop_statement_p TempStmt = stmt->next;
+    stmt->next = NULL;
+    freeStatement(stmt);
+    stmt = TempStmt;
   }
 
-  // Initialize the statements.
-  for (SCoP::reverse_iterator SI = S->rbegin(), SE = S->rend(); SI != SE;
-       ++SI) {
-    openscop_statement_p stmt = SCoPStmtToOpenSCoPStmt(*SI, &ArrayMap);
-    stmt->next = OpenSCoP->statement;
-    OpenSCoP->statement = stmt;
-  }
+  openscop->statement = NULL;
 
-
-  return OpenSCoP;
+  openscop_scop_free(openscop);
 }
 
 bool SCoPExporter::runOnRegion(Region *R, RGPassManager &RGM) {
@@ -400,10 +495,8 @@ bool SCoPExporter::runOnRegion(Region *R, RGPassManager &RGM) {
     << FunctionName << "' to '" << Filename << "'...\n";
 
   FILE *F = fopen(Filename.c_str(), "w");
-  openscop_scop_p OpenSCoP = ScopToOpenScop(S);
-
-  openscop_scop_print_dot_scop(F, OpenSCoP);
-
+  OpenSCoP openscop(S);
+  openscop.print(F);
   fclose(F);
 
   return false;
