@@ -38,17 +38,21 @@ STATISTIC(RichSCoPFound,   "Number of SCoP has loop inside");
 
 //===----------------------------------------------------------------------===//
 MemoryAccess::~MemoryAccess() {
-  isl_map_free(AccFunc);
+  isl_map_free(getAccessFunction());
 }
 
 void MemoryAccess::print(raw_ostream &OS) const {
    // Print BaseAddr
   OS << (isRead() ? "Reads" : "Writes") << " ";
-  WriteAsOperand(OS, BaseAddr.getPointer(), false);
-  OS << " at:\n";
-  isl_map_print(AccFunc, stderr, 20, ISL_FORMAT_ISL);
-  DEBUG(OS << "\n");
-  DEBUG(isl_map_dump(AccFunc, stderr, 20));
+  if (isScalar())
+    OS << *getScalar() << "\n";
+  else {
+    WriteAsOperand(OS, getBaseAddr(), false);
+    OS << " at:\n";
+    isl_map_print(getAccessFunction(), stderr, 20, ISL_FORMAT_ISL);
+    DEBUG(OS << "\n");
+    DEBUG(isl_map_dump(getAccessFunction(), stderr, 20));
+  }
 }
 
 void MemoryAccess::dump() const {

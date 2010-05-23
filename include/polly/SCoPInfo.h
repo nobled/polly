@@ -22,6 +22,7 @@
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/ADT/PointerIntPair.h"
+#include "llvm/ADT/PointerUnion.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 
@@ -55,22 +56,38 @@ public:
 
 private:
   // The access function map iterate domain to memory location.
-  polly_map *AccFunc;
+  PointerIntPair<polly_map*, 1, AccessType> AccFunc;
 
   // Base address and access type.
-  // Value? or SCEV?
-  PointerIntPair<const Value*, 1, AccessType> BaseAddr;
+  // Value for Array access and SCEV for scalar access
+  PointerUnion<const Value*, const SCEV*> BaseAddr;
 
 public:
   MemoryAccess(const Value *Base, AccessType AccType, polly_map *accFunc)
-    : AccFunc(accFunc), BaseAddr(Base, AccType) {}
+    : AccFunc(accFunc, AccType), BaseAddr(Base) {}
+
+  MemoryAccess(const SCEV *Scalar, AccessType AccType, polly_map *accFunc)
+    : AccFunc(accFunc, AccType), BaseAddr(Scalar) {}
+
 
   ~MemoryAccess();
 
-  bool isRead() const { return BaseAddr.getInt() == MemoryAccess::Read; }
+  bool isRead() const { return AccFunc.getInt() == MemoryAccess::Read; }
 
-  polly_map *getAccessFunction() { return AccFunc; }
-  const Value *getBaseAddr() { return BaseAddr.getPointer(); }
+  polly_map *getAccessFunction() { return AccFunc.getPointer(); }
+  polly_map *getAccessFunction() const { return AccFunc.getPointer(); }
+
+  const SCEV *getScalar() const {
+    assert(BaseAddr.is<const SCEV*>() && "This is not a scalar access!");
+    return BaseAddr.get<const SCEV*>();
+  }
+
+  const Value *getBaseAddr() const {
+    assert(BaseAddr.is<const Value*>() && "This is not a array access!");
+    return BaseAddr.get<const Value*>();
+  }
+
+  bool isScalar() const { return BaseAddr.is<const SCEV*>(); }
 
   /// @brief Print the MemoryAccess.
   ///
