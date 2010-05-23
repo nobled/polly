@@ -14,6 +14,7 @@
 #include "polly/ClastParser.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/IRHelper.h"
+#include "polly/Support/BasicBlockEdge.h"
 #include "polly/CLooG.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -37,7 +38,7 @@ typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
 
 struct codegenctx : cp_ctx {
-  succ_iterator edge;
+  bb_edge edge;
   Pass *P;
   std::vector<succ_iterator> edges;
   ValueMapT ValueMap;
