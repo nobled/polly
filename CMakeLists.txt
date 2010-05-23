@@ -113,6 +113,6 @@ add_subdirectory(test)
 # TODO: docs.
 
 
-configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/include/polly/config.h.cmake
-                ${LLVM_BINARY_DIR}/include/polly/config.h )
+configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/include/polly/Config/config.h.cmake
+                ${LLVM_BINARY_DIR}/include/polly/Config/config.h )
 

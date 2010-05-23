@@ -4,29 +4,41 @@ dnl **************************************************************************
 AC_INIT([Polly],[0.01],[etherzhhb@gmail.com grosser@fim.uni-passau.de ojomojo@gmail.com])
 
 dnl Identify where LLVM source tree is
-LLVM_SRC_ROOT="../../.."
-LLVM_OBJ_ROOT="../../.."
-dnl Tell autoconf that the auxilliary files are actually located in
-dnl the LLVM autoconf directory, not here.
-AC_CONFIG_AUX_DIR($LLVM_SRC_ROOT/autoconf)
+LLVM_SRC_ROOT="`(cd $srcdir/../..; pwd)`"
+LLVM_OBJ_ROOT="`(cd ../..; pwd)`"
 
 dnl Tell autoconf that this is an LLVM project being configured
 dnl This provides the --with-llvmsrc and --with-llvmobj options
 LLVM_CONFIG_PROJECT($LLVM_SRC_ROOT,$LLVM_OBJ_ROOT)
 
+dnl Tell autoconf that the auxilliary files are actually located in
+dnl the LLVM autoconf directory, not here.
+AC_CONFIG_AUX_DIR($LLVM_SRC/autoconf)
+
+dnl Indicate that we require autoconf 2.59 or later. Ths is needed because we
+dnl use some autoconf macros only available in 2.59.
+AC_PREREQ(2.59)
+
 dnl Verify that the source directory is valid
-AC_CONFIG_SRCDIR(["Makefile.common.in"])
+AC_CONFIG_SRCDIR(["lib/SCoPInfo.cpp"])
 
 dnl Configure a common Makefile
+AC_CONFIG_FILES(Makefile.config)
 AC_CONFIG_FILES(Makefile.common)
 
 dnl Configure project makefiles
 dnl List every Makefile that exists within your source tree
-AC_CONFIG_MAKEFILE(Makefile)
-AC_CONFIG_MAKEFILE(lib/Makefile)
-AC_CONFIG_MAKEFILE(lib/sample/Makefile)
-AC_CONFIG_MAKEFILE(tools/Makefile)
-AC_CONFIG_MAKEFILE(tools/sample/Makefile)
+AC_CONFIG_MAKEFILE(Makefile.tools.rules)
+
+dnl Quit if the source directory has already been configured.
+dnl NOTE: This relies upon undocumented autoconf behavior.
+if test ${srcdir} != "." ; then
+  if test -f ${srcdir}/include/polly/Config/config.h ; then
+    AC_MSG_ERROR([Already configured in ${srcdir}])
+  fi
+fi
+
+AC_DEFINE([CLOOG_INT_GMP], [1], [Use gmp for isl])
 
 dnl **************************************************************************
 dnl * Determine which system we are building on
@@ -35,6 +47,10 @@ dnl **************************************************************************
 dnl **************************************************************************
 dnl * Check for programs.
 dnl **************************************************************************
+
+dnl AC_PROG_CPP
+dnl AC_PROG_CC(gcc)
+dnl AC_PROG_CXX(g++)
 
 dnl **************************************************************************
 dnl * Check for libraries.
@@ -59,10 +75,28 @@ dnl **************************************************************************
 dnl **************************************************************************
 dnl * Set the location of various third-party software packages
 dnl **************************************************************************
+dnl Find Gmp
+find_lib_and_headers([gmp], [gmp.h], [gmp], [required])
+
+dnl Find Isl
+find_lib_and_headers([isl], [isl/isl_config.h], [isl], [required])
+
+dnl Dirty hack: Cloog will include isl stuffs like #include <isl_map.h>
+AS_IF([test "x$isl_inc" != "x"],
+  [AC_SUBST([isl_isl_inc],["$isl_inc/isl"])])
+
+dnl Find cloog
+find_lib_and_headers([cloog], [cloog/version.h], [cloog-isl], [required])
+
+dnl Check if Scoplib there
+find_lib_and_headers([openscop], [openscop/scop.h], [openscop])
+AS_IF([test "x$openscop_found" = "xyes"],
+  [AC_DEFINE([OPENSCOP_FOUND],[1],[Define if openscop found])])
 
 dnl **************************************************************************
 dnl * Create the output files
 dnl **************************************************************************
 
 dnl This must be last
+AC_CONFIG_HEADERS(include/polly/Config/config.h)
 AC_OUTPUT

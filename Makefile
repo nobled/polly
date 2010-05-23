@@ -1,6 +1,6 @@
-##===- projects/sample/Makefile ----------------------------*- Makefile -*-===##
+##===- projects/polly/Makefile -----------------------------*- Makefile -*-===##
 #
-# This is a sample Makefile for a project that uses LLVM.
+# This is a polly Makefile for a project that uses LLVM.
 #
 ##===----------------------------------------------------------------------===##
 

@@ -4,8 +4,8 @@ dnl **************************************************************************
 AC_INIT([Polly],[0.01],[etherzhhb@gmail.com grosser@fim.uni-passau.de ojomojo@gmail.com])
 
 dnl Identify where LLVM source tree is
-LLVM_SRC_ROOT="../../.."
-LLVM_OBJ_ROOT="../../.."
+LLVM_SRC_ROOT="../.."
+LLVM_OBJ_ROOT="../.."
 dnl Tell autoconf that the auxilliary files are actually located in
 dnl the LLVM autoconf directory, not here.
 AC_CONFIG_AUX_DIR($LLVM_SRC_ROOT/autoconf)
@@ -24,9 +24,6 @@ dnl Configure project makefiles
 dnl List every Makefile that exists within your source tree
 AC_CONFIG_MAKEFILE(Makefile)
 AC_CONFIG_MAKEFILE(lib/Makefile)
-AC_CONFIG_MAKEFILE(lib/sample/Makefile)
-AC_CONFIG_MAKEFILE(tools/Makefile)
-AC_CONFIG_MAKEFILE(tools/sample/Makefile)
 
 dnl **************************************************************************
 dnl * Determine which system we are building on

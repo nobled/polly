@@ -15,7 +15,7 @@
 #ifndef POLLY_LINKALLPASSES_H
 #define POLLY_LINKALLPASSES_H
 
-#include "polly/config.h"
+#include "polly/Config/config.h"
 #include "polly/ClastParser.h"
 #include "polly/ScalarDataRef.h"
 #include "polly/SCoPExchange.h"
