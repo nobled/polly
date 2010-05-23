@@ -30,11 +30,11 @@
 using namespace llvm;
 using namespace polly;
 
-STATISTIC(ValidRegion,"The # of regions that a valid part of SCoP");
+STATISTIC(ValidRegion,"Number of regions that a valid part of SCoP");
 
-STATISTIC(SCoPFound,  "The # of valid SCoP");
+STATISTIC(SCoPFound,  "Number of valid SCoP");
 
-STATISTIC(RichSCoPFound,   "The # of valid SCoP has loop inside");
+STATISTIC(RichSCoPFound,   "Number of SCoP has loop inside");
 
 //===----------------------------------------------------------------------===//
 MemoryAccess::~MemoryAccess() {
@@ -414,7 +414,6 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   ++SCoPFound;
 
   if (tempSCoP->getMaxLoopDepth() > 0) ++RichSCoPFound;
-
 
   SmallVector<Loop*, 8> NestLoops;
   SmallVector<unsigned, 8> Scatter;

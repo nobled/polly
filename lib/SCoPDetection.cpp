@@ -47,7 +47,7 @@ PrintTempSCoPInDetail("polly-print-temp-scop-in-detail",
 // Some statistic
 
 #define BADSCOP_STAT(NAME, DESC) STATISTIC(Bad##NAME##ForSCoP, \
-                                           "The # of bad regions for SCoP: "\
+                                           "Number of bad regions for SCoP: "\
                                            DESC)
 
 
