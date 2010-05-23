@@ -1,0 +1,47 @@
+##===- projects/polly/tools/Makefile.tools.common -*- Makefile -*-===##
+
+CPP.Flags += -DLLVM_HAS_POLLY
+
+CPP.Flags += $(POLLY_INC) \
+            -I$(POLLY_SRC_ROOT)/include \
+            -I$(POLLY_OBJ_ROOT)/include
+
+#do not link the exchange library if openscop not there
+ifndef OPENSCOP_FOUND
+  USEDLIBS := $(filter-out pollyexchange.a, $(USEDLIBS))
+endif
+# link the external librarys
+TOOLLINKOPTSB = $(POLLY_LD)
+TOOLLINKOPTS = $(POLLY_LIB)
+
+Makefile_tools_rules := $(POLLY_TOOL_LEVEL)/Makefile.tools.rules
+
+$(Makefile_tools_rules): $(POLLY_SRC_ROOT)/Makefile.tools.rules
+	$(Echo) "Updating Makefile.tools.rules"
+	$(Verb) $(MKDIR) $(@D)
+	$(Verb) $(CP) -f $< $@
+
+include $(LEVEL)/Makefile.common
+
+# Note: Copy from SAFECode
+#
+# These rules create symbolic links from the polly object tree to the
+# opt object tree.  This allows the LLVM build machinery to handle
+# library dependencies.
+#
+
+PollyLibDir := $(POLLY_OBJ_ROOT)/$(BuildMode)/lib
+
+$(LibDir)/libpolly.a: $(PollyLibDir)/libpolly.a
+	$(Verb) $(RM) -f $@
+	$(Verb) $(AliasTool) $< $@
+
+$(LibDir)/libpollysupport.a: $(PollyLibDir)/libpollysupport.a
+	$(Verb) $(RM) -f $@
+	$(Verb) $(AliasTool) $< $@
+
+ifdef OPENSCOP_FOUND
+$(LibDir)/libpollyexchange.a: $(PollyLibDir)/libpollyexchange.a
+	$(Verb) $(RM) -f $@
+	$(Verb) $(AliasTool) $< $@
+endif
