@@ -126,13 +126,13 @@ void scop_func(long ni, long nj, long nk, long nl) {
       for (k = 0; k < nk; ++k)
         C[i][j] += A[i][k] * B[k][j];
     }
-    for (i = 0; i < ni; i++)
-      for (j = 0; j < nl; j++)
-      {
-        E[i][j] = 0;
-        for (k = 0; k < nj; ++k)
-          E[i][j] += C[i][k] * D[k][j];
-      }
+  for (i = 0; i < ni; i++)
+    for (j = 0; j < nl; j++)
+    {
+      E[i][j] = 0;
+      for (k = 0; k < nj; ++k)
+        E[i][j] += C[i][k] * D[k][j];
+    }
 
 
 #pragma endscop

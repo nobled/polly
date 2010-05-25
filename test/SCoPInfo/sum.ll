@@ -42,15 +42,15 @@ bb2:                                              ; preds = %bb, %entry
 
 ; CHECK: SCoP: entry => <Function Return>        Parameters: (%n, ), Max Loop Depth: 1
 ; CHECK: Bounds of Loop: bb:     { 0, 1 * %n + -2}
-; CHECK: BB: bb2{
-; CHECK: Reads %.lcssa[]
-; CHECK: }
-; CHECK: BB: bb{
-; CHECK: Reads %a[8 * {0,+,1}<%bb> + 8]
-; CHECK: Reads %2[]
-; CHECK: Writes %2[]
-; CHECK: }
+; CHECK:   BB: bb{
+; CHECK:   Reads %a[8 * {0,+,1}<%bb> + 8]
+; CHECK:   Reads %2[]
+; CHECK:   Writes %2[]
+; CHECK:   }
 ; CHECK: BB: bb2.loopexit{
 ; CHECK: Reads %2[]
 ; CHECK: Writes %.lcssa[]
+; CHECK: }
+; CHECK: BB: bb2{
+; CHECK: Reads %.lcssa[]
 ; CHECK: }

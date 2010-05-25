@@ -1,4 +1,4 @@
-; RUN: opt  -O3 -loopsimplify -indvars -polly-scop-detect  -print-top-scop-only -analyze %s | FileCheck %s
+; RUN: opt -O3 -indvars -polly-scop-detect -polly-print-temp-scop-in-detail -print-top-scop-only -analyze %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
@@ -90,4 +90,37 @@ bb14.preheader:                                   ; preds = %bb15, %bb6
 return:                                           ; preds = %bb15
   ret void
 }
-; CHECK: SCoP: bb.nph50.bb.nph50.split_crit_edge => <Function Return>    Parameters: (), Max Loop Depth: 3
+
+; CHECK: SCoP: bb.nph50.bb.nph50.split_crit_edge => <Function Return>   Parameters: (), Max Loop Depth: 3
+; CHECK: Bounds of Loop: bb5.preheader: { 0, 511}
+; CHECK:   Bounds of Loop: bb.nph27.us: { 0, 511}
+; CHECK:     BB: bb.nph27.us{
+; CHECK:     Writes @C[4096 * {0,+,1}<%bb5.preheader> + 8 * {0,+,1}<%bb.nph27.us> + 0]
+; CHECK:     }
+; CHECK:     Bounds of Loop: bb2.us:    { 0, 511}
+; CHECK:       BB: bb2.us{
+; CHECK:       Reads @A[4096 * {0,+,1}<%bb5.preheader> + 8 * {0,+,1}<%bb2.us> + 0]
+; CHECK:       Reads @B[8 * {0,+,1}<%bb.nph27.us> + 4096 * {0,+,1}<%bb2.us> + 0]
+; CHECK:       Reads %4[]
+; CHECK:       Writes %4[]
+; CHECK:       }
+; CHECK:     BB: bb4.us{
+; CHECK:     Writes @C[4096 * {0,+,1}<%bb5.preheader> + 8 * {0,+,1}<%bb.nph27.us> + 0]
+; CHECK:     Reads %4[]
+; CHECK:     }
+; CHECK: Bounds of Loop: bb14.preheader:        { 0, 511}
+; CHECK:   Bounds of Loop: bb.nph.us:   { 0, 511}
+; CHECK:     BB: bb.nph.us{
+; CHECK:     Writes @E[4096 * {0,+,1}<%bb14.preheader> + 8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:     }
+; CHECK:     Bounds of Loop: bb11.us:   { 0, 511}
+; CHECK:       BB: bb11.us{
+; CHECK:       Reads @C[8 * {0,+,1}<%bb11.us> + 4096 * {0,+,1}<%bb14.preheader> + 0]
+; CHECK:       Reads @D[4096 * {0,+,1}<%bb11.us> + 8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:       Reads %11[]
+; CHECK:       Writes %11[]
+; CHECK:       }
+; CHECK:     BB: bb13.us{
+; CHECK:     Writes @E[4096 * {0,+,1}<%bb14.preheader> + 8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:     Reads %11[]
+; CHECK:     }

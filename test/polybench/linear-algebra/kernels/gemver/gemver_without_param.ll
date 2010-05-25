@@ -1,4 +1,4 @@
-; RUN: opt  -O3 -loopsimplify -indvars -polly-scop-detect  -print-top-scop-only -analyze %s | FileCheck %s
+; RUN: opt -O3 -indvars -polly-scop-detect -polly-print-temp-scop-in-detail -print-top-scop-only  -analyze %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
@@ -128,4 +128,70 @@ return:                                           ; preds = %bb18
   ret void
 }
 
-; CHECK: SCoP: bb.nph31.bb.nph31.split_crit_edge => <Function Return>    Parameters: (), Max Loop Depth: 2
+; CHECK: SCoP: bb.nph31.bb.nph31.split_crit_edge => <Function Return>   Parameters: (), Max Loop Depth: 2
+; CHECK: Bounds of Loop: bb.nph26:      { 0, 3999}
+; CHECK:   BB: bb.nph26{
+; CHECK:   Reads @u1[8 * {0,+,1}<%bb.nph26> + 0]
+; CHECK:   Reads @u2[8 * {0,+,1}<%bb.nph26> + 0]
+; CHECK:   Writes %0[]
+; CHECK:   Writes %1[]
+; CHECK:   }
+; CHECK:   Bounds of Loop: bb1: { 0, 3999}
+; CHECK:     BB: bb1{
+; CHECK:     Reads @A[32000 * {0,+,1}<%bb.nph26> + 8 * {0,+,1}<%bb1> + 0]
+; CHECK:     Reads @v1[8 * {0,+,1}<%bb1> + 0]
+; CHECK:     Reads @v2[8 * {0,+,1}<%bb1> + 0]
+; CHECK:     Writes @A[32000 * {0,+,1}<%bb.nph26> + 8 * {0,+,1}<%bb1> + 0]
+; CHECK:     Reads %0[]
+; CHECK:     Reads %1[]
+; CHECK:     }
+; CHECK: BB: bb.nph24.bb.nph24.split_crit_edge{
+; CHECK: Reads @beta[0]
+; CHECK: Writes %18[]
+; CHECK: }
+; CHECK: Bounds of Loop: bb.nph16:      { 0, 3999}
+; CHECK:   BB: bb.nph16{
+; CHECK:   Reads @x[8 * {0,+,1}<%bb.nph16> + 0]
+; CHECK:   Writes %.promoted17[]
+; CHECK:   }
+; CHECK:   Bounds of Loop: bb7: { 0, 3999}
+; CHECK:     BB: bb7{
+; CHECK:     Reads @A[8 * {0,+,1}<%bb.nph16> + 32000 * {0,+,1}<%bb7> + 0]
+; CHECK:     Reads @y[8 * {0,+,1}<%bb7> + 0]
+; CHECK:     Reads %.promoted17[]
+; CHECK:     Reads %15[]
+; CHECK:     Reads %18[]
+; CHECK:     Writes %15[]
+; CHECK:     }
+; CHECK:   BB: bb9{
+; CHECK:   Writes @x[8 * {0,+,1}<%bb.nph16> + 0]
+; CHECK:   Reads %15[]
+; CHECK:   }
+; CHECK: Bounds of Loop: bb12:  { 0, 3999}
+; CHECK:   BB: bb12{
+; CHECK:   Reads @x[8 * {0,+,1}<%bb12> + 0]
+; CHECK:   Reads @z[8 * {0,+,1}<%bb12> + 0]
+; CHECK:   Writes @x[8 * {0,+,1}<%bb12> + 0]
+; CHECK:   }
+; CHECK: BB: bb.nph12.bb.nph12.split_crit_edge{
+; CHECK: Reads @alpha[0]
+; CHECK: Writes %30[]
+; CHECK: }
+; CHECK: Bounds of Loop: bb.nph:        { 0, 3999}
+; CHECK:   BB: bb.nph{
+; CHECK:   Reads @w[8 * {0,+,1}<%bb.nph> + 0]
+; CHECK:   Writes %.promoted[]
+; CHECK:   }
+; CHECK:   Bounds of Loop: bb16:        { 0, 3999}
+; CHECK:     BB: bb16{
+; CHECK:     Reads @A[8 * {0,+,1}<%bb16> + 32000 * {0,+,1}<%bb.nph> + 0]
+; CHECK:     Reads @x[8 * {0,+,1}<%bb16> + 0]
+; CHECK:     Reads %.promoted[]
+; CHECK:     Reads %27[]
+; CHECK:     Reads %30[]
+; CHECK:     Writes %27[]
+; CHECK:     }
+; CHECK:   BB: bb18{
+; CHECK:   Writes @w[8 * {0,+,1}<%bb.nph> + 0]
+; CHECK:   Reads %27[]
+; CHECK:   }
