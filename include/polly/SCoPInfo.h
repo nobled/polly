@@ -41,12 +41,12 @@ class SCoPInfo;
 /// @brief Represent memory accesses in statements.
 ///
 /// XXX: Or call it DataReference?
-class MemoryAccess {
+class DataRef {
   //===-------------------------------------------------------------------===//
   // DO NOT IMPLEMENT
-  MemoryAccess(const MemoryAccess &);
+  DataRef(const DataRef &);
   // DO NOT IMPLEMENT
-  const MemoryAccess &operator=(const MemoryAccess &);
+  const DataRef &operator=(const DataRef &);
 
 public:
   enum AccessType {
@@ -63,16 +63,16 @@ private:
   PointerUnion<const Value*, const SCEV*> BaseAddr;
 
 public:
-  MemoryAccess(const Value *Base, AccessType AccType, polly_map *accFunc)
+  DataRef(const Value *Base, AccessType AccType, polly_map *accFunc)
     : AccFunc(accFunc, AccType), BaseAddr(Base) {}
 
-  MemoryAccess(const SCEV *Scalar, AccessType AccType, polly_map *accFunc)
+  DataRef(const SCEV *Scalar, AccessType AccType, polly_map *accFunc)
     : AccFunc(accFunc, AccType), BaseAddr(Scalar) {}
 
 
-  ~MemoryAccess();
+  ~DataRef();
 
-  bool isRead() const { return AccFunc.getInt() == MemoryAccess::Read; }
+  bool isRead() const { return AccFunc.getInt() == DataRef::Read; }
 
   polly_map *getAccessFunction() { return AccFunc.getPointer(); }
   polly_map *getAccessFunction() const { return AccFunc.getPointer(); }
@@ -141,7 +141,7 @@ class SCoPStmt {
   /// a look at cloog.org to find a complete description.
   polly_map *Scattering;
 
-  typedef SmallVector<MemoryAccess*, 8> MemAccVec;
+  typedef SmallVector<DataRef*, 8> MemAccVec;
   MemAccVec MemAccs;
 
   /// Create the SCoPStmt from a BasicBlock.
@@ -149,7 +149,7 @@ class SCoPStmt {
            const SmallVectorImpl<Loop*> &NestLoops);
 
   ///
-  void addMemoryAccess(MemoryAccess *MemAcc) {
+  void addMemoryAccess(DataRef *MemAcc) {
     assert(MemAcc && "Can insert null MemoryAccess!");
     MemAccs.push_back(MemAcc);
   }

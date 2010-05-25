@@ -37,11 +37,11 @@ STATISTIC(SCoPFound,  "Number of valid SCoP");
 STATISTIC(RichSCoPFound,   "Number of SCoP has loop inside");
 
 //===----------------------------------------------------------------------===//
-MemoryAccess::~MemoryAccess() {
+DataRef::~DataRef() {
   isl_map_free(getAccessFunction());
 }
 
-void MemoryAccess::print(raw_ostream &OS) const {
+void DataRef::print(raw_ostream &OS) const {
    // Print BaseAddr
   OS << (isRead() ? "Reads" : "Writes") << " ";
   if (isScalar())
@@ -55,7 +55,7 @@ void MemoryAccess::print(raw_ostream &OS) const {
   }
 }
 
-void MemoryAccess::dump() const {
+void DataRef::dump() const {
   print(errs());
 }
 //===----------------------------------------------------------------------===//
@@ -327,8 +327,8 @@ void SCoP::buildStmt(TempSCoP &TempSCoP, BasicBlock &BB,
 
       polly_map *map = isl_map_from_basic_map(bmap);
 
-      MemoryAccess *access = new MemoryAccess(AffFunc.getBaseAddr(),
-        AffFunc.isRead() ? MemoryAccess::Read : MemoryAccess::Write, map);
+      DataRef *access = new DataRef(AffFunc.getBaseAddr(),
+        AffFunc.isRead() ? DataRef::Read : DataRef::Write, map);
 
       DEBUG(dbgs() << "Translate access function:\n");
       DEBUG(AffFunc.print(dbgs(), &SE));
