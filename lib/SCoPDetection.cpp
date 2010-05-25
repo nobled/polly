@@ -350,7 +350,7 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
 //===----------------------------------------------------------------------===//
 // LLVMSCoP Implement
 
-void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE) const {
+void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const {
   OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
   // Print Parameters.
   for (ParamSetType::const_iterator PI = Params.begin(), PE = Params.end();
@@ -362,43 +362,46 @@ void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE) const {
   if (!PrintTempSCoPInDetail)
     return;
 
-  printBounds(OS, SE);
-
-  printAccFunc(OS, SE);
+  printDetail(OS, SE, LI, &R, 0);
 }
 
-void TempSCoP::printAccFunc(llvm::raw_ostream &OS, ScalarEvolution *SE) const {
-  for (AccFuncMapType::const_iterator I = AccFuncMap.begin(),
-    E = AccFuncMap.end(); I != E; ++I) {
-      if (!R.contains(I->first))
-        continue;
-
-      OS << "BB: " << I->first->getName() << "{\n";
-      for (AccFuncSetType::const_iterator FI = I->second.begin(),
-          FE = I->second.end(); FI != FE; ++FI) {
-        FI->print(OS,SE);
-        OS << "\n";
+void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
+                           LoopInfo *LI, const Region *Reg, unsigned ind) const {
+  // Iterate the region nodes of this SCoP to print
+  // the access function and loop bounds
+  for (Region::const_element_iterator I = Reg->element_begin(),
+      E = Reg->element_end(); I != E; ++I) {
+    unsigned subInd = ind;
+    if (I->isSubRegion()) {
+      Region *subR = I->getNodeAs<Region>();
+      BoundMapType::const_iterator at =
+        LoopBounds.find(castToLoop(*subR, *LI));
+      if (at != LoopBounds.end()) {
+        // Print the loop bounds if these is an loops
+        OS.indent(ind) << "Bounds of Loop: " << at->first->getHeader()->getName()
+          << ":\t{ ";
+        at->second.first.print(OS,SE);
+        OS << ", ";
+        at->second.second.print(OS,SE);
+        OS << "}\n";
+        // Increase the indent
+        subInd += 2;
       }
-      OS << "}\n";
-  }
-}
-
-void TempSCoP::printBounds(raw_ostream &OS, ScalarEvolution *SE) const {
-  if (LoopBounds.empty()) {
-    OS << "No good loops found!\n";
-    return;
-  }
-  for (BoundMapType::const_iterator I = LoopBounds.begin(),
-      E = LoopBounds.end(); I != E; ++I){
-    if (!R.contains(I->first->getHeader()))
-      continue;
-
-    OS << "Bounds of Loop: " << I->first->getHeader()->getName()
-      << ":\t{ ";
-    I->second.first.print(OS,SE);
-    OS << ", ";
-    I->second.second.print(OS,SE);
-    OS << "}\n";
+      printDetail(OS, SE, LI, subR, subInd);
+    } else {
+      AccFuncMapType::const_iterator at =
+        AccFuncMap.find(I->getNodeAs<BasicBlock>());
+      // Try to print the access functions
+      if (at != AccFuncMap.end()) {
+        OS.indent(ind) << "BB: " << at->first->getName() << "{\n";
+        for (AccFuncSetType::const_iterator FI = at->second.begin(),
+          FE = at->second.end(); FI != FE; ++FI) {
+            FI->print(OS.indent(ind),SE);
+            OS << "\n";
+        }
+        OS.indent(ind) << "}\n";
+      }
+    }
   }
 }
 
@@ -885,7 +888,7 @@ void SCoPDetection::print(raw_ostream &OS, const Module *) const {
     for (TempSCoPMapType::const_iterator I = RegionToSCoPs.begin(),
         E = RegionToSCoPs.end(); I != E; ++I){
       if(!PrintTopSCoPOnly || isMaxRegionInSCoP(*(I->first))) {
-        I->second->print(OS, SE);
+        I->second->print(OS, SE, LI);
       }
     }
 

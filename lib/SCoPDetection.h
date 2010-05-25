@@ -230,19 +230,16 @@ public:
   /// @param OS The output stream the access functions is printed to.
   /// @param SE The ScalarEvolution that help printing Temporary SCoP
   ///           information.
-  void print(raw_ostream &OS, ScalarEvolution *SE) const;
+  /// @param LI The LoopInfo that help printing the access functions.
+  void print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const;
 
-  /// @brief Print the loop bounds in this SCoP.
-  ///
-  /// @param OS The output stream the access functions is printed to.
-  /// @param SE The ScalarEvolution that help printing the loop bounds.
-  void printBounds(raw_ostream &OS, ScalarEvolution *SE) const;
-
-  /// @brief Print the access functions in this SCoP.
+  /// @brief Print the access functions and loop bounds in this SCoP.
   ///
   /// @param OS The output stream the access functions is printed to.
   /// @param SE The ScalarEvolution that help printing the access functions.
-  void printAccFunc(raw_ostream &OS, ScalarEvolution *SE) const;
+  /// @param LI The LoopInfo that help printing the access functions.
+  void printDetail(raw_ostream &OS, ScalarEvolution *SE,
+                   LoopInfo *LI, const Region *Reg, unsigned ind) const;
 
 };
 
