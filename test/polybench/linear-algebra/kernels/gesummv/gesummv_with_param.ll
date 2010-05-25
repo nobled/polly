@@ -1,4 +1,4 @@
-; RUN: opt  -O3 -loopsimplify -indvars -polly-scop-detect  -print-top-scop-only -analyze %s | FileCheck %s
+; RUN: opt -O3 -indvars -polly-scop-detect -polly-print-temp-scop-in-detail -print-top-scop-only  -analyze %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
@@ -63,4 +63,33 @@ return:                                           ; preds = %bb3.us, %entry
   ret void
 }
 
-; CHECK: SCoP: entry => <Function Return>        Parameters: (%n, ), Max Loop Depth: 2
+; CHECK: SCoP: entry => <Function Return>       Parameters: (%n, ), Max Loop Depth: 2
+; CHECK: BB: bb.nph10.split.us{
+; CHECK: Reads @alpha[0]
+; CHECK: Reads @beta[0]
+; CHECK: Writes %1[]
+; CHECK: Writes %2[]
+; CHECK: }
+; CHECK: Bounds of Loop: bb.nph.us:     { 0, 1 * %n + -1}
+; CHECK:   BB: bb.nph.us{
+; CHECK:   Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:   Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:   }
+; CHECK:   Bounds of Loop: bb1.us:      { 0, 1 * %n + -1}
+; CHECK:     BB: bb1.us{
+; CHECK:     Reads @A[8 * {0,+,1}<%bb1.us> + 32000 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:     Reads @x[8 * {0,+,1}<%bb1.us> + 0]
+; CHECK:     Reads @B[8 * {0,+,1}<%bb1.us> + 32000 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:     Reads %13[]
+; CHECK:     Reads %10[]
+; CHECK:     Writes %10[]
+; CHECK:     Writes %13[]
+; CHECK:     }
+; CHECK:   BB: bb3.us{
+; CHECK:   Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:   Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:   Reads %13[]
+; CHECK:   Reads %10[]
+; CHECK:   Reads %1[]
+; CHECK:   Reads %2[]
+; CHECK:   }
