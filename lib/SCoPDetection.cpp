@@ -764,12 +764,8 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
       I != E; ++I){
     if (I->isSubRegion()) {
       Region *SubR = I->getNodeAs<Region>();
-      // Dirty hack for calculate temp scop on the fly
-      // Do not extract the information for a hidden region.
-      if (isHidden(SubR))
-        continue;
       // Extract information of sub scop and merge them.
-      else if (TempSCoP *SubSCoP = getTempSCoP(*SubR)) {
+      if (TempSCoP *SubSCoP = getTempSCoP(*SubR)) {
         isValidRegion &= mergeSubSCoP(*SCoP, *SubSCoP);
 
         if (checkSCoPOnly) {
@@ -862,7 +858,6 @@ void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 void SCoPDetection::clear() {
-  HiddenRegions.clear();
   LoopBounds.clear();
   AccFuncMap.clear();
 

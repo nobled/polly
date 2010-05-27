@@ -283,10 +283,6 @@ class SCoPDetection : public FunctionPass {
   // SCoPs in the function
   TempSCoPMapType RegionToSCoPs;
 
-  // Todo: Remember hidden regions
-  typedef std::set<const Region*> RegionSet;
-  RegionSet HiddenRegions;
-
   // Clear the context.
   void clear();
 
@@ -340,8 +336,6 @@ public:
   ///
   /// @return The SCoP information in LLVM IR represent.
   TempSCoP *getTempSCoPFor(const Region* R) const;
-
-  bool isHidden(const Region *R) const { return HiddenRegions.count(R); }
 
   /// @brief Is the region is the maximum region of a SCoP?
   ///
