@@ -46,6 +46,7 @@ class OpenSCoP {
   std::map<const Value*, int> ArrayMap;
 
   void initializeArrays();
+  void initializeParameters();
   void initializeScattering();
   void initializeStatements();
   openscop_statement_p initializeStatement(SCoPStmt *stmt);
@@ -70,11 +71,20 @@ public:
 OpenSCoP::OpenSCoP(SCoP *S) : PollySCoP(S) {
   openscop = openscop_scop_malloc();
 
-  openscop->nb_parameters = PollySCoP->getNumParams();
-
   initializeArrays();
+  initializeParameters();
   initializeScattering();
   initializeStatements();
+}
+
+void OpenSCoP::initializeParameters() {
+  openscop->nb_parameters = PollySCoP->getNumParams();
+  openscop->parameters = new char*[openscop->nb_parameters];
+
+  for (int i = 0; i < openscop->nb_parameters; ++i) {
+    openscop->parameters[i] = new char[20];
+    sprintf(openscop->parameters[i], "p_%d", i);
+  }
 }
 
 void OpenSCoP::initializeArrays() {
@@ -176,6 +186,9 @@ void OpenSCoP::freeStatement(openscop_statement_p stmt) {
   delete[](stmt->iterators);
   stmt->iterators = NULL;
   stmt->nb_iterators = 0;
+
+  delete[](stmt->body);
+  stmt->body = NULL;
 
   openscop_statement_free(stmt);
 }
@@ -465,6 +478,12 @@ OpenSCoP::~OpenSCoP() {
   openscop->scattdims = NULL;
   openscop->nb_scattdims = 0;
 
+  // Free parameters
+  for (int i = 0; i < openscop->nb_parameters; ++i)
+    delete[](openscop->parameters[i]);
+
+  delete[](openscop->parameters);
+  openscop->parameters = NULL;
   openscop->nb_parameters = 0;
 
   openscop_statement_p stmt = openscop->statement;
