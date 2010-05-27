@@ -140,19 +140,18 @@ succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
 
 class CPCodeGenerationActions : public CPActions {
   protected:
-  void print(struct clast_assignment *a, int depth, cp_ctx *ctx) {
-    codegenctx *cg_ctx = (codegenctx*) ctx;
+  void print(struct clast_assignment *a, codegenctx *ctx) {
     switch(ctx->dir) {
       case DFS_IN:
 	eval(a->RHS, ctx);
 
         if (!a->LHS) {
-          PHINode *PN = cg_ctx->stmt->IVS[cg_ctx->assignmentCount];
-          cg_ctx->assignmentCount++;
+          PHINode *PN = ctx->stmt->IVS[ctx->assignmentCount];
+          ctx->assignmentCount++;
           Value *V = PN;
           if (PN->getNumOperands() == 2)
             V = *(PN->use_begin());
-          cg_ctx->ValueMap[V] = cg_ctx->exprValue;
+          ctx->ValueMap[V] = ctx->exprValue;
         }
 	break;
       case DFS_OUT:
@@ -160,25 +159,24 @@ class CPCodeGenerationActions : public CPActions {
     }
   }
 
-  void print(struct clast_user_stmt *u, int depth, cp_ctx *ctx) {
-    codegenctx *cg_ctx = (codegenctx*) ctx;
+  void print(struct clast_user_stmt *u, codegenctx *ctx) {
     // Actually we have a list of pointers here. be careful.
     SCoPStmt *stmt = (SCoPStmt *)u->statement->usr;
     BasicBlock *BB = stmt->getBasicBlock();
     switch(ctx->dir) {
       case DFS_IN:
-        cg_ctx->BB = BB;
-        cg_ctx->stmt = stmt;
-        cg_ctx->assignmentCount = 0;
+        ctx->BB = BB;
+        ctx->stmt = stmt;
+        ctx->assignmentCount = 0;
 	break;
       case DFS_OUT:
-        cg_ctx->edge = copyBB(cg_ctx->edge, BB, cg_ctx->ValueMap, cg_ctx->P);
-        cg_ctx->BB = 0;
+        ctx->edge = copyBB(ctx->edge, BB, ctx->ValueMap, ctx->P);
+        ctx->BB = 0;
 	break;
     }
   }
 
-  void print(struct clast_block *b, int depth, cp_ctx *ctx) {
+  void print(struct clast_block *b, codegenctx *ctx) {
     switch(ctx->dir) {
       case DFS_IN:
 	break;
@@ -187,37 +185,36 @@ class CPCodeGenerationActions : public CPActions {
     }
   }
 
-  void print(struct clast_for *f, int depth, cp_ctx *ctx) {
-    codegenctx *cg_ctx = (codegenctx*) ctx;
+  void print(struct clast_for *f, codegenctx *ctx) {
     switch(ctx->dir) {
       case DFS_IN: {
 	APInt stride = APInt_from_MPZ(f->stride);
         Value *IV;
 	eval(f->LB, ctx);
-        //Value *LB = cg_ctx->exprValue;
+        //Value *LB = ctx->exprValue;
 	eval(f->UB, ctx);
-        Value *UB = cg_ctx->exprValue;
-        cg_ctx->edge = createLoop(cg_ctx->edge, UB, cg_ctx->P,
+        Value *UB = ctx->exprValue;
+        ctx->edge = createLoop(ctx->edge, UB, ctx->P,
                                   stride, &IV);
-        cg_ctx->edges.push_back(succ_begin(cg_ctx->edge.getSource()));
-        CharMapT *M = &cg_ctx->CharMap;
+        ctx->edges.push_back(succ_begin(ctx->edge.getSource()));
+        CharMapT *M = &ctx->CharMap;
         (*M)[f->iterator] = IV;
-        cg_ctx->loop_ivs.push_back(IV);
+        ctx->loop_ivs.push_back(IV);
 	break;
       }
       case DFS_OUT:
-        cg_ctx->edge = cg_ctx->edges.back();
-        cg_ctx->edges.pop_back();
-        cg_ctx->loop_ivs.pop_back();
+        ctx->edge = ctx->edges.back();
+        ctx->edges.pop_back();
+        ctx->loop_ivs.pop_back();
 	break;
     }
   }
 
-  void print(struct clast_equation *eq, int depth, cp_ctx *ctx) {
+  void print(struct clast_equation *eq, codegenctx *ctx) {
     llvm_unreachable("Clast equation not yet supported");
   }
 
-  void print(struct clast_guard *g, int depth, cp_ctx *ctx) {
+  void print(struct clast_guard *g, codegenctx *ctx) {
     llvm_unreachable("Clast guards not yet supported");
     switch(ctx->dir) {
       case DFS_IN:
@@ -227,47 +224,45 @@ class CPCodeGenerationActions : public CPActions {
     }
   }
 
-  void print(struct clast_root *r, int depth, cp_ctx *ctx) {}
+  void print(struct clast_root *r, codegenctx *ctx) {}
 
-  void print(clast_stmt *stmt, int depth, cp_ctx *ctx) {
+  void print(clast_stmt *stmt, codegenctx *ctx) {
     if	    (CLAST_STMT_IS_A(stmt, stmt_root))
-      print((struct clast_root *)stmt, depth, ctx);
+      print((struct clast_root *)stmt, ctx);
     else if (CLAST_STMT_IS_A(stmt, stmt_ass))
-      print((struct clast_assignment *)stmt, depth, ctx);
+      print((struct clast_assignment *)stmt, ctx);
     else if (CLAST_STMT_IS_A(stmt, stmt_user))
-      print((struct clast_user_stmt *)stmt, depth, ctx);
+      print((struct clast_user_stmt *)stmt, ctx);
     else if (CLAST_STMT_IS_A(stmt, stmt_block))
-      print((struct clast_block *)stmt, depth, ctx);
+      print((struct clast_block *)stmt, ctx);
     else if (CLAST_STMT_IS_A(stmt, stmt_for))
-      print((struct clast_for *)stmt, depth, ctx);
+      print((struct clast_for *)stmt, ctx);
     else if (CLAST_STMT_IS_A(stmt, stmt_guard))
-      print((struct clast_guard *)stmt, depth, ctx);
+      print((struct clast_guard *)stmt, ctx);
   }
 
-  void print(clast_name *e, cp_ctx *ctx) {
+  void print(clast_name *e, codegenctx *ctx) {
     if(ctx->dir == DFS_IN) {
-      codegenctx *cg_ctx = (codegenctx*) ctx;
-      CharMapT::iterator I = cg_ctx->CharMap.find(e->name);
+      CharMapT::iterator I = ctx->CharMap.find(e->name);
 
-      if (I != cg_ctx->CharMap.end())
-        cg_ctx->exprValue = I->second;
+      if (I != ctx->CharMap.end())
+        ctx->exprValue = I->second;
       else
         llvm_unreachable("Value not found");
 
     }
   }
 
-  void print(clast_term *e, cp_ctx *ctx) {
-    codegenctx *cg_ctx = (codegenctx*) ctx;
+  void print(clast_term *e, codegenctx *ctx) {
     APInt a = APInt_from_MPZ(e->val);
     if (ctx->dir == DFS_IN) {
       a.zext(64);
-      Value *ConstOne = ConstantInt::get((cg_ctx->edge)->getContext(), a);
-      cg_ctx->exprValue = ConstOne;
+      Value *ConstOne = ConstantInt::get((ctx->edge)->getContext(), a);
+      ctx->exprValue = ConstOne;
     }
   }
 
-  void print(clast_binary *e, cp_ctx *ctx) {
+  void print(clast_binary *e, codegenctx *ctx) {
     llvm_unreachable("Binary expressions not yet supported");
     switch(ctx->dir) {
       case DFS_IN:
@@ -277,7 +272,7 @@ class CPCodeGenerationActions : public CPActions {
     }
   }
 
-  void print(clast_reduction *r, cp_ctx *ctx) {
+  void print(clast_reduction *r, codegenctx *ctx) {
     if (ctx->dir == DFS_IN) {
       assert((   r->type == clast_red_min
               || r->type == clast_red_max
@@ -293,7 +288,7 @@ class CPCodeGenerationActions : public CPActions {
     }
   }
 
-  void print(clast_expr *e, cp_ctx *ctx) {
+  void print(clast_expr *e, codegenctx *ctx) {
     switch(e->type) {
       case clast_expr_name:
 	print((struct clast_name *)e, ctx);
@@ -316,22 +311,22 @@ class CPCodeGenerationActions : public CPActions {
 
   virtual void in(clast_stmt *s, int depth, cp_ctx *ctx) {
     ctx->dir = DFS_IN;
-    print(s, depth, ctx);
+    print(s, static_cast<codegenctx*>(ctx));
   }
 
   virtual void out(clast_stmt *s, int depth, cp_ctx *ctx) {
     ctx->dir = DFS_OUT;
-    print(s, depth, ctx);
+    print(s, static_cast<codegenctx*>(ctx));
   }
 
   virtual void in(clast_expr *e, cp_ctx *ctx) {
     ctx->dir = DFS_IN;
-    print(e, ctx);
+    print(e, static_cast<codegenctx*>(ctx));
   }
 
   virtual void out(clast_expr *e, cp_ctx *ctx) {
     ctx->dir = DFS_OUT;
-    print(e, ctx);
+    print(e, static_cast<codegenctx*>(ctx));
   }
 };
 }
