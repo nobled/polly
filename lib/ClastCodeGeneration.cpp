@@ -115,6 +115,7 @@ succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
   }
 
   BBCopy->setName("polly_stmt." + BB->getName());
+
   // Loop over all instructions, and copy them over.
   BasicBlock::iterator it = BBCopy->begin();
   for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
@@ -126,10 +127,9 @@ succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
     VMap[II] = NewInst;
 
     for (Instruction::op_iterator UI = NewInst->op_begin(),
-         UE = NewInst->op_end(); UI != UE; ++UI) {
+         UE = NewInst->op_end(); UI != UE; ++UI)
       if (VMap.find(*UI) != VMap.end())
         NewInst->replaceUsesOfWith(*UI, VMap[*UI]);
-    }
 
     it = BBCopy->getInstList().insert(it, NewInst);
     ++it;
@@ -376,6 +376,16 @@ class ClastCodeGeneration : public RegionPass {
     return succ_end(branch);
   }
 
+  void createSeSeEdges(Region *R) {
+    BasicBlock *newEntry = createSingleEntryEdge(R, this);
+
+    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI)
+      if ((*SI)->getBasicBlock() == R->getEntry())
+        (*SI)->setBasicBlock(newEntry);
+
+    createSingleExitEdge(R, this);
+  }
+
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
     S = getAnalysis<SCoPInfo>().getSCoP();
@@ -384,22 +394,17 @@ class ClastCodeGeneration : public RegionPass {
     if (!S)
       return false;
 
-    BasicBlock *newEntry = createSingleEntryEdge(R, this);
-
-    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI)
-      if ((*SI)->getBasicBlock() == R->getEntry())
-        (*SI)->setBasicBlock(newEntry);
-
-    createSingleExitEdge(R, this);
+    createSeSeEdges(R);
     succ_iterator edge = insertNewCodeBranch();
 
     CLooG C = CLooG(S);
+
     CPCodeGenerationActions cpa = CPCodeGenerationActions(dbgs());
     ClastParser cp = ClastParser(cpa);
     codegenctx ctx (edge, this, S);
 
     cp.parse(C.getClast(), &ctx);
-    dbgs() << "\n";
+
     return false;
   }
 
