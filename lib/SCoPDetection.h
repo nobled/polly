@@ -290,8 +290,8 @@ class SCoPDetection : public FunctionPass {
   // return false, otherwise return true.
   TempSCoP *getTempSCoP(Region &R);
 
-  // Check if the instruction calling the valid function for SCoP.
-  bool isValidCallInst(CallInst &CI, TempSCoP &SCoP);
+  // Check if the instruction is a valid function call.
+  static bool isValidCallInst(CallInst &CI);
 
   // Check is a memory access is valid.
   bool isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP);

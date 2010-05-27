@@ -474,8 +474,7 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
   // TODO: handle the branch condition
 }
 
-bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
-  // Check for side Effects and
+bool SCoPDetection::isValidCallInst(CallInst &CI) {
   if (CI.mayHaveSideEffects() || CI.doesNotReturn())
     return false;
 
@@ -488,9 +487,8 @@ bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
   if (CalledFunction == 0)
     return false;
 
+  // TODO: Intrinsics.
   return false;
-
-  // TODO: intrinisics.
 }
 
 bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
@@ -542,9 +540,8 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
   // Try to remove the temporary value for address computation
   // Do this in the Checking phase, so we will get the final result
   // when we try to get SCoP by "getTempSCoPFor";
-  if (Instruction *GEP = dyn_cast<Instruction>(Pointer)) {
+  if (Instruction *GEP = dyn_cast<Instruction>(Pointer))
     killAllTempValFor(*GEP);
-  }
 
   return true;
 }
@@ -567,7 +564,7 @@ void SCoPDetection::captureScalarDataRef(Instruction &Inst,
 bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP) {
   // We only check the call instruction but not invoke instruction.
   if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
-    if (isValidCallInst(*CI, SCoP))
+    if (isValidCallInst(*CI))
       return true;
 
     DEBUG(dbgs() << "Bad call Inst!\n");
@@ -853,16 +850,15 @@ void SCoPDetection::print(raw_ostream &OS, const Module *) const {
   // Try to build the SCoPs again, this time is not check only.
   const_cast<SCoPDetection*>(this)->getTempSCoP(*(RI->getTopLevelRegion()));
 
-  if (RegionToSCoPs.empty())
+  if (RegionToSCoPs.empty()) {
     OS << "No SCoP found!\n";
-  else
-    // Print all SCoPs.
-    for (TempSCoPMapType::const_iterator I = RegionToSCoPs.begin(),
-        E = RegionToSCoPs.end(); I != E; ++I){
-      if(!PrintTopSCoPOnly || isMaxRegionInSCoP(*(I->first))) {
-        I->second->print(OS, SE, LI);
-      }
-    }
+    return;
+  }
+
+  for (TempSCoPMapType::const_iterator I = RegionToSCoPs.begin(),
+       E = RegionToSCoPs.end(); I != E; ++I)
+    if (!PrintTopSCoPOnly || isMaxRegionInSCoP(*(I->first)))
+      I->second->print(OS, SE, LI);
 
   OS << "\n";
 }
