@@ -509,11 +509,7 @@ bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
   // function, e.g. line 239 in Intrinsics.td
   unsigned IntrID = CalledFunction->getIntrinsicID();
 
-  if (IntrID != Intrinsic::not_intrinsic)
-    return isPureIntrinsic(IntrID);
-
-  // XXX: Get the alias analysis result?
-  return false;
+  return isPureIntrinsic(IntrID);
 }
 
 bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
