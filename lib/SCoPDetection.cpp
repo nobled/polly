@@ -474,26 +474,9 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
   // TODO: handle the branch condition
 }
 
-static bool isPureIntrinsic(unsigned ID) {
-  switch (ID) {
-  default:
-    return false;
-  case Intrinsic::sqrt:
-  case Intrinsic::powi:
-  case Intrinsic::sin:
-  case Intrinsic::cos:
-  case Intrinsic::pow:
-  case Intrinsic::log:
-  case Intrinsic::log10:
-  case Intrinsic::log2:
-  case Intrinsic::exp:
-  case Intrinsic::exp2:
-    return true;
-  }
-}
-
 bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
-  if (CI.mayThrow() || CI.doesNotReturn())
+  // Check for side Effects and
+  if (CI.mayHaveSideEffects() || CI.doesNotReturn())
     return false;
 
   if (CI.doesNotAccessMemory())
@@ -505,11 +488,9 @@ bool SCoPDetection::isValidCallInst(CallInst &CI, TempSCoP &SCoP) {
   if (CalledFunction == 0)
     return false;
 
-  // Unfortunately some memory access information are true for intrinisic
-  // function, e.g. line 239 in Intrinsics.td
-  unsigned IntrID = CalledFunction->getIntrinsicID();
+  return false;
 
-  return isPureIntrinsic(IntrID);
+  // TODO: intrinisics.
 }
 
 bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP) {
