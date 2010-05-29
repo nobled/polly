@@ -366,38 +366,39 @@ void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const {
 }
 
 void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
-                           LoopInfo *LI, const Region *Reg, unsigned ind) const {
+                           LoopInfo *LI, const Region *CurR, unsigned ind) const {
+  // Print the loopbounds if current region is a loop
+  BoundMapType::const_iterator at = LoopBounds.find(castToLoop(*CurR, *LI));
+  if (at != LoopBounds.end()) {
+    // Print the loop bounds if these is an loops
+    OS.indent(ind) << "Bounds of Loop: " << at->first->getHeader()->getName()
+      << ":\t{ ";
+    at->second.first.print(OS,SE);
+    OS << ", ";
+    at->second.second.print(OS,SE);
+    OS << "}\n";
+    // Increase the indent
+    ind += 2;
+  }
   // Iterate the region nodes of this SCoP to print
   // the access function and loop bounds
-  for (Region::const_element_iterator I = Reg->element_begin(),
-      E = Reg->element_end(); I != E; ++I) {
+  for (Region::const_element_iterator I = CurR->element_begin(),
+      E = CurR->element_end(); I != E; ++I) {
     unsigned subInd = ind;
     if (I->isSubRegion()) {
       Region *subR = I->getNodeAs<Region>();
-      BoundMapType::const_iterator at =
-        LoopBounds.find(castToLoop(*subR, *LI));
-      if (at != LoopBounds.end()) {
-        // Print the loop bounds if these is an loops
-        OS.indent(ind) << "Bounds of Loop: " << at->first->getHeader()->getName()
-          << ":\t{ ";
-        at->second.first.print(OS,SE);
-        OS << ", ";
-        at->second.second.print(OS,SE);
-        OS << "}\n";
-        // Increase the indent
-        subInd += 2;
-      }
       printDetail(OS, SE, LI, subR, subInd);
     } else {
+      unsigned bb_ind = ind + 2;
       AccFuncMapType::const_iterator at =
         AccFuncMap.find(I->getNodeAs<BasicBlock>());
       // Try to print the access functions
       if (at != AccFuncMap.end()) {
         OS.indent(ind) << "BB: " << at->first->getName() << "{\n";
         for (AccFuncSetType::const_iterator FI = at->second.begin(),
-          FE = at->second.end(); FI != FE; ++FI) {
-            FI->print(OS.indent(ind),SE);
-            OS << "\n";
+            FE = at->second.end(); FI != FE; ++FI) {
+          FI->print(OS.indent(bb_ind),SE);
+          OS << "\n";
         }
         OS.indent(ind) << "}\n";
       }
@@ -427,6 +428,10 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP) {
   BranchInst *Br = dyn_cast<BranchInst>(TI);
   // We dose not support switch at the moment.
   if (!Br) return false;
+
+  // XXX: Should us preform some optimization to eliminate this?
+  // It is the same as unconditional branch if the condition is constant.
+  if (isa<Constant>(Br->getCondition())) return true;
 
   Instruction *Cond = dyn_cast<Instruction>(Br->getCondition());
   // And we only support instruction as condition now
