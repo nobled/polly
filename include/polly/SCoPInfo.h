@@ -252,8 +252,7 @@ class SCoP {
 
   /// Create the static control part with a region, max loop depth of this region
   /// and parameters used in this region.
-  template<class It>
-  explicit SCoP(Region &r, unsigned maxLoopDepth, It ParamBegin, It ParamEnd);
+  explicit SCoP(TempSCoP &TempSCoP, LoopInfo &LI, ScalarEvolution &SE);
 
   /// Build the SCoP and Statement with precalculate scop information.
   void buildSCoP(TempSCoP &TempSCoP, const Region &CurRegion,

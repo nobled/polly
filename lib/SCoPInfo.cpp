@@ -125,21 +125,37 @@ void SCoPStmt::dump() const { print(dbgs()); }
 
 //===----------------------------------------------------------------------===//
 /// SCoP class implement
-template<class It>
-SCoP::SCoP(Region &r, unsigned maxLoopDepth, It ParamBegin, It ParamEnd)
-           : R(r), MaxLoopDepth(maxLoopDepth) {
-   // Create the context
-   ctx = isl_ctx_alloc();
+SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &SE)
+           : R(tempSCoP.getMaxRegion()),
+           MaxLoopDepth(tempSCoP.getMaxLoopDepth()) {
+  // Create the context
+  ctx = isl_ctx_alloc();
 
-   // Initialize parameters
-   for (It I = ParamBegin, E = ParamEnd; I != E ; ++I)
-     Parameters.push_back(*I);
+  ParamSetType &Params = tempSCoP.getParamSet();
+  // Initialize parameters
+  for (ParamSetType::const_iterator I = Params.begin(), E = Params.end();
+      I != E ; ++I)
+    Parameters.push_back(*I);
 
-   // Create the dim with 0 output?
-   polly_dim *dim = isl_dim_set_alloc(ctx, getNumParams(), 0);
-   // TODO: Handle the constrain of parameters.
-   // Take the dim.
-   Context = isl_set_universe (dim);
+  // Create the dim with 0 output?
+  polly_dim *dim = isl_dim_set_alloc(ctx, getNumParams(), 0);
+  // TODO: Handle the constrain of parameters.
+  // Take the dim.
+  Context = isl_set_universe (dim);
+
+  // Build the SCoP.
+  SmallVector<Loop*, 8> NestLoops;
+  SmallVector<unsigned, 8> Scatter;
+
+  unsigned numScatter = MaxLoopDepth + 1;
+  // Initialize the scattering function
+  Scatter.assign(numScatter, 0);
+
+  // Build the iterate domain, access functions and scattering functions
+  // by traverse the region tree.
+  buildSCoP(tempSCoP, getRegion(), NestLoops, Scatter, LI, SE);
+
+  assert(NestLoops.empty() && "NestLoops not empty at top level!");
 }
 
 SCoP::~SCoP() {
@@ -358,7 +374,7 @@ void SCoP::buildSCoP(TempSCoP &TempSCoP,
   if (L)
     NestLoops.push_back(L);
 
-  // TODO: scattering function
+  // TODO: scattering function for non-linear CFG
   unsigned loopDepth = NestLoops.size();
   assert(Scatter.size() > loopDepth && "Scatter not big enough!");
 
@@ -375,9 +391,7 @@ void SCoP::buildSCoP(TempSCoP &TempSCoP,
       // we are using a depth iterator and the program is linear
       ++Scatter[loopDepth];
     }
-
   }
-
 
   if (L) {
     // Clear the scatter function when leaving the loop.
@@ -385,7 +399,7 @@ void SCoP::buildSCoP(TempSCoP &TempSCoP,
     NestLoops.pop_back();
     // To next loop
     ++Scatter[loopDepth-1];
-    // TODO: scattering function
+    // TODO: scattering function for non-linear CFG
   }
 
 }
@@ -416,7 +430,7 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
     assert(Parent && "Non max region will always have parent!");
     // If the current region is the child of toplevel region,
     // then this region is the maximal region we could handle,
-    //  because we cannot yet handle complete functions.
+    // because we cannot yet handle complete functions.
     if(Parent->getParent())
       return false;
   }
@@ -427,24 +441,13 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   // A SCoP found
   ++SCoPFound;
 
+  // The SCoP have loop inside
   if (tempSCoP->getMaxLoopDepth() > 0) ++RichSCoPFound;
 
-  SmallVector<Loop*, 8> NestLoops;
-  SmallVector<unsigned, 8> Scatter;
-
-  ParamSetType &Params = tempSCoP->getParamSet();
-  unsigned maxLoopDepth = tempSCoP->getMaxLoopDepth();
   // Create the scop.
-  scop = new SCoP(*R, maxLoopDepth, Params.begin(), Params.end());
-
-  unsigned numScatter = maxLoopDepth + 1;
-  // Initialize the scattering function
-  Scatter.assign(numScatter, 0);
-
-  scop->buildSCoP(*tempSCoP, scop->getRegion(), NestLoops, Scatter,
-                  getAnalysis<LoopInfo>(), getAnalysis<ScalarEvolution>());
-
-  assert(NestLoops.empty() && "NestLoops not empty at top level!");
+  scop = new SCoP(*tempSCoP,
+                  getAnalysis<LoopInfo>(),
+                  getAnalysis<ScalarEvolution>());
 
   return false;
 }
