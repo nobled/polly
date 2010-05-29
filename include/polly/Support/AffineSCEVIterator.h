@@ -240,10 +240,6 @@ public:
 
     const Type *Ty = S->getType();
 
-    // Dont iterate bool value now.
-    if (Ty->isIntegerTy(1))
-      return;
-
     // Init the constant component.
     visitStack.push_back(SE->getIntegerSCEV(0, Ty));
 
