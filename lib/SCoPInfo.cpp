@@ -411,8 +411,18 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   ++ValidRegion;
 
   // Only analyse the maximal SCoPs.
-  if (!SCoPDetect.isMaxRegionInSCoP(*R))
-    return false;
+  if (!SCoPDetect.isMaxRegionInSCoP(*R)) {
+    Region *Parent = R->getParent();
+    assert(Parent && "Non max region will always have parent!");
+    // If the current region is the child of toplevel region,
+    // then this region is the maximal region we could handle,
+    //  because we cannot yet handle complete functions.
+    if(Parent->getParent())
+      return false;
+  }
+  // Do not build the scopinfo for toplevel region
+  else if (!R->getParent())
+      return false;
 
   // A SCoP found
   ++SCoPFound;

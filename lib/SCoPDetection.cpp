@@ -726,9 +726,6 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
 
   bool isValidRegion = true;
 
-  if (!R.getExit())
-    isValidRegion = false;
-
   // Check if getScopeLoop work on the current loop nest and region tree,
   // if it not work, we could not handle any further
   if (getScopeLoop(R, *LI) != LI->getLoopFor(R.getEntry())) {
