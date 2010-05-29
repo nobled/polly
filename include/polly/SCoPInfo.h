@@ -36,6 +36,7 @@ namespace polly {
 //===----------------------------------------------------------------------===//
 class SCoP;
 class SCoPInfo;
+class TempSCoP;
 
 //===----------------------------------------------------------------------===//
 /// @brief Represent memory accesses in statements.
@@ -141,18 +142,14 @@ class SCoPStmt {
   /// a look at cloog.org to find a complete description.
   polly_map *Scattering;
 
-  typedef SmallVector<DataRef*, 8> MemAccVec;
-  MemAccVec MemAccs;
+  typedef SmallVector<DataRef*, 8> DataRefVec;
+  DataRefVec MemAccs;
 
   /// Create the SCoPStmt from a BasicBlock.
-  SCoPStmt(SCoP &parent, BasicBlock &bb, polly_set *domain, polly_map *scat,
-           const SmallVectorImpl<Loop*> &NestLoops);
-
-  ///
-  void addMemoryAccess(DataRef *MemAcc) {
-    assert(MemAcc && "Can insert null MemoryAccess!");
-    MemAccs.push_back(MemAcc);
-  }
+  SCoPStmt(SCoP &parent, TempSCoP &tempSCoP, BasicBlock &bb,
+          SmallVectorImpl<Loop*> &NestLoops,
+          SmallVectorImpl<unsigned> &Scatter,
+          ScalarEvolution &SE);
 
   friend class SCoP;
 public:
@@ -179,7 +176,7 @@ public:
 
   void setBasicBlock(BasicBlock *Block) { BB = Block; }
 
-  typedef MemAccVec::iterator memacc_iterator;
+  typedef DataRefVec::iterator memacc_iterator;
   memacc_iterator memacc_begin() { return MemAccs.begin(); }
   memacc_iterator memacc_end() { return MemAccs.end(); }
 
@@ -208,8 +205,6 @@ static inline raw_ostream& operator<<(raw_ostream &O, const SCoPStmt &S) {
   S.print(O);
   return O;
 }
-
-class TempSCoP;
 
 //===----------------------------------------------------------------------===//
 /// @brief Static Control Part in program tree.
@@ -261,12 +256,6 @@ class SCoP {
                   // The scattering numbers
                   SmallVectorImpl<unsigned> &Scatter,
                   LoopInfo &LI, ScalarEvolution &SE);
-  void buildStmt(TempSCoP &TempSCoP, BasicBlock &BB,
-                  // Loops in SCoP containing BB
-                  SmallVectorImpl<Loop*> &NestLoops,
-                  // The scattering numbers
-                  SmallVectorImpl<unsigned> &Scatter,
-                  ScalarEvolution &SE);
 
   /// Helper function for printing the SCoP.
   void printContext(raw_ostream &OS) const;
