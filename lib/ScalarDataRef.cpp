@@ -71,7 +71,7 @@ bool ScalarDataRef::killedAsTempVal(const Instruction &Inst) const {
 }
 
 void ScalarDataRef::getAllUsing(Instruction &Inst,
-                                SmallVectorImpl<const Value*> &Defs) {
+                                SmallVectorImpl<Value*> &Defs) {
   // XXX: temporary value not using anything?
   if (killedAsTempVal(Inst))
     return;
@@ -110,7 +110,7 @@ void ScalarDataRef::getAllUsing(Instruction &Inst,
     }
   }
 
-  for (SmallVector<const Value*, 4>::iterator VI = Defs.begin(),
+  for (SmallVector<Value*, 4>::iterator VI = Defs.begin(),
       VE = Defs.end(); VI != VE; ++VI)
     DEBUG(dbgs() << "get read: " << **VI << "\n");
   DEBUG(dbgs() << "\n");

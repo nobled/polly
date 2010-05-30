@@ -46,21 +46,19 @@ bb2:                                              ; preds = %bb, %entry
   ret i64 0
 }
 
-; CHECK: SCoP: entry => <Function Return>        Parameters: (%n, ), Max Loop Depth: 1
+; CHECK: SCoP: entry => <Function Return>       Parameters: (%n, ), Max Loop Depth: 1
 ; CHECK: BB: bb.nph{
-; CHECK: Reads %a[0]
-; CHECK: Writes %.pre[]
+; CHECK:   Writes %.pre[]
+; CHECK:   Reads %a[0]
 ; CHECK: }
-; CHECK: Bounds of Loop: bb:     { 0, 1 * %n + -2}
+; CHECK: Bounds of Loop: bb:    { 0, 1 * %n + -2}
 ; CHECK:   BB: bb{
-; CHECK:   Writes %a[8 * {0,+,1}<%bb> + 8]
-; CHECK:   Reads %a[16 * {0,+,1}<%bb> + 16]
-; CHECK:   Reads %a[8 * {0,+,1}<%bb> + 32]
-; CHECK:   Reads %.pre[]
-; CHECK:   Reads %2[]
-; CHECK:   Reads %5[]
-; CHECK:   Writes %2[]
-; CHECK:   Writes %5[]
+; CHECK:     Reads %.pre[]
+; CHECK:     Reads %2[]
+; CHECK:     Reads %5[]
+; CHECK:     Writes %2[]
+; CHECK:     Writes %a[8 * {0,+,1}<%bb> + 8]
+; CHECK:     Reads %a[16 * {0,+,1}<%bb> + 16]
+; CHECK:     Reads %a[8 * {0,+,1}<%bb> + 32]
+; CHECK:     Writes %5[]
 ; CHECK:   }
-
-

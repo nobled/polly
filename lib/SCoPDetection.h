@@ -72,11 +72,13 @@ public:
     Read = 1, // Or we could call it "Use"
     Write = 2 // Or define
   };
+  // Pair of {address, read/write}
+  typedef PointerIntPair<Value*, 2, AccessType> MemAccTy;
 private:
   // The base address of the address SCEV, if the Value is a pointer, this is
   // an array access, otherwise, this is a value access.
   // And the Write/Read modifier
-  PointerIntPair<const Value *, 2, AccessType> BaseAddr;
+  MemAccTy BaseAddr;
 
   // getCoeff - Get the Coefficient of a given variable.
   const SCEV *getCoeff(const SCEV *Var) const {
@@ -90,7 +92,7 @@ public:
 
   /// @brief Create a new SCEV affine function with memory access type.
 
-  explicit SCEVAffFunc(AccessType Type, const Value* baseAddr = 0)
+  explicit SCEVAffFunc(AccessType Type, Value* baseAddr = 0)
     : TransComp(0), BaseAddr(baseAddr, Type) {}
 
   /// @brief Build an affine function from a SCEV expression.
@@ -111,6 +113,9 @@ public:
   static bool buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
     SCEVAffFunc *FuncToBuild, LoopInfo &LI, ScalarEvolution &SE,
     AccessType AccType = SCEVAffFunc::None);
+
+  static bool buildMemoryAccess(MemAccTy MemAcc, TempSCoP &SCoP,
+    SCEVAffFunc *FuncToBuild, LoopInfo &LI, ScalarEvolution &SE);
 
   /// @brief Build a loop bound constrain from an affine function.
   ///
@@ -189,6 +194,10 @@ class TempSCoP {
     AccFuncMapType &accFuncMap)
     : R(r), MaxLoopDepth(0),
     LoopBounds(loopBounds), AccFuncMap(accFuncMap) {}
+
+  // Merge the SCoP information of sub regions
+  bool mergeSubSCoP(TempSCoP &SubSCoP,
+                    LoopInfo &LI, ScalarEvolution &SE);
 public:
 
   /// @name Information about this Temporary SCoP.
@@ -289,11 +298,13 @@ class SCoPDetection : public FunctionPass {
   // otherwise return the temporary SCoP information of Region R.
   TempSCoP *getTempSCoP(Region &R, bool checkSCoPOnly);
 
+  TempSCoP *buildTempSCoP(Region &R, bool checkSCoPOnly);
+
   // Check if the max region of SCoP is valid, return true if it is valid
   // false otherwise. if checkSCoPOnly is false, the function will also try
   // to fill temporary scop information such as loop bounds, access functions
   // and parameters into SCoP.
-  bool isValidRegion(TempSCoP &SCoP, bool checkSCoPOnly);
+  TempSCoP *isValidRegion(TempSCoP &SCoP, bool checkSCoPOnly);
 
   // Check if the instruction is a valid function call.
   static bool isValidCallInst(CallInst &CI);
@@ -306,9 +317,6 @@ class SCoPDetection : public FunctionPass {
   // the corresponding information, return false otherwise.
   bool isValidInstruction(Instruction &I, TempSCoP &SCoP, bool checkSCoPOnly);
 
-  // Capture scalar data reference.
-  void captureScalarDataRef(Instruction &I, AccFuncSetType &ScalarAccs);
-
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
   bool isValidBasicBlock(BasicBlock &BB, TempSCoP &SCoP, bool checkSCoPOnly);
@@ -319,8 +327,15 @@ class SCoPDetection : public FunctionPass {
   // Check if the loop bounds in SCoP is valid.
   bool hasValidLoopBounds(TempSCoP &SCoP, bool checkSCoPOnly);
 
-  // Merge the SCoP information of sub regions
-  bool mergeSubSCoP(TempSCoP &Parent, TempSCoP &SubSCoP, bool checkSCoPOnly);
+  // Extract the access functions from a BasicBlock to ScalarAccs
+  void extractAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
+                              AccFuncSetType &AccessFunctions);
+
+  void extractLoopBounds(TempSCoP &SCoP);
+
+  // Capture scalar data reference. Fill the scalar "memory access" to the
+  // access function map.
+  void captureScalarDataRef(Instruction &I, AccFuncSetType &ScalarAccs);
 
   // Kill all temporary value for computing Instruction I.
   void killAllTempValFor(Instruction &I, bool checkSCoPOnly) {

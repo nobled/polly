@@ -74,7 +74,7 @@ public:
 
   bool isDefExported(Instruction &I) const;
 
-  void getAllUsing(Instruction &Inst, SmallVectorImpl<const Value*> &Defs);
+  void getAllUsing(Instruction &Inst, SmallVectorImpl<Value*> &Defs);
 
   void reduceTempRefFor(const Instruction& Inst);
 

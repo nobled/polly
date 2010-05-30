@@ -150,6 +150,43 @@ static bool isParameter(const SCEV *Var, Region &R,
   return false;
 }
 
+static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative) {
+  if (Coeff) { // If the coefficient exist
+    const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
+    const APInt &CI = C->getValue()->getValue();
+    // Convert i >= expr to i - expr >= 0
+    MPZ_from_APInt(v, negative ?(-CI):CI);
+  }
+  else
+    isl_int_set_si(v, 0);
+}
+// TODO: Move to LoopInfo?
+static bool isPreHeader(BasicBlock *BB, LoopInfo *LI) {
+  TerminatorInst *TI = BB->getTerminator();
+  return (TI->getNumSuccessors() == 1)
+    && LI->isLoopHeader(TI->getSuccessor(0));
+}
+
+static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
+  assert((isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst))
+    && "Only accept Load or Store!");
+
+  // Try to handle the load/store.
+  Value *Pointer = 0;
+  SCEVAffFunc::AccessType AccType = SCEVAffFunc::None;
+
+  if (LoadInst *load = dyn_cast<LoadInst>(&Inst)) {
+    Pointer = load->getPointerOperand();
+    AccType = SCEVAffFunc::Read;
+  } else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
+    Pointer = store->getPointerOperand();
+    AccType = SCEVAffFunc::Write;
+  } // else unreachable because of the previous assert!
+
+  assert(Pointer && "Why pointer is null?");
+  return SCEVAffFunc::MemAccTy(Pointer, AccType);
+}
+
 //===----------------------------------------------------------------------===//
 // SCEVAffFunc Implement
 
@@ -245,15 +282,11 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
     PtrExist;
 }
 
-static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative) {
-  if (Coeff) { // If the coefficient exist
-    const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
-    const APInt &CI = C->getValue()->getValue();
-    // Convert i >= expr to i - expr >= 0
-    MPZ_from_APInt(v, negative ?(-CI):CI);
-  }
-  else
-    isl_int_set_si(v, 0);
+bool SCEVAffFunc::buildMemoryAccess(MemAccTy MemAcc, TempSCoP &SCoP,
+                                    SCEVAffFunc *FuncToBuild,
+                                    LoopInfo &LI, ScalarEvolution &SE) {
+  return buildAffineFunc(SE.getSCEV(MemAcc.getPointer()),
+                         SCoP, FuncToBuild, LI, SE, MemAcc.getInt());
 }
 
 polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
@@ -350,6 +383,44 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
 //===----------------------------------------------------------------------===//
 // LLVMSCoP Implement
 
+bool TempSCoP::mergeSubSCoP(TempSCoP &SubSCoP,
+                            LoopInfo &LI, ScalarEvolution &SE) {
+  Loop *L = castToLoop(R, LI);
+
+  // Merge the parameters.
+  for (ParamSetType::iterator I = SubSCoP.Params.begin(),
+      E = SubSCoP.Params.end(); I != E; ++I) {
+    const SCEV *Param = *I;
+    // The valid parameter in subregion may not valid in its parameter
+    if (isParameter(Param, getMaxRegion(), LI, SE)) {
+      // Param is a valid parameter in Parent, too.
+      Params.insert(Param);
+      continue;
+    }
+    // Param maybe the indvar of the loop at current level.
+    else if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Param)) {
+      if ( L == AddRec->getLoop())
+        continue;
+      // Else it is a invalid parameter.
+      assert((!L || AddRec->getLoop()->contains(L) ||
+        isa<SCEVCouldNotCompute>(
+        SE.getBackedgeTakenCount(AddRec->getLoop())))
+        && "Where comes the indvar?");
+    }
+
+    DEBUG(dbgs() << "Bad parameter in parent: " << *Param
+      << " in " << getMaxRegion().getNameStr() << " at "
+      << (L?L->getHeader()->getName():"Top Level")
+      << "\n");
+  }
+
+  // Update the loop depth.
+  if (SubSCoP.MaxLoopDepth > MaxLoopDepth)
+    MaxLoopDepth = SubSCoP.MaxLoopDepth;
+
+  return true;
+}
+
 void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const {
   OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
   // Print Parameters.
@@ -408,13 +479,6 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
 
 //===----------------------------------------------------------------------===//
 // SCoPDetection Implement
-
-// TODO: Move to LoopInfo?
-static bool isPreHeader(BasicBlock *BB, LoopInfo *LI) {
-  TerminatorInst *TI = BB->getTerminator();
-  return (TI->getNumSuccessors() == 1)
-    && LI->isLoopHeader(TI->getSuccessor(0));
-}
 
 bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP,
                                bool checkSCoPOnly) {
@@ -499,44 +563,11 @@ bool SCoPDetection::isValidCallInst(CallInst &CI) {
 
 bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP,
                                         bool checkSCoPOnly) {
-  assert((isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst))
-    && "What else instruction access memory?");
+  SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(Inst);
 
-  // Try to handle the load/store.
-  Value *Pointer = 0;
-  SCEVAffFunc::AccessType AccType = SCEVAffFunc::Read;
-
-  if (LoadInst *load = dyn_cast<LoadInst>(&Inst)) {
-    Pointer = load->getPointerOperand();
-    DEBUG(dbgs() << "Read Addr " << *SE->getSCEV(Pointer) << "\n");
-  } else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
-    Pointer = store->getPointerOperand();
-    DEBUG(dbgs() << "Write Addr " << *SE->getSCEV(Pointer) << "\n");
-    AccType = SCEVAffFunc::Write;
-  }
-
-  // Can we get the pointer?
-  if (!Pointer) {
-    DEBUG(dbgs() << "Bad Inst accessing memory!\n");
-    STATSCOP(Other);
-    return false;
-  }
-
-  SCEVAffFunc *func = 0;
-
-  if (!checkSCoPOnly) {
-    // Get the function set
-    AccFuncSetType &AccFuncSet = AccFuncMap[Inst.getParent()];
-    // Make the access function.
-    AccFuncSet.push_back(SCEVAffFunc(AccType));
-    func = &AccFuncSet.back();
-  }
-
-  // Is the access function affine?
-  const SCEV *Addr = SE->getSCEV(Pointer);
-
-  if (!SCEVAffFunc::buildAffineFunc(Addr, SCoP, func, *LI, *SE, AccType)) {
-    DEBUG(dbgs() << "Bad memory addr " << *Addr << "\n");
+  if (!SCEVAffFunc::buildMemoryAccess(MemAcc, SCoP, 0, *LI, *SE)) {
+    DEBUG(dbgs() << "Bad memory addr "
+                 << SE->getSCEV(MemAcc.getPointer()) << "\n");
     STATSCOP(AffFunc);
     return false;
   }
@@ -547,25 +578,42 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP,
   // Try to remove the temporary value for address computation
   // Do this in the Checking phase, so we will get the final result
   // when we try to get SCoP by "getTempSCoPFor";
-  if (Instruction *GEP = dyn_cast<Instruction>(Pointer))
+  if (Instruction *GEP = dyn_cast<Instruction>(MemAcc.getPointer()))
     killAllTempValFor(*GEP, checkSCoPOnly);
 
   return true;
 }
 
 void SCoPDetection::captureScalarDataRef(Instruction &Inst,
-                                    AccFuncSetType &ScalarAccs) {
-  // Only capture scalar data reference if we are not checking
-  // SCoP.
-  SmallVector<const Value*, 4> Defs;
+                                         AccFuncSetType &ScalarAccs) {
+  SmallVector<Value*, 4> Defs;
   SDR->getAllUsing(Inst, Defs);
 
-  for (SmallVector<const Value*, 4>::iterator VI = Defs.begin(),
+  for (SmallVector<Value*, 4>::iterator VI = Defs.begin(),
     VE = Defs.end(); VI != VE; ++VI)
       ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::Read, *VI));
 
   if (SDR->isDefExported(Inst))
     ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::Write, &Inst));
+}
+
+void SCoPDetection::extractAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
+                                           AccFuncSetType &AccessFunctions) {
+  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
+    Instruction &Inst = *I;
+    // Extract scalar "memory access" functions.
+    captureScalarDataRef(Inst, AccessFunctions);
+    // and the non-scalar one.
+    if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
+      SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(Inst);
+      // Make the access function.
+      AccessFunctions.push_back(SCEVAffFunc(MemAcc.getInt()));
+      // And build the access function
+      bool buildSuccessful = SCEVAffFunc::buildMemoryAccess(MemAcc, SCoP,
+         &AccessFunctions.back(), *LI, *SE);
+      assert(buildSuccessful && "Expect memory access is valid!");
+    }
+  }
 }
 
 bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP,
@@ -601,21 +649,11 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP,
 
 bool SCoPDetection::isValidBasicBlock(BasicBlock &BB, TempSCoP &SCoP,
                                       bool checkSCoPOnly) {
-  AccFuncSetType ScalarAccs;
 
   // Check all instructions, except the terminator instruction.
-  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
+  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I)
     if (!isValidInstruction(*I, SCoP, checkSCoPOnly))
       return false;
-    // XXX: this seems make things complex
-    if (!checkSCoPOnly)
-      captureScalarDataRef(*I, ScalarAccs);
-  }
-
-  if (!ScalarAccs.empty()) {
-    AccFuncSetType &Accs = AccFuncMap[&BB];
-    Accs.insert(Accs.end(), ScalarAccs.begin(), ScalarAccs.end());
-  }
 
   return true;
 }
@@ -645,8 +683,6 @@ bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP, bool checkSCoPOnly) {
     killAllTempValFor(*IndVar, checkSCoPOnly);
     killAllTempValFor(*IndVarInc, checkSCoPOnly);
 
-    ++SCoP.MaxLoopDepth;
-
     const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
 
     DEBUG(dbgs() << "Backedge taken count: "<< *LoopCount <<"\n");
@@ -662,18 +698,9 @@ bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP, bool checkSCoPOnly) {
     const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType()),
       *UB = LoopCount;
 
-    SCEVAffFunc *lb = 0,
-                *ub = 0;
-
-    if (!checkSCoPOnly) {
-      AffBoundType &affbounds = LoopBounds[L];
-      lb = &affbounds.first;
-      ub = &affbounds.second;
-    }
-
     // Build the lower bound.
-    if (!SCEVAffFunc::buildAffineFunc(LB, SCoP, lb, *LI, *SE)
-        || !SCEVAffFunc::buildAffineFunc(UB, SCoP, ub, *LI, *SE)) {
+    if (!SCEVAffFunc::buildAffineFunc(LB, SCoP, 0, *LI, *SE)
+        || !SCEVAffFunc::buildAffineFunc(UB, SCoP, 0, *LI, *SE)) {
       STATSCOP(AffFunc);
       return false;
     }
@@ -682,45 +709,24 @@ bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP, bool checkSCoPOnly) {
   return true;
 }
 
-bool SCoPDetection::mergeSubSCoP(TempSCoP &Parent, TempSCoP &SubSCoP,
-                                 bool checkSCoPOnly) {
-  Loop *L = castToLoop(Parent.R, *LI);
+void SCoPDetection::extractLoopBounds(TempSCoP &SCoP) {
+  assert(hasValidLoopBounds(SCoP, false)
+    && "Expect loop bounds of SCoP are valid!");
 
-  // Merge the parameters.
-  for (ParamSetType::iterator I = SubSCoP.Params.begin(),
-      E = SubSCoP.Params.end(); I != E; ++I) {
-    const SCEV *Param = *I;
-    // The valid parameter in subregion may not valid in its parameter
-    if (isParameter(Param, Parent.getMaxRegion(), *LI, *SE)) {
-      // Param is a valid parameter in Parent, too.
-      Parent.Params.insert(Param);
-      continue;
-    }
-    // Param maybe the indvar of the loop at current level.
-    else if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Param)) {
-      if ( L == AddRec->getLoop())
-        continue;
-      // Else it is a invalid parameter.
-      assert((!L || AddRec->getLoop()->contains(L) ||
-        isa<SCEVCouldNotCompute>(
-          SE->getBackedgeTakenCount(AddRec->getLoop())))
-        && "Where comes the indvar?");
-    }
+  if (Loop *L = castToLoop(SCoP.getMaxRegion(), *LI)) {
+    const SCEV *UB = SE->getBackedgeTakenCount(L);
+    const SCEV *LB = SE->getIntegerSCEV(0, UB->getType());
 
-    DEBUG(dbgs() << "Bad parameter in parent: " << *Param
-      << " in " << Parent.getMaxRegion().getNameStr() << " at "
-      << (L?L->getHeader()->getName():"Top Level")
-      << "\n");
-    // Bad parameter occur in expression
-    STATSCOP(AffFunc);
-    return false;
+    AffBoundType &affbounds = LoopBounds[L];
+
+    bool buildSuccessful =
+      SCEVAffFunc::buildAffineFunc(LB, SCoP, &affbounds.first, *LI, *SE)
+      && SCEVAffFunc::buildAffineFunc(UB, SCoP, &affbounds.second, *LI, *SE);
+
+    assert(buildSuccessful && "Expect loop bounds of SCoP are valid!");
+
+    ++SCoP.MaxLoopDepth;
   }
-
-  // Update the loop depth.
-  if (SubSCoP.MaxLoopDepth > Parent.MaxLoopDepth)
-    Parent.MaxLoopDepth = SubSCoP.MaxLoopDepth;
-
-  return true;
 }
 
 TempSCoP *SCoPDetection::getTempSCoP(Region& R, bool checkSCoPOnly) {
@@ -770,7 +776,11 @@ bool SCoPDetection::isValidRegion(TempSCoP &SCoP, bool checkSCoPOnly) {
       Region *SubR = I->getNodeAs<Region>();
       // Extract information of sub scop and merge them.
       if (TempSCoP *SubSCoP = getTempSCoP(*SubR, checkSCoPOnly)) {
-        isValid &= mergeSubSCoP(SCoP, *SubSCoP, checkSCoPOnly);
+        if (!SCoP.mergeSubSCoP(*SubSCoP, *LI, *SE)) {
+          // Merge fail only because bad parameter occur in expression
+          STATSCOP(AffFunc);
+          isValid = false;
+        }
 
         if (checkSCoPOnly) {
           // Do not do any thing if we only check the SCoP.
@@ -785,16 +795,31 @@ bool SCoPDetection::isValidRegion(TempSCoP &SCoP, bool checkSCoPOnly) {
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
       // Check CFG and all non terminator inst
       if (!isValidCFG(BB, SCoP, checkSCoPOnly)
-        || !isValidBasicBlock(BB, SCoP, checkSCoPOnly)){
+          || !isValidBasicBlock(BB, SCoP, checkSCoPOnly)){
           DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
-          // Clean up the access function map, so we get a clear dump.
-          AccFuncMap.erase(&BB);
           isValid = false;
+      } else if (!checkSCoPOnly) {
+        // If this is a valid BB, and we are not only check the SCoP, but
+        // also try to build it.
+        // Then build the memory access functions.
+        AccFuncSetType AccessFunctions;
+        extractAccessFunctions(SCoP, BB, AccessFunctions);
+        if (!AccessFunctions.empty()) {
+          AccFuncSetType &Accs = AccFuncMap[&BB];
+          Accs.insert(Accs.end(),
+                      AccessFunctions.begin(), AccessFunctions.end());
+        }
       }
     }
   }
 
-  return (isValid && hasValidLoopBounds(SCoP, checkSCoPOnly));
+  if (isValid && hasValidLoopBounds(SCoP, checkSCoPOnly)) {
+    if (!checkSCoPOnly)
+      extractLoopBounds(SCoP);
+
+    return true;
+  }
+  return false;
 }
 
 TempSCoP *SCoPDetection::getTempSCoPFor(const Region* R) const {
