@@ -278,8 +278,6 @@ class SCoPDetection : public FunctionPass {
   // Access function of bbs.
   AccFuncMapType AccFuncMap;
 
-  bool checkSCoPOnly;
-
   // SCoPs in the function
   TempSCoPMapType RegionToSCoPs;
 
@@ -287,44 +285,52 @@ class SCoPDetection : public FunctionPass {
   void clear();
 
   // If the Region not a valid part of a SCoP,
-  // return false, otherwise return true.
-  TempSCoP *getTempSCoP(Region &R);
+  // return null if Region R is a valid part of a SCoP,
+  // otherwise return the temporary SCoP information of Region R.
+  TempSCoP *getTempSCoP(Region &R, bool checkSCoPOnly);
+
+  // Check if the max region of SCoP is valid, return true if it is valid
+  // false otherwise. if checkSCoPOnly is false, the function will also try
+  // to fill temporary scop information such as loop bounds, access functions
+  // and parameters into SCoP.
+  bool isValidRegion(TempSCoP &SCoP, bool checkSCoPOnly);
 
   // Check if the instruction is a valid function call.
   static bool isValidCallInst(CallInst &CI);
 
   // Check is a memory access is valid.
-  bool isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP);
+  bool isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP,
+                          bool checkSCoPOnly);
 
   // Check if the Instruction is a valid part of SCoP, return true and extract
   // the corresponding information, return false otherwise.
-  bool isValidInstruction(Instruction &I, TempSCoP &SCoP);
+  bool isValidInstruction(Instruction &I, TempSCoP &SCoP, bool checkSCoPOnly);
 
   // Capture scalar data reference.
   void captureScalarDataRef(Instruction &I, AccFuncSetType &ScalarAccs);
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
-  bool isValidBasicBlock(BasicBlock &BB, TempSCoP &SCoP);
+  bool isValidBasicBlock(BasicBlock &BB, TempSCoP &SCoP, bool checkSCoPOnly);
 
   // Check if the CFG is valid for SCoP.
-  bool isValidCFG(BasicBlock &BB, TempSCoP &SCoP);
+  bool isValidCFG(BasicBlock &BB, TempSCoP &SCoP, bool checkSCoPOnly);
 
   // Check if the loop bounds in SCoP is valid.
-  bool hasValidLoopBounds(TempSCoP &SCoP);
+  bool hasValidLoopBounds(TempSCoP &SCoP, bool checkSCoPOnly);
 
   // Merge the SCoP information of sub regions
-  bool mergeSubSCoP(TempSCoP &Parent, TempSCoP &SubSCoP);
+  bool mergeSubSCoP(TempSCoP &Parent, TempSCoP &SubSCoP, bool checkSCoPOnly);
 
   // Kill all temporary value for computing Instruction I.
-  void killAllTempValFor(Instruction &I) {
+  void killAllTempValFor(Instruction &I, bool checkSCoPOnly) {
     if (checkSCoPOnly)
       SDR->reduceTempRefFor(I);
   }
 
 public:
   static char ID;
-  explicit SCoPDetection() : FunctionPass(&ID), checkSCoPOnly(false) {}
+  explicit SCoPDetection() : FunctionPass(&ID) {}
   ~SCoPDetection();
 
   /// @brief Get the temporay SCoP information in LLVM IR represent
@@ -343,10 +349,8 @@ public:
   ///
   /// @return Return true if R is the maximum Region in a SCoP, false otherwise.
   bool isMaxRegionInSCoP(const Region &R) const {
-    assert(RegionToSCoPs.find(&R) != RegionToSCoPs.end() &&
-      "R must be a valid SCoP!");
-    return (R.getParent() == 0) ||
-      RegionToSCoPs.find(R.getParent()) == RegionToSCoPs.end();
+    assert(RegionToSCoPs.count(&R) && "R must be a valid SCoP!");
+    return (R.getParent() == 0) || !RegionToSCoPs.count(R.getParent());
   }
 
   /// @name FunctionPass interface
