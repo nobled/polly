@@ -28,14 +28,14 @@ AC_DEFUN([find_lib_and_headers],
   LIBS="$LIBS -l$3";
 
   # Get include path
-  AC_ARG_WITH([$1-include-path],
-    [AS_HELP_STRING([--with-$1-include-path], [location of $1 includes])],
+  AC_ARG_WITH([$1-include],
+    [AS_HELP_STRING([--with-$1-include], [location of $1 includes])],
       [given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"],
       [given_inc_path=inc_not_give_$1]
     )
   # Get lib path
-  AC_ARG_WITH([$1-library-path],
-    [AS_HELP_STRING([--with-$1-library-path],[location of the $1 libraries])],
+  AC_ARG_WITH([$1-library],
+    [AS_HELP_STRING([--with-$1-library],[location of the $1 libraries])],
       [given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"],
       [given_lib_path=lib_not_give_$1]
   )

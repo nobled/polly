@@ -629,14 +629,14 @@ ac_user_opts='
 enable_option_checking
 with_llvmsrc
 with_llvmobj
-with_gmp_include_path
-with_gmp_library_path
-with_isl_include_path
-with_isl_library_path
-with_cloog_include_path
-with_cloog_library_path
-with_openscop_include_path
-with_openscop_library_path
+with_gmp_include
+with_gmp_library
+with_isl_include
+with_isl_library
+with_cloog_include
+with_cloog_library
+with_openscop_include
+with_openscop_library
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1258,18 +1258,14 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-llvmsrc          Location of LLVM Source Code
   --with-llvmobj          Location of LLVM Object Code
-  --with-gmp-include-path location of gmp includes
-  --with-gmp-library-path location of the gmp libraries
-  --with-isl-include-path location of isl includes
-  --with-isl-library-path location of the isl libraries
-  --with-cloog-include-path
-                          location of cloog includes
-  --with-cloog-library-path
-                          location of the cloog libraries
-  --with-openscop-include-path
-                          location of openscop includes
-  --with-openscop-library-path
-                          location of the openscop libraries
+  --with-gmp-include      location of gmp includes
+  --with-gmp-library      location of the gmp libraries
+  --with-isl-include      location of isl includes
+  --with-isl-library      location of the isl libraries
+  --with-cloog-include    location of cloog includes
+  --with-cloog-library    location of the cloog libraries
+  --with-openscop-include location of openscop includes
+  --with-openscop-library location of the openscop libraries
 
 Some influential environment variables:
   CXX         C++ compiler command
@@ -2401,9 +2397,9 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
   # Get include path
 
-# Check whether --with-gmp-include-path was given.
-if test "${with_gmp_include_path+set}" = set; then :
-  withval=$with_gmp_include_path; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
+# Check whether --with-gmp-include was given.
+if test "${with_gmp_include+set}" = set; then :
+  withval=$with_gmp_include; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
 else
   given_inc_path=inc_not_give_gmp
 
@@ -2411,9 +2407,9 @@ fi
 
   # Get lib path
 
-# Check whether --with-gmp-library-path was given.
-if test "${with_gmp_library_path+set}" = set; then :
-  withval=$with_gmp_library_path; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
+# Check whether --with-gmp-library was given.
+if test "${with_gmp_library+set}" = set; then :
+  withval=$with_gmp_library; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
 else
   given_lib_path=lib_not_give_gmp
 
@@ -2488,9 +2484,9 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
   # Get include path
 
-# Check whether --with-isl-include-path was given.
-if test "${with_isl_include_path+set}" = set; then :
-  withval=$with_isl_include_path; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
+# Check whether --with-isl-include was given.
+if test "${with_isl_include+set}" = set; then :
+  withval=$with_isl_include; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
 else
   given_inc_path=inc_not_give_isl
 
@@ -2498,9 +2494,9 @@ fi
 
   # Get lib path
 
-# Check whether --with-isl-library-path was given.
-if test "${with_isl_library_path+set}" = set; then :
-  withval=$with_isl_library_path; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
+# Check whether --with-isl-library was given.
+if test "${with_isl_library+set}" = set; then :
+  withval=$with_isl_library; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
 else
   given_lib_path=lib_not_give_isl
 
@@ -2580,9 +2576,9 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
   # Get include path
 
-# Check whether --with-cloog-include-path was given.
-if test "${with_cloog_include_path+set}" = set; then :
-  withval=$with_cloog_include_path; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
+# Check whether --with-cloog-include was given.
+if test "${with_cloog_include+set}" = set; then :
+  withval=$with_cloog_include; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
 else
   given_inc_path=inc_not_give_cloog
 
@@ -2590,9 +2586,9 @@ fi
 
   # Get lib path
 
-# Check whether --with-cloog-library-path was given.
-if test "${with_cloog_library_path+set}" = set; then :
-  withval=$with_cloog_library_path; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
+# Check whether --with-cloog-library was given.
+if test "${with_cloog_library+set}" = set; then :
+  withval=$with_cloog_library; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
 else
   given_lib_path=lib_not_give_cloog
 
@@ -2667,9 +2663,9 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
   # Get include path
 
-# Check whether --with-openscop-include-path was given.
-if test "${with_openscop_include_path+set}" = set; then :
-  withval=$with_openscop_include_path; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
+# Check whether --with-openscop-include was given.
+if test "${with_openscop_include+set}" = set; then :
+  withval=$with_openscop_include; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
 else
   given_inc_path=inc_not_give_openscop
 
@@ -2677,9 +2673,9 @@ fi
 
   # Get lib path
 
-# Check whether --with-openscop-library-path was given.
-if test "${with_openscop_library_path+set}" = set; then :
-  withval=$with_openscop_library_path; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
+# Check whether --with-openscop-library was given.
+if test "${with_openscop_library+set}" = set; then :
+  withval=$with_openscop_library; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
 else
   given_lib_path=lib_not_give_openscop
 
