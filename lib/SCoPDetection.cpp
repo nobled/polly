@@ -780,6 +780,8 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) {
       if (isValidRegion(*SubR, Params) ) {
         // We found a valid region.
         RegionToSCoPs.insert(std::make_pair(SubR, (TempSCoP*)0));
+        // Check if parameters from inner regions is also ok, and add it to the
+        // parameters list of the outer region.
         if (tryMergeParams(R, Params, SubParams))
           continue;
         // Merge fail only because bad parameter occur in expression
