@@ -75,28 +75,28 @@ return:                                           ; preds = %bb9, %bb10.preheade
 ; CHECK: SCoP: entry => <Function Return>       Parameters: (%ny, %nx, ), Max Loop Depth: 2
 ; CHECK: Bounds of Loop: bb:    { 0, 1 * %nx + -1}
 ; CHECK:   BB: bb{
-; CHECK:   Writes @y[8 * {0,+,1}<%bb> + 0]
+; CHECK:     Writes @y[8 * {0,+,1}<%bb> + 0]
 ; CHECK:   }
 ; CHECK: Bounds of Loop: bb.nph:        { 0, 1 * %ny + -1}
 ; CHECK:   BB: bb.nph{
-; CHECK:   Writes @tmp[8 * {0,+,1}<%bb.nph> + 0]
+; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph> + 0]
 ; CHECK:   }
 ; CHECK:   Bounds of Loop: bb4: { 0, 1 * %ny + -1}
 ; CHECK:     BB: bb4{
-; CHECK:     Reads @A[8 * {0,+,1}<%bb4> + 64000 * {0,+,1}<%bb.nph> + 0]
-; CHECK:     Reads @x[8 * {0,+,1}<%bb4> + 0]
-; CHECK:     Reads %6[]
-; CHECK:     Writes %6[]
+; CHECK:       Reads %6[]
+; CHECK:       Reads @A[8 * {0,+,1}<%bb4> + 64000 * {0,+,1}<%bb.nph> + 0]
+; CHECK:       Reads @x[8 * {0,+,1}<%bb4> + 0]
+; CHECK:       Writes %6[]
 ; CHECK:     }
 ; CHECK:   BB: bb8.loopexit{
-; CHECK:   Writes @tmp[8 * {0,+,1}<%bb.nph> + 0]
-; CHECK:   Reads %6[]
-; CHECK:   Writes %.lcssa[]
+; CHECK:     Reads %6[]
+; CHECK:     Writes %.lcssa[]
+; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph> + 0]
 ; CHECK:   }
 ; CHECK:   Bounds of Loop: bb7: { 0, 1 * %ny + -1}
 ; CHECK:     BB: bb7{
-; CHECK:     Reads @y[8 * {0,+,1}<%bb7> + 0]
-; CHECK:     Reads @A[64000 * {0,+,1}<%bb.nph> + 8 * {0,+,1}<%bb7> + 0]
-; CHECK:     Writes @y[8 * {0,+,1}<%bb7> + 0]
-; CHECK:     Reads %.lcssa[]
+; CHECK:       Reads @y[8 * {0,+,1}<%bb7> + 0]
+; CHECK:       Reads @A[64000 * {0,+,1}<%bb.nph> + 8 * {0,+,1}<%bb7> + 0]
+; CHECK:       Reads %.lcssa[]
+; CHECK:       Writes @y[8 * {0,+,1}<%bb7> + 0]
 ; CHECK:     }

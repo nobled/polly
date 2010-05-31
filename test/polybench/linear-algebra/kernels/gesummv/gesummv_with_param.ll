@@ -65,31 +65,31 @@ return:                                           ; preds = %bb3.us, %entry
 
 ; CHECK: SCoP: entry => <Function Return>       Parameters: (%n, ), Max Loop Depth: 2
 ; CHECK: BB: bb.nph10.split.us{
-; CHECK: Reads @alpha[0]
-; CHECK: Reads @beta[0]
-; CHECK: Writes %1[]
-; CHECK: Writes %2[]
+; CHECK:   Writes %1[]
+; CHECK:   Reads @alpha[0]
+; CHECK:   Writes %2[]
+; CHECK:   Reads @beta[0]
 ; CHECK: }
 ; CHECK: Bounds of Loop: bb.nph.us:     { 0, 1 * %n + -1}
 ; CHECK:   BB: bb.nph.us{
-; CHECK:   Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:   Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:     Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
 ; CHECK:   }
 ; CHECK:   Bounds of Loop: bb1.us:      { 0, 1 * %n + -1}
 ; CHECK:     BB: bb1.us{
-; CHECK:     Reads @A[8 * {0,+,1}<%bb1.us> + 32000 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:     Reads @x[8 * {0,+,1}<%bb1.us> + 0]
-; CHECK:     Reads @B[8 * {0,+,1}<%bb1.us> + 32000 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:     Reads %13[]
-; CHECK:     Reads %10[]
-; CHECK:     Writes %10[]
-; CHECK:     Writes %13[]
+; CHECK:       Reads %13[]
+; CHECK:       Reads %10[]
+; CHECK:       Reads @A[8 * {0,+,1}<%bb1.us> + 32000 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:       Reads @x[8 * {0,+,1}<%bb1.us> + 0]
+; CHECK:       Writes %10[]
+; CHECK:       Reads @B[8 * {0,+,1}<%bb1.us> + 32000 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:       Writes %13[]
 ; CHECK:     }
 ; CHECK:   BB: bb3.us{
-; CHECK:   Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:   Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:   Reads %13[]
-; CHECK:   Reads %10[]
-; CHECK:   Reads %1[]
-; CHECK:   Reads %2[]
+; CHECK:     Reads %13[]
+; CHECK:     Reads %10[]
+; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:     Reads %1[]
+; CHECK:     Reads %2[]
+; CHECK:     Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
 ; CHECK:   }

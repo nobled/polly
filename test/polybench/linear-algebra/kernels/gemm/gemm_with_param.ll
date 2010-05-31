@@ -78,38 +78,38 @@ return:                                           ; preds = %bb.nph26, %bb6, %en
   ret void
 }
 
-; CHECK: SCoP: entry => <Function Return>  Parameters: (%nj, %nk, %ni, ), Max Loop Depth: 3
+; CHECK: SCoP: entry => <Function Return>       Parameters: (%nj, %nk, %ni, ), Max Loop Depth: 3
 ; CHECK: BB: bb.nph26{
-; CHECK: Reads @beta[0]
-; CHECK: Reads @alpha[0]
-; CHECK: Writes %5[]
-; CHECK: Writes %6[]
+; CHECK:   Writes %5[]
+; CHECK:   Reads @beta[0]
+; CHECK:   Writes %6[]
+; CHECK:   Reads @alpha[0]
 ; CHECK: }
-; CHECK: Bounds of Loop: bb.nph.us.preheader.us:   { 0, 1 * %ni + -1}
-; CHECK:   Bounds of Loop: bb.nph.us.us:   { 0, 1 * %nj + -1}
+; CHECK: Bounds of Loop: bb.nph.us.preheader.us:        { 0, 1 * %ni + -1}
+; CHECK:   Bounds of Loop: bb.nph.us.us:        { 0, 1 * %nj + -1}
 ; CHECK:     BB: bb.nph.us.us{
-; CHECK:     Reads @C[4096 * {0,+,1}<%bb.nph.us.preheader.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
-; CHECK:     Writes @C[4096 * {0,+,1}<%bb.nph.us.preheader.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
-; CHECK:     Reads %5[]
-; CHECK:     Writes %17[]
+; CHECK:       Reads @C[4096 * {0,+,1}<%bb.nph.us.preheader.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
+; CHECK:       Reads %5[]
+; CHECK:       Writes %17[]
+; CHECK:       Writes @C[4096 * {0,+,1}<%bb.nph.us.preheader.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
 ; CHECK:     }
-; CHECK:     Bounds of Loop: bb2.us.us:    { 0, 1 * %nk + -1}
+; CHECK:     Bounds of Loop: bb2.us.us: { 0, 1 * %nk + -1}
 ; CHECK:       BB: bb2.us.us{
-; CHECK:       Reads @A[8 * {0,+,1}<%bb2.us.us> + 4096 * {0,+,1}<%bb.nph.us.preheader.us> + 0]
-; CHECK:       Reads @B[4096 * {0,+,1}<%bb2.us.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
-; CHECK:       Reads %17[]
-; CHECK:       Reads %14[]
-; CHECK:       Reads %6[]
-; CHECK:       Writes %14[]
+; CHECK:         Reads %17[]
+; CHECK:         Reads %14[]
+; CHECK:         Reads @A[8 * {0,+,1}<%bb2.us.us> + 4096 * {0,+,1}<%bb.nph.us.preheader.us> + 0]
+; CHECK:         Reads %6[]
+; CHECK:         Reads @B[4096 * {0,+,1}<%bb2.us.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
+; CHECK:         Writes %14[]
 ; CHECK:       }
 ; CHECK:     BB: bb4.us.us{
-; CHECK:     Writes @C[4096 * {0,+,1}<%bb.nph.us.preheader.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
-; CHECK:     Reads %14[]
+; CHECK:       Reads %14[]
+; CHECK:       Writes @C[4096 * {0,+,1}<%bb.nph.us.preheader.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
 ; CHECK:     }
-; CHECK: Bounds of Loop: bb4.preheader:    { 0, 1 * %ni + -1}
-; CHECK:   Bounds of Loop: bb4:    { 0, 1 * %nj + -1}
+; CHECK: Bounds of Loop: bb4.preheader: { 0, 1 * %ni + -1}
+; CHECK:   Bounds of Loop: bb4: { 0, 1 * %nj + -1}
 ; CHECK:     BB: bb4{
-; CHECK:     Reads @C[8 * {0,+,1}<%bb4> + 4096 * {0,+,1}<%bb4.preheader> + 0]
-; CHECK:     Writes @C[8 * {0,+,1}<%bb4> + 4096 * {0,+,1}<%bb4.preheader> + 0]
-; CHECK:     Reads %5[]
+; CHECK:       Reads @C[8 * {0,+,1}<%bb4> + 4096 * {0,+,1}<%bb4.preheader> + 0]
+; CHECK:       Reads %5[]
+; CHECK:       Writes @C[8 * {0,+,1}<%bb4> + 4096 * {0,+,1}<%bb4.preheader> + 0]
 ; CHECK:     }
