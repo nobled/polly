@@ -52,8 +52,7 @@ PrintTempSCoPInDetail("polly-print-temp-scop-in-detail",
 
 
 #define STATSCOP(NAME);              \
-  do { if (checkSCoPOnly) { ++Bad##NAME##ForSCoP; }  \
-  } while (0)
+  ++Bad##NAME##ForSCoP;
 
 // Note: This will make loop bounds could not compute,
 // but this is checked before loop bounds.
@@ -190,15 +189,13 @@ static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
 //===----------------------------------------------------------------------===//
 // SCEVAffFunc Implement
 
-bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
+bool SCEVAffFunc::buildAffineFunc(const SCEV *S, Region &R, ParamSetType &Params,
                                   SCEVAffFunc *FuncToBuild,
                                   LoopInfo &LI, ScalarEvolution &SE,
                                   AccessType AccType) {
   assert(S && "S can not be null!");
 
   bool PtrExist = false;
-
-  Region &R = SCoP.getMaxRegion();
 
   if (isa<SCEVCouldNotCompute>(S))
     return false;
@@ -273,7 +270,7 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
     }
 
     // Add the loop invariants to parameter lists.
-    SCoP.getParamSet().insert(Var);
+    Params.insert(Var);
   }
 
   // The SCEV is valid if it is not a memory access
@@ -282,11 +279,11 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
     PtrExist;
 }
 
-bool SCEVAffFunc::buildMemoryAccess(MemAccTy MemAcc, TempSCoP &SCoP,
+bool SCEVAffFunc::buildMemoryAccess(MemAccTy MemAcc, Region &R, ParamSetType &Params,
                                     SCEVAffFunc *FuncToBuild,
                                     LoopInfo &LI, ScalarEvolution &SE) {
   return buildAffineFunc(SE.getSCEV(MemAcc.getPointer()),
-                         SCoP, FuncToBuild, LI, SE, MemAcc.getInt());
+                         R, Params, FuncToBuild, LI, SE, MemAcc.getInt());
 }
 
 polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
@@ -383,44 +380,6 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
 //===----------------------------------------------------------------------===//
 // LLVMSCoP Implement
 
-bool TempSCoP::mergeSubSCoP(TempSCoP &SubSCoP,
-                            LoopInfo &LI, ScalarEvolution &SE) {
-  Loop *L = castToLoop(R, LI);
-
-  // Merge the parameters.
-  for (ParamSetType::iterator I = SubSCoP.Params.begin(),
-      E = SubSCoP.Params.end(); I != E; ++I) {
-    const SCEV *Param = *I;
-    // The valid parameter in subregion may not valid in its parameter
-    if (isParameter(Param, getMaxRegion(), LI, SE)) {
-      // Param is a valid parameter in Parent, too.
-      Params.insert(Param);
-      continue;
-    }
-    // Param maybe the indvar of the loop at current level.
-    else if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Param)) {
-      if ( L == AddRec->getLoop())
-        continue;
-      // Else it is a invalid parameter.
-      assert((!L || AddRec->getLoop()->contains(L) ||
-        isa<SCEVCouldNotCompute>(
-        SE.getBackedgeTakenCount(AddRec->getLoop())))
-        && "Where comes the indvar?");
-    }
-
-    DEBUG(dbgs() << "Bad parameter in parent: " << *Param
-      << " in " << getMaxRegion().getNameStr() << " at "
-      << (L?L->getHeader()->getName():"Top Level")
-      << "\n");
-  }
-
-  // Update the loop depth.
-  if (SubSCoP.MaxLoopDepth > MaxLoopDepth)
-    MaxLoopDepth = SubSCoP.MaxLoopDepth;
-
-  return true;
-}
-
 void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const {
   OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
   // Print Parameters.
@@ -437,7 +396,8 @@ void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const {
 }
 
 void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
-                           LoopInfo *LI, const Region *CurR, unsigned ind) const {
+                           LoopInfo *LI, const Region *CurR,
+                           unsigned ind) const {
   // Print the loopbounds if current region is a loop
   BoundMapType::const_iterator at = LoopBounds.find(castToLoop(*CurR, *LI));
   if (at != LoopBounds.end()) {
@@ -480,9 +440,7 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
 //===----------------------------------------------------------------------===//
 // SCoPDetection Implement
 
-bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP,
-                               bool checkSCoPOnly) {
-  Region &R = SCoP.getMaxRegion();
+bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &R) {
   TerminatorInst *TI = BB.getTerminator();
 
   unsigned int numSucc = TI->getNumSuccessors();
@@ -502,15 +460,16 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP,
   // And we only support instruction as condition now
   if (!Cond) return false;
 
+  // Hide the Instructions for computing conditions.
+  killAllTempValFor(*Cond);
+
   if (Loop *L = getScopeLoop(R, *LI)) {
     // Only allow branches that are loop exits. This stops anything
     // except loops that have just one exit and are detected by our LoopInfo
     // analysis
     // It is ok if BB is branching out of the loop
-    if (L->isLoopExiting(&BB)) {
-      killAllTempValFor(*Cond, checkSCoPOnly);
+    if (L->isLoopExiting(&BB))
       return true;
-    }
 
     assert(L->getExitingBlock()
            && "The Loop return from getScopeLoop will always have 1 exit!");
@@ -526,7 +485,6 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP,
           STATSCOP(CFG);
           return false;
         }
-        killAllTempValFor(*Cond, checkSCoPOnly);
         return true;
       }
     }
@@ -538,10 +496,9 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, TempSCoP &SCoP,
     return false;
   }
 
-  killAllTempValFor(*Cond, checkSCoPOnly);
   // BB is not in any loop.
-  return true;
   // TODO: handle the branch condition
+  return true;
 }
 
 bool SCoPDetection::isValidCallInst(CallInst &CI) {
@@ -561,11 +518,11 @@ bool SCoPDetection::isValidCallInst(CallInst &CI) {
   return false;
 }
 
-bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP,
-                                        bool checkSCoPOnly) {
+bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
+                                        Region &R, ParamSetType &Params) {
   SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(Inst);
 
-  if (!SCEVAffFunc::buildMemoryAccess(MemAcc, SCoP, 0, *LI, *SE)) {
+  if (!SCEVAffFunc::buildMemoryAccess(MemAcc, R, Params, 0, *LI, *SE)) {
     DEBUG(dbgs() << "Bad memory addr "
                  << SE->getSCEV(MemAcc.getPointer()) << "\n");
     STATSCOP(AffFunc);
@@ -579,7 +536,7 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP,
   // Do this in the Checking phase, so we will get the final result
   // when we try to get SCoP by "getTempSCoPFor";
   if (Instruction *GEP = dyn_cast<Instruction>(MemAcc.getPointer()))
-    killAllTempValFor(*GEP, checkSCoPOnly);
+    killAllTempValFor(*GEP);
 
   return true;
 }
@@ -588,11 +545,11 @@ void SCoPDetection::captureScalarDataRef(Instruction &Inst,
                                          AccFuncSetType &ScalarAccs) {
   SmallVector<Value*, 4> Defs;
   SDR->getAllUsing(Inst, Defs);
-
+  // Capture scalar read access.
   for (SmallVector<Value*, 4>::iterator VI = Defs.begin(),
     VE = Defs.end(); VI != VE; ++VI)
       ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::Read, *VI));
-
+  // And write access.
   if (SDR->isDefExported(Inst))
     ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::Write, &Inst));
 }
@@ -609,15 +566,15 @@ void SCoPDetection::extractAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
       // Make the access function.
       AccessFunctions.push_back(SCEVAffFunc(MemAcc.getInt()));
       // And build the access function
-      bool buildSuccessful = SCEVAffFunc::buildMemoryAccess(MemAcc, SCoP,
-         &AccessFunctions.back(), *LI, *SE);
+      bool buildSuccessful = SCEVAffFunc::buildMemoryAccess(MemAcc,
+        SCoP.R, SCoP.getParamSet(), &AccessFunctions.back(), *LI, *SE);
       assert(buildSuccessful && "Expect memory access is valid!");
     }
   }
 }
 
-bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP,
-                                       bool checkSCoPOnly) {
+bool SCoPDetection::isValidInstruction(Instruction &Inst, Region &R,
+                                       ParamSetType &Params) {
   // We only check the call instruction but not invoke instruction.
   if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
     if (isValidCallInst(*CI))
@@ -640,27 +597,25 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst, TempSCoP &SCoP,
   }
 
   if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst))
-    return isValidMemoryAccess(Inst, SCoP, checkSCoPOnly);
+    return isValidMemoryAccess(Inst, R, Params);
 
   // We do not know this instruction, therefore we assume it is invalid.
   STATSCOP(Other);
   return false;
 }
 
-bool SCoPDetection::isValidBasicBlock(BasicBlock &BB, TempSCoP &SCoP,
-                                      bool checkSCoPOnly) {
+bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
+                                      Region &R, ParamSetType &Params) {
 
   // Check all instructions, except the terminator instruction.
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I)
-    if (!isValidInstruction(*I, SCoP, checkSCoPOnly))
+    if (!isValidInstruction(*I, R, Params))
       return false;
 
   return true;
 }
 
-bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP, bool checkSCoPOnly) {
-  Region &R = SCoP.getMaxRegion();
-
+bool SCoPDetection::hasValidLoopBounds(Region &R, ParamSetType &Params) {
   // Find the parameters used in loop bounds
   if (Loop *L = castToLoop(R, *LI)) {
 
@@ -680,8 +635,8 @@ bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP, bool checkSCoPOnly) {
     }
 
     // Take away the Induction Variable and its increment
-    killAllTempValFor(*IndVar, checkSCoPOnly);
-    killAllTempValFor(*IndVarInc, checkSCoPOnly);
+    killAllTempValFor(*IndVar);
+    killAllTempValFor(*IndVarInc);
 
     const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
 
@@ -696,11 +651,11 @@ bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP, bool checkSCoPOnly) {
     // The AffineSCEVIterator will always return the induction variable
     // which start from 0, and step by 1.
     const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType()),
-      *UB = LoopCount;
+               *UB = LoopCount;
 
     // Build the lower bound.
-    if (!SCEVAffFunc::buildAffineFunc(LB, SCoP, 0, *LI, *SE)
-        || !SCEVAffFunc::buildAffineFunc(UB, SCoP, 0, *LI, *SE)) {
+    if (!SCEVAffFunc::buildAffineFunc(LB, R, Params, 0, *LI, *SE)
+        || !SCEVAffFunc::buildAffineFunc(UB, R, Params, 0, *LI, *SE)) {
       STATSCOP(AffFunc);
       return false;
     }
@@ -710,56 +665,102 @@ bool SCoPDetection::hasValidLoopBounds(TempSCoP &SCoP, bool checkSCoPOnly) {
 }
 
 void SCoPDetection::extractLoopBounds(TempSCoP &SCoP) {
-  assert(hasValidLoopBounds(SCoP, false)
-    && "Expect loop bounds of SCoP are valid!");
-
   if (Loop *L = castToLoop(SCoP.getMaxRegion(), *LI)) {
+    // Get the loop bounds
     const SCEV *UB = SE->getBackedgeTakenCount(L);
+    // FIXME: The lower bound is always 0.
     const SCEV *LB = SE->getIntegerSCEV(0, UB->getType());
 
     AffBoundType &affbounds = LoopBounds[L];
-
+    // Build the affine function of loop bounds
     bool buildSuccessful =
-      SCEVAffFunc::buildAffineFunc(LB, SCoP, &affbounds.first, *LI, *SE)
-      && SCEVAffFunc::buildAffineFunc(UB, SCoP, &affbounds.second, *LI, *SE);
+      SCEVAffFunc::buildAffineFunc(
+        LB, SCoP.getMaxRegion(), SCoP.getParamSet(), &affbounds.first, *LI, *SE)
+      &&
+      SCEVAffFunc::buildAffineFunc(
+        UB, SCoP.getMaxRegion(), SCoP.getParamSet(), &affbounds.second, *LI, *SE);
 
     assert(buildSuccessful && "Expect loop bounds of SCoP are valid!");
-
+    // Increase the loop depth because we found a loop.
     ++SCoP.MaxLoopDepth;
   }
 }
 
-TempSCoP *SCoPDetection::getTempSCoP(Region& R, bool checkSCoPOnly) {
-  if (!checkSCoPOnly) {
-    // Did we already compute the SCoP for R?
-    TempSCoPMapType::const_iterator at = RegionToSCoPs.find(&R);
-    if (at != RegionToSCoPs.end() && at->second != 0)
-      return at->second;
-  }
-  // Otherwise, we had to extract the temporary SCoP information.
-  //
-  // Initialize the TempSCoP by setting up its coresponding region,
-  // the loop bounds map and access functions map.
-  TempSCoP *SCoP = new TempSCoP(R, LoopBounds, AccFuncMap);
+TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
+  // Did we already compute the SCoP for R?
+  TempSCoPMapType::const_iterator at = RegionToSCoPs.find(&R);
+  assert(at != RegionToSCoPs.end() && "R is expect to be found!");
+  if (at->second != 0)
+    return at->second;
 
-  // And we will fill the loop bounds and access functions of this SCoP
-  // in form of SCEV to the TempSCoP if we are not checkSCoPOnly.
-  if (isValidRegion(*SCoP, checkSCoPOnly)) {
-    // Insert the SCoP into the map, if all the above was successful
-    // and we are not only checking SCoPs.
-    RegionToSCoPs[&(SCoP->R)] = checkSCoPOnly ? 0 : SCoP;
-    return SCoP;
-  } else {
-    // If the Temporary SCoP is not valid, just delete it.
-    DEBUG(dbgs() << "Bad region found: " << R.getNameStr() << "!\n");
-    delete SCoP;
-    return 0;
-  }
+  // Otherwise, we had to extract the temporary SCoP information.
+  TempSCoP *tempSCoP = buildTempSCoP(R);
+  RegionToSCoPs[&R] = tempSCoP;
+  return tempSCoP;
 }
 
-bool SCoPDetection::isValidRegion(TempSCoP &SCoP, bool checkSCoPOnly) {
-  Region &R = SCoP.getMaxRegion();
+TempSCoP *SCoPDetection::buildTempSCoP(Region &R) {
+  TempSCoP *SCoP = new TempSCoP(R, LoopBounds, AccFuncMap);
+  for (Region::element_iterator I = R.element_begin(), E = R.element_end();
+      I != E; ++I) {
+    if (I->isSubRegion()) {
+      TempSCoP *SubSCoP = getTempSCoP(*I->getNodeAs<Region>());
+      // Merge parameters from sub SCoPs.
+      bool mergeSuccess = tryMergeParams(R, SCoP->getParamSet(),
+                                         SubSCoP->getParamSet());
+      assert(mergeSuccess && "Bad scop found!");
+      // Update the loop depth.
+      if (SubSCoP->MaxLoopDepth > SCoP->MaxLoopDepth)
+        SCoP->MaxLoopDepth = SubSCoP->MaxLoopDepth;
+    } else {
+      // Extract access function of BasicBlocks.
+      BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
+      AccFuncSetType AccFuncs;
+      extractAccessFunctions(*SCoP, BB, AccFuncs);
+      if (!AccFuncs.empty()) {
+        AccFuncSetType &Accs = AccFuncMap[&BB];
+        Accs.insert(Accs.end(), AccFuncs.begin(), AccFuncs.end());
+      }
+    }
+  }
+  // Try to extract the loop bounds
+  extractLoopBounds(*SCoP);
+  return SCoP;
+}
 
+bool SCoPDetection::tryMergeParams(Region &R, ParamSetType &Params,
+                                   ParamSetType &SubParams) {
+  Loop *L = castToLoop(R, *LI);
+  // Merge the parameters.
+  for (ParamSetType::iterator I = SubParams.begin(),
+    E = SubParams.end(); I != E; ++I) {
+      const SCEV *Param = *I;
+      // The valid parameter in subregion may not valid in its parameter
+      if (isParameter(Param, R, *LI, *SE)) {
+        Params.insert(Param);
+        continue;
+      }
+      // Param maybe the indvar of the loop at current level.
+      else if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Param)) {
+        if ( L == AddRec->getLoop())
+          continue;
+        // Else it is a invalid parameter.
+        assert((!L || AddRec->getLoop()->contains(L) ||
+          isa<SCEVCouldNotCompute>(
+          SE->getBackedgeTakenCount(AddRec->getLoop())))
+          && "Where comes the indvar?");
+      }
+
+      DEBUG(dbgs() << "Bad parameter in parent: " << *Param
+        << " in " << R.getNameStr() << " at "
+        << (L?L->getHeader()->getName():"Top Level")
+        << "\n");
+      return false;
+  }
+  return true;
+}
+
+bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) {
   bool isValid = true;
 
   // Check if getScopeLoop work on the current loop nest and region tree,
@@ -768,58 +769,36 @@ bool SCoPDetection::isValidRegion(TempSCoP &SCoP, bool checkSCoPOnly) {
     STATSCOP(LoopNest);
     isValid = false;
   }
-
+  ParamSetType SubParams;
   // Visit all sub region node.
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
       I != E; ++I){
     if (I->isSubRegion()) {
+      SubParams.clear();
       Region *SubR = I->getNodeAs<Region>();
       // Extract information of sub scop and merge them.
-      if (TempSCoP *SubSCoP = getTempSCoP(*SubR, checkSCoPOnly)) {
-        if (!SCoP.mergeSubSCoP(*SubSCoP, *LI, *SE)) {
-          // Merge fail only because bad parameter occur in expression
-          STATSCOP(AffFunc);
-          isValid = false;
-        }
-
-        if (checkSCoPOnly) {
-          // Do not do any thing if we only check the SCoP.
-          delete SubSCoP;
-        }
-
-        continue;
+      if (isValidRegion(*SubR, Params) ) {
+        // We found a valid region.
+        RegionToSCoPs.insert(std::make_pair(SubR, (TempSCoP*)0));
+        if (tryMergeParams(R, Params, SubParams))
+          continue;
+        // Merge fail only because bad parameter occur in expression
+        STATSCOP(AffFunc);
       }
       isValid = false;
     } else if (isValid) {
       // We check the basic blocks only the region is valid.
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
       // Check CFG and all non terminator inst
-      if (!isValidCFG(BB, SCoP, checkSCoPOnly)
-          || !isValidBasicBlock(BB, SCoP, checkSCoPOnly)){
+      if (!isValidCFG(BB, R)
+          || !isValidBasicBlock(BB, R, Params)){
           DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
           isValid = false;
-      } else if (!checkSCoPOnly) {
-        // If this is a valid BB, and we are not only check the SCoP, but
-        // also try to build it.
-        // Then build the memory access functions.
-        AccFuncSetType AccessFunctions;
-        extractAccessFunctions(SCoP, BB, AccessFunctions);
-        if (!AccessFunctions.empty()) {
-          AccFuncSetType &Accs = AccFuncMap[&BB];
-          Accs.insert(Accs.end(),
-                      AccessFunctions.begin(), AccessFunctions.end());
-        }
       }
     }
   }
 
-  if (isValid && hasValidLoopBounds(SCoP, checkSCoPOnly)) {
-    if (!checkSCoPOnly)
-      extractLoopBounds(SCoP);
-
-    return true;
-  }
-  return false;
+  return isValid && hasValidLoopBounds(R, Params);
 }
 
 TempSCoP *SCoPDetection::getTempSCoPFor(const Region* R) const {
@@ -828,13 +807,7 @@ TempSCoP *SCoPDetection::getTempSCoPFor(const Region* R) const {
     return 0;
 
   // Recalculate the temporary SCoP info.
-  TempSCoP *tempSCoP =
-    const_cast<SCoPDetection*>(this)->getTempSCoP(*const_cast<Region*>(R), false);
-  assert(tempSCoP && "R should be valid if it contains in the map!");
-
-  // Update the map.
-  const_cast<SCoPDetection*>(this)->RegionToSCoPs[R] = tempSCoP;
-  return tempSCoP;
+  return const_cast<SCoPDetection*>(this)->getTempSCoP(*const_cast<Region*>(R));
 }
 
 bool SCoPDetection::runOnFunction(llvm::Function &F) {
@@ -844,10 +817,10 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   SDR = &getAnalysis<ScalarDataRef>();
   Region *TopRegion = RI->getTopLevelRegion();
 
-  if (TempSCoP *tempSCoP = getTempSCoP(*TopRegion, true)) {
-    RegionToSCoPs[TopRegion] = 0;
-    delete tempSCoP;
-  }
+  ParamSetType Params;
+  // Check if regions in functions is valid.
+  if (isValidRegion(*TopRegion, Params))
+    RegionToSCoPs.insert(std::make_pair(TopRegion, (TempSCoP*)0));
 
   return false;
 }
@@ -864,6 +837,7 @@ void SCoPDetection::clear() {
   LoopBounds.clear();
   AccFuncMap.clear();
 
+  // Delete all tempSCoP entry in the maps.
   while (!RegionToSCoPs.empty()) {
     TempSCoPMapType::iterator I = RegionToSCoPs.begin();
     if (I->second)
@@ -876,10 +850,6 @@ void SCoPDetection::clear() {
 /// Debug/Testing function
 
 void SCoPDetection::print(raw_ostream &OS, const Module *) const {
-  // Try to build the SCoPs again, this time is not check only.
-  const_cast<SCoPDetection*>(this)->getTempSCoP(*(RI->getTopLevelRegion()),
-                                                false);
-
   if (RegionToSCoPs.empty()) {
     OS << "No SCoP found!\n";
     return;
@@ -888,7 +858,7 @@ void SCoPDetection::print(raw_ostream &OS, const Module *) const {
   for (TempSCoPMapType::const_iterator I = RegionToSCoPs.begin(),
        E = RegionToSCoPs.end(); I != E; ++I)
     if (!PrintTopSCoPOnly || isMaxRegionInSCoP(*(I->first)))
-      I->second->print(OS, SE, LI);
+      getTempSCoPFor(I->first)->print(OS, SE, LI);
 
   OS << "\n";
 }

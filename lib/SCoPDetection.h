@@ -30,8 +30,8 @@ using namespace llvm;
 
 namespace polly {
 
-class TempSCoP;
 class SCoPDetection;
+typedef std::set<const SCEV*> ParamSetType;
 
 //===----------------------------------------------------------------------===//
 /// Temporary Hack for extended regiontree.
@@ -110,11 +110,11 @@ public:
   ///
   /// @return             Return true if S could be convert to affine function,
   ///                     false otherwise.
-  static bool buildAffineFunc(const SCEV *S, TempSCoP &SCoP,
+  static bool buildAffineFunc(const SCEV *S, Region &R, ParamSetType &Params,
     SCEVAffFunc *FuncToBuild, LoopInfo &LI, ScalarEvolution &SE,
     AccessType AccType = SCEVAffFunc::None);
 
-  static bool buildMemoryAccess(MemAccTy MemAcc, TempSCoP &SCoP,
+  static bool buildMemoryAccess(MemAccTy MemAcc, Region &R, ParamSetType &Params,
     SCEVAffFunc *FuncToBuild, LoopInfo &LI, ScalarEvolution &SE);
 
   /// @brief Build a loop bound constrain from an affine function.
@@ -162,7 +162,6 @@ typedef std::map<const Loop*, AffBoundType> BoundMapType;
 typedef std::vector<SCEVAffFunc> AccFuncSetType;
 typedef std::map<const BasicBlock*, AccFuncSetType> AccFuncMapType;
 
-typedef std::set<const SCEV*> ParamSetType;
 
 //===---------------------------------------------------------------------===//
 /// @brief SCoP represent with llvm objects.
@@ -194,10 +193,6 @@ class TempSCoP {
     AccFuncMapType &accFuncMap)
     : R(r), MaxLoopDepth(0),
     LoopBounds(loopBounds), AccFuncMap(accFuncMap) {}
-
-  // Merge the SCoP information of sub regions
-  bool mergeSubSCoP(TempSCoP &SubSCoP,
-                    LoopInfo &LI, ScalarEvolution &SE);
 public:
 
   /// @name Information about this Temporary SCoP.
@@ -293,39 +288,47 @@ class SCoPDetection : public FunctionPass {
   // Clear the context.
   void clear();
 
-  // If the Region not a valid part of a SCoP,
-  // return null if Region R is a valid part of a SCoP,
-  // otherwise return the temporary SCoP information of Region R.
-  TempSCoP *getTempSCoP(Region &R, bool checkSCoPOnly);
-
-  TempSCoP *buildTempSCoP(Region &R, bool checkSCoPOnly);
-
+  /////////////////////////////////////////////////////////////////////////////
+  // We need to check if valid parameters from child SCoP also valid in
+  // parent SCoP. So all the isValidXXX functions will extract parameters
+  // to Params.
+  //
   // Check if the max region of SCoP is valid, return true if it is valid
-  // false otherwise. if checkSCoPOnly is false, the function will also try
-  // to fill temporary scop information such as loop bounds, access functions
-  // and parameters into SCoP.
-  TempSCoP *isValidRegion(TempSCoP &SCoP, bool checkSCoPOnly);
+  // false otherwise.
+  //
+  // NOTE: All this function will increase the statistic counters.
+  bool isValidRegion(Region &R, ParamSetType &Params);
 
   // Check if the instruction is a valid function call.
   static bool isValidCallInst(CallInst &CI);
 
   // Check is a memory access is valid.
-  bool isValidMemoryAccess(Instruction &Inst, TempSCoP &SCoP,
-                          bool checkSCoPOnly);
+  bool isValidMemoryAccess(Instruction &Inst, Region &R, ParamSetType &Params);
+
+  // Check if all parameters in Params valid in Region R.
+  bool tryMergeParams(Region &R, ParamSetType &Params, ParamSetType &SubParams);
 
   // Check if the Instruction is a valid part of SCoP, return true and extract
   // the corresponding information, return false otherwise.
-  bool isValidInstruction(Instruction &I, TempSCoP &SCoP, bool checkSCoPOnly);
+  bool isValidInstruction(Instruction &I, Region &R, ParamSetType &Params);
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
-  bool isValidBasicBlock(BasicBlock &BB, TempSCoP &SCoP, bool checkSCoPOnly);
+  bool isValidBasicBlock(BasicBlock &BB, Region &R, ParamSetType &Params);
 
   // Check if the CFG is valid for SCoP.
-  bool isValidCFG(BasicBlock &BB, TempSCoP &SCoP, bool checkSCoPOnly);
+  bool isValidCFG(BasicBlock &BB, Region &R);
 
   // Check if the loop bounds in SCoP is valid.
-  bool hasValidLoopBounds(TempSCoP &SCoP, bool checkSCoPOnly);
+  bool hasValidLoopBounds(Region &R, ParamSetType &Params);
+
+  /////////////////////////////////////////////////////////////////////////////
+  // If the Region not a valid part of a SCoP,
+  // return null if Region R is a valid part of a SCoP,
+  // otherwise return the temporary SCoP information of Region R.
+  TempSCoP *getTempSCoP(Region &R);
+
+  TempSCoP *buildTempSCoP(Region &R);
 
   // Extract the access functions from a BasicBlock to ScalarAccs
   void extractAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
@@ -338,9 +341,8 @@ class SCoPDetection : public FunctionPass {
   void captureScalarDataRef(Instruction &I, AccFuncSetType &ScalarAccs);
 
   // Kill all temporary value for computing Instruction I.
-  void killAllTempValFor(Instruction &I, bool checkSCoPOnly) {
-    if (checkSCoPOnly)
-      SDR->reduceTempRefFor(I);
+  void killAllTempValFor(Instruction &I) {
+    SDR->reduceTempRefFor(I);
   }
 
 public:
