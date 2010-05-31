@@ -1,9 +1,9 @@
 #define N 20
 #include "limits.h"
+volatile long long A[N];
 
 int main () {
-  int i;
-  int A[N];
+  long long i;
 
   A[0] = 0;
 

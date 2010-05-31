@@ -20,6 +20,8 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/IRBuilder.h"
+#include "llvm/Analysis/RegionIterator.h"
 
 
 #define CLOOG_INT_GMP 1
@@ -40,84 +42,88 @@ typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
 
 struct codegenctx : cp_ctx {
-  bb_edge edge;
-  Pass *P;
-  std::vector<succ_iterator> edges;
+  std::vector<BasicBlock*> ab;
   ValueMapT ValueMap;
-  codegenctx(succ_iterator e, Pass *p, SCoP *scop): edge(e), P(p), S(scop) {}
-  std::vector<Value*> loop_ivs;
+  codegenctx(SCoP *scop, IRBuilder<> *builder):
+   S(scop), B(builder) {}
+  std::vector<PHINode*> loop_ivs;
+  std::vector<Value*> NV;
   Value *exprValue;
   CharMapT CharMap;
   SCoP *S;
   SCoPStmt *stmt;
   BasicBlock *BB;
   unsigned assignmentCount;
+  IRBuilder<> *B;
 };
 
-/// Create a loop on a specific edge
-/// @returns An edge on which the loop body can be inserted.
-succ_iterator createLoop(succ_iterator edge, Value *UB,
-                         Pass *P, APInt stride, Value **IV) {
-  BasicBlock *dest = *edge;
-  BasicBlock *src = edge.getSource();
-  const IntegerType *LoopIVType = IntegerType::getInt64Ty(src->getContext());
+// Create a new loop.
+//
+// @param Builder The builder used to create the loop.  It also defines the
+//                place where to create the loop.
+// @param UB      The upper bound of the loop iv.
+// @param Stride  The number by which the loop iv is incremented after every
+//                iteration.
+void createLoop(IRBuilder<> *Builder, Value *UB, APInt Stride, PHINode **IV,
+                BasicBlock** AB, Value** NV) {
+  Function *F = Builder->GetInsertBlock()->getParent();
+  LLVMContext &Context = F->getContext();
 
-  // Create the loop header
-  BasicBlock *loop = SplitEdge(src, dest, P);
+  BasicBlock *PreheaderBB = Builder->GetInsertBlock();
+  BasicBlock *HeaderBB = BasicBlock::Create(Context, "polly.loop_header", F);
+  BasicBlock *BodyBB = BasicBlock::Create(Context, "polly.loop_body", F);
+  BasicBlock *AfterBB = BasicBlock::Create(Context, "polly.after_loop", F);
 
-  if (*succ_begin(loop) != dest) {
-    loop = dest;
-    dest = *succ_begin(dest);
-  }
+  Builder->CreateBr(HeaderBB);
 
-  loop->setName("polly.loop.header");
-  TerminatorInst *oldTerminator = loop->getTerminator();
-  PHINode *loopIV = PHINode::Create(LoopIVType, "polly.loopiv",
-                                    loop->begin());
-  Value *iv = static_cast<Value*>(loopIV);
-  *IV = iv;
+  Builder->SetInsertPoint(BodyBB);
 
-  ICmpInst *IS = new ICmpInst(oldTerminator, ICmpInst::ICMP_SGT, loopIV,
-                              UB);
-  BranchInst::Create(dest, loop, IS, loop);
-  loopIV->addIncoming(loopIV, loop);
-  loopIV->addIncoming(ConstantInt::get(LoopIVType, 0), src);
-  oldTerminator->eraseFromParent();
+  Builder->SetInsertPoint(HeaderBB);
 
-  // Create the loop latch
-  BasicBlock *latch = SplitEdge(loop, loop, P);
-  latch->setName("polly.loop.latch");
+  // TODO: Use a correct/derived IV type.
+  const IntegerType *LoopIVType = IntegerType::getInt64Ty(Context);
 
-  // Add loop induction variable increment
-  stride.zext(64);
-  Value *ConstOne = ConstantInt::get(src->getContext(), stride);
-  Instruction* IncrementedIV = BinaryOperator::CreateAdd(loopIV, ConstOne);
-  IncrementedIV->insertBefore(latch->begin());
-  loopIV->replaceUsesOfWith(loopIV,IncrementedIV);
+  // IV
+  PHINode *Variable = Builder->CreatePHI(LoopIVType, "polly.loopiv");
+  Variable->addIncoming(ConstantInt::get(LoopIVType, 0), PreheaderBB);
 
-  // Return the loop body
-  succ_iterator SI = succ_begin(loop);
+  // IV increment.
+  Stride.zext(64);
+  Value *StrideValue = ConstantInt::get(Context, Stride);
+  Value *NextVar = Builder->CreateAdd(Variable, StrideValue,
+                                      "polly.next_loopiv");
 
-  while (*SI != latch)
-    ++SI;
+  // Exit condition.
+  Value *CMP = Builder->CreateICmpSGE(UB, Variable);
+  Builder->CreateCondBr(CMP, BodyBB, AfterBB);
 
-  return SI;
+  //Variable->addIncoming(NextVar, BodyBB);
+  Builder->SetInsertPoint(BodyBB);
+
+  *IV = Variable;
+  *AB = AfterBB;
+  *NV = NextVar;
 }
 
-succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
-                     ValueMapT &VMap, Pass *P) {
-  BasicBlock *dest = *edge;
-  BasicBlock *BBCopy = SplitEdge(edge.getSource(), dest, P);
+// Insert a copy of a basic block in the newly generated code.
+//
+// @param Builder The builder used to insert the code. It also specifies
+//                where to insert the code.
+// @param BB      The basic block to copy
+// @param VMap    A map returning for any old value its new equivalent. This
+//                is used to update the operands of the statements.
+//                For new statements a relation old->new is inserted in this
+//                map.
+//
+void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap) {
+  Function *F = Builder->GetInsertBlock()->getParent();
+  LLVMContext &Context = F->getContext();
 
-  if (*succ_begin(BBCopy) != dest) {
-    BBCopy= dest;
-    dest = *succ_begin(dest);
-  }
+  BasicBlock *CopyBB = BasicBlock::Create(Context,
+                                          "polly.stmt_" + BB->getNameStr(), F);
+  Builder->CreateBr(CopyBB);
+  Builder->SetInsertPoint(CopyBB);
 
-  BBCopy->setName("polly_stmt." + BB->getName());
-
-  // Loop over all instructions, and copy them over.
-  BasicBlock::iterator it = BBCopy->begin();
   for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
        II != IE; ++II) {
     if (II->isTerminator() || dyn_cast<PHINode>(II))
@@ -126,16 +132,22 @@ succ_iterator copyBB(succ_iterator edge, BasicBlock *BB,
     Instruction *NewInst = II->clone();
     VMap[II] = NewInst;
 
+    // Replace old operands with the new ones.
     for (Instruction::op_iterator UI = NewInst->op_begin(),
          UE = NewInst->op_end(); UI != UE; ++UI)
-      if (VMap.find(*UI) != VMap.end())
-        NewInst->replaceUsesOfWith(*UI, VMap[*UI]);
+      if (VMap.find(*UI) != VMap.end()) {
+        Value *NewOp = VMap[*UI];
 
-    it = BBCopy->getInstList().insert(it, NewInst);
-    ++it;
+        // Insert a cast if the types differ.
+        if ((*UI)->getType()->getScalarSizeInBits()
+            < VMap[*UI]->getType()->getScalarSizeInBits())
+          NewOp = Builder->CreateTruncOrBitCast(NewOp, (*UI)->getType());
+
+        NewInst->replaceUsesOfWith(*UI, NewOp);
+      }
+
+    Builder->Insert(NewInst);
   }
-
-  return succ_begin(BBCopy);
 }
 
 class CPCodeGenerationActions : public CPActions {
@@ -170,7 +182,7 @@ class CPCodeGenerationActions : public CPActions {
         ctx->assignmentCount = 0;
 	break;
       case DFS_OUT:
-        ctx->edge = copyBB(ctx->edge, BB, ctx->ValueMap, ctx->P);
+        copyBB(ctx->B, BB, ctx->ValueMap);
         ctx->BB = 0;
 	break;
     }
@@ -189,23 +201,27 @@ class CPCodeGenerationActions : public CPActions {
     switch(ctx->dir) {
       case DFS_IN: {
 	APInt stride = APInt_from_MPZ(f->stride);
-        Value *IV;
+        PHINode *IV;
+        Value *NV;
+        BasicBlock *AB;
 	eval(f->LB, ctx);
         //Value *LB = ctx->exprValue;
 	eval(f->UB, ctx);
         Value *UB = ctx->exprValue;
-        ctx->edge = createLoop(ctx->edge, UB, ctx->P,
-                                  stride, &IV);
-        ctx->edges.push_back(succ_begin(ctx->edge.getSource()));
-        CharMapT *M = &ctx->CharMap;
-        (*M)[f->iterator] = IV;
+        createLoop(ctx->B, UB, stride, &IV, &AB, &NV);
+        (ctx->CharMap)[f->iterator] = IV;
+        ctx->NV.push_back(NV);
+        ctx->ab.push_back(AB);
         ctx->loop_ivs.push_back(IV);
 	break;
       }
       case DFS_OUT:
-        ctx->edge = ctx->edges.back();
-        ctx->edges.pop_back();
+        ctx->B->CreateBr(*pred_begin(ctx->ab.back()));
+        ctx->loop_ivs.back()->addIncoming(ctx->NV.back(),
+                                          ctx->B->GetInsertBlock());
+        ctx->B->SetInsertPoint(ctx->ab.back());
         ctx->loop_ivs.pop_back();
+        ctx->ab.pop_back();
 	break;
     }
   }
@@ -249,7 +265,6 @@ class CPCodeGenerationActions : public CPActions {
         ctx->exprValue = I->second;
       else
         llvm_unreachable("Value not found");
-
     }
   }
 
@@ -257,7 +272,7 @@ class CPCodeGenerationActions : public CPActions {
     APInt a = APInt_from_MPZ(e->val);
     if (ctx->dir == DFS_IN) {
       a.zext(64);
-      Value *ConstOne = ConstantInt::get((ctx->edge)->getContext(), a);
+      Value *ConstOne = ConstantInt::get(ctx->B->getContext(), a);
       ctx->exprValue = ConstOne;
     }
   }
@@ -342,35 +357,6 @@ class ClastCodeGeneration : public RegionPass {
 
   ClastCodeGeneration() : RegionPass(&ID) {}
 
-  succ_iterator insertNewCodeBranch() {
-    Region *region = const_cast<Region*>(&S->getRegion());
-    BasicBlock *SEntry = *succ_begin(region->getEntry());
-    BasicBlock *SExit;
-
-    // Find the merge basic block after the region.
-    for (pred_iterator PI = pred_begin(region->getExit()),
-         PE = pred_end(region->getExit()); PI != PE; ++PI) {
-      if (region->contains(*PI))
-        SExit = *PI;
-    }
-
-    SplitEdge(region->getEntry(), SEntry, this);
-    BasicBlock *branch = *succ_begin(region->getEntry());
-    branch->setName("polly.new_code_branch");
-    TerminatorInst *OldTermInst = branch->getTerminator();
-    BranchInst::Create(*succ_begin(branch), SExit,
-                       ConstantInt::getFalse(branch->getContext()), branch);
-    OldTermInst->eraseFromParent();
-
-    // Return the edge on which the new code will be inserted.
-    for (succ_iterator SI = succ_begin(branch),
-         SE = succ_end(branch); SI != SE; ++SI)
-      if (*SI == SExit)
-        return SI;
-
-    return succ_end(branch);
-  }
-
   void createSeSeEdges(Region *R) {
     BasicBlock *newEntry = createSingleEntryEdge(R, this);
 
@@ -390,15 +376,32 @@ class ClastCodeGeneration : public RegionPass {
       return false;
 
     createSeSeEdges(R);
-    succ_iterator edge = insertNewCodeBranch();
 
     CLooG C = CLooG(S);
 
     CPCodeGenerationActions cpa = CPCodeGenerationActions(dbgs());
     ClastParser cp = ClastParser(cpa);
-    codegenctx ctx (edge, this, S);
 
+    Function *F = R->getEntry()->getParent();
+
+    // Create a basic block in which to start code generation.
+    BasicBlock *PollyBB = BasicBlock::Create(F->getContext(), "pollyBB", F);
+    IRBuilder<> Builder(PollyBB);
+
+    codegenctx ctx (S, &Builder);
     cp.parse(C.getClast(), &ctx);
+    Builder.CreateBr(R->getExit());
+
+    // Update old PHI nodes to pass LLVM verification.
+    for (BasicBlock::iterator SI = succ_begin(R->getEntry())->begin(),
+         SE = succ_begin(R->getEntry())->end(); SI != SE; ++SI)
+      if (PHINode::classof(&(*SI))) {
+        PHINode *PN = static_cast<PHINode *>(&*SI);
+        PN->removeIncomingValue(R->getEntry());
+      }
+
+    // Enable the new polly code.
+    R->getEntry()->getTerminator()->setSuccessor(0, PollyBB);
 
     return false;
   }
