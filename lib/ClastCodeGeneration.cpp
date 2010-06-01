@@ -42,10 +42,13 @@ typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
 
 struct codegenctx : cp_ctx {
+  //=== Code generation global state -------//
+
+  // The open merge basic blocks of Guards/Conditions.
+  std::vector<BasicBlock*> GuardMergeBBs;
+
   std::vector<BasicBlock*> ab;
   ValueMapT ValueMap;
-  codegenctx(SCoP *scop, IRBuilder<> *builder):
-   S(scop), B(builder) {}
   std::vector<PHINode*> loop_ivs;
   std::vector<Value*> NV;
   Value *exprValue;
@@ -55,6 +58,8 @@ struct codegenctx : cp_ctx {
   BasicBlock *BB;
   unsigned assignmentCount;
   IRBuilder<> *B;
+  codegenctx(SCoP *scop, IRBuilder<> *builder):
+   S(scop), B(builder) {}
 };
 
 // Create a new loop.
@@ -228,15 +233,55 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   void print(struct clast_equation *eq, codegenctx *ctx) {
-    llvm_unreachable("Clast equation not yet supported");
+    eval(eq->LHS, ctx);
+    Value *LHS = ctx->exprValue;
+    eval(eq->RHS, ctx);
+    Value *RHS = ctx->exprValue;
+    Value *Result;
+    CmpInst::Predicate P;
+
+    if (eq->sign == 0)
+      P = ICmpInst::ICMP_EQ;
+    else if (eq->sign > 0)
+      P = ICmpInst::ICMP_SGE;
+    else
+      P = ICmpInst::ICMP_SLE;
+
+    Result = ctx->B->CreateICmp(P, LHS, RHS);
+
+    ctx->exprValue = Result;
   }
 
   void print(struct clast_guard *g, codegenctx *ctx) {
-    //llvm_unreachable("Clast guards not yet supported");
+    IRBuilder<> *Builder = ctx->B;
+
     switch(ctx->dir) {
       case DFS_IN:
-	break;
+        {
+          Function *F = Builder->GetInsertBlock()->getParent();
+          LLVMContext &Context = F->getContext();
+          BasicBlock *ThenBB = BasicBlock::Create(Context, "polly.then", F);
+          BasicBlock *MergeBB = BasicBlock::Create(Context, "polly.merge", F);
+
+          print(&(g->eq[0]), ctx);
+          Value *Predicate = ctx->exprValue;
+
+          for (int i = 1; i < g->n; ++i) {
+            Value *TmpPredicate;
+            print(&(g->eq[i]), ctx);
+            TmpPredicate = ctx->exprValue;
+            Predicate = Builder->CreateAnd(Predicate, TmpPredicate);
+          }
+
+          Builder->CreateCondBr(Predicate, ThenBB, MergeBB);
+          Builder->SetInsertPoint(ThenBB);
+          ctx->GuardMergeBBs.push_back(MergeBB);
+          break;
+        }
       case DFS_OUT:
+        Builder->CreateBr(ctx->GuardMergeBBs.back());
+        Builder->SetInsertPoint(ctx->GuardMergeBBs.back());
+        ctx->GuardMergeBBs.pop_back();
 	break;
     }
   }
@@ -279,10 +324,39 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   void print(clast_binary *e, codegenctx *ctx) {
-    llvm_unreachable("Binary expressions not yet supported");
     switch(ctx->dir) {
-      case DFS_IN:
+    case DFS_IN:
+      {
+        eval(e->LHS, ctx);
+        Value *LHS = ctx->exprValue;
+
+        APInt RHS_AP = APInt_from_MPZ(e->RHS);
+        RHS_AP.zext(64);
+        Value *RHS = ConstantInt::get(ctx->B->getContext(), RHS_AP);
+
+        Value *Result;
+
+        switch (e->type) {
+        case clast_bin_mod:
+          Result = ctx->B->CreateURem(LHS, RHS);
+          llvm_unreachable("mod binary expression not supported");
+          break;
+        case clast_bin_fdiv:
+          llvm_unreachable("fdiv binary expression not supported");
+          break;
+        case clast_bin_cdiv:
+          llvm_unreachable("cdiv binary expression not supported");
+          break;
+        case clast_bin_div:
+          llvm_unreachable("div binary expression not supported");
+          break;
+        default:
+          llvm_unreachable("Unknown binary expression type");
+        };
+
+        ctx->exprValue = Result;
         break;
+      }
       case DFS_OUT:
 	break;
     }
