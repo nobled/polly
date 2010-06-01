@@ -249,6 +249,17 @@ class SCoP {
   /// and parameters used in this region.
   explicit SCoP(TempSCoP &TempSCoP, LoopInfo &LI, ScalarEvolution &SE);
 
+  /// @brief Check if a basic block is trivial.
+  ///
+  /// A trivial basic block does not contain any useful calculation. Therefore,
+  /// it does not need to be represented as a polyhedral statement.
+  ///
+  /// @param BB The basic block to check
+  /// @param tempSCoP TempSCoP returning further information regarding the SCoP.
+  ///
+  /// @return True if the basic block is trivial, otherwise false.
+  static bool isTrivialBB(BasicBlock *BB, TempSCoP &tempSCoP);
+
   /// Build the SCoP and Statement with precalculate scop information.
   void buildSCoP(TempSCoP &TempSCoP, const Region &CurRegion,
                   // Loops in SCoP containing CurRegion

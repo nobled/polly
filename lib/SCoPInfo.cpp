@@ -356,6 +356,13 @@ void SCoP::print(raw_ostream &OS) const {
 
 void SCoP::dump() const { print(dbgs()); }
 
+bool SCoP::isTrivialBB(BasicBlock *BB, TempSCoP &tempSCoP) {
+  if (tempSCoP.getAccessFunctions(BB))
+    return false;
+
+  return true;
+}
+
 void SCoP::buildSCoP(TempSCoP &tempSCoP,
                       const Region &CurRegion,
                       SmallVectorImpl<Loop*> &NestLoops,
@@ -371,14 +378,20 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
   assert(Scatter.size() > loopDepth && "Scatter not big enough!");
 
   for (Region::const_element_iterator I = CurRegion.element_begin(),
-      E = CurRegion.element_end(); I != E; ++I) {
+      E = CurRegion.element_end(); I != E; ++I)
     if (I->isSubRegion())
       buildSCoP(tempSCoP, *(I->getNodeAs<Region>()), NestLoops, Scatter,
                 LI, SE);
     else {
+      BasicBlock *BB = I->getNodeAs<BasicBlock>();
+
+      if (isTrivialBB(BB, tempSCoP))
+        continue;
+
       // Build the statement
-      SCoPStmt *stmt = new SCoPStmt(*this, tempSCoP,
-        *(I->getNodeAs<BasicBlock>()), NestLoops, Scatter, SE);
+      SCoPStmt *stmt = new SCoPStmt(*this, tempSCoP, *BB, NestLoops, Scatter,
+                                    SE);
+
       // Add the new statement to statements list.
       Stmts.push_back(stmt);
 
@@ -386,7 +399,6 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
       // we are using a depth iterator and the program is linear
       ++Scatter[loopDepth];
     }
-  }
 
   if (L) {
     // Clear the scatter function when leaving the loop.
