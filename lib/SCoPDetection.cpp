@@ -440,7 +440,7 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
 //===----------------------------------------------------------------------===//
 // SCoPDetection Implement
 
-bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &R) {
+bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &R) const {
   TerminatorInst *TI = BB.getTerminator();
 
   unsigned int numSucc = TI->getNumSuccessors();
@@ -515,8 +515,8 @@ bool SCoPDetection::isValidCallInst(CallInst &CI) {
   return false;
 }
 
-bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
-                                        Region &R, ParamSetType &Params) {
+bool SCoPDetection::isValidMemoryAccess(Instruction &Inst, Region &R,
+                                        ParamSetType &Params) const {
   SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(Inst);
 
   if (!SCEVAffFunc::buildMemoryAccess(MemAcc, R, Params, 0, *LI, *SE)) {
@@ -563,7 +563,7 @@ void SCoPDetection::extractAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
 }
 
 bool SCoPDetection::isValidInstruction(Instruction &Inst, Region &R,
-                                       ParamSetType &Params) {
+                                       ParamSetType &Params) const {
   // We only check the call instruction but not invoke instruction.
   if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
     if (isValidCallInst(*CI))
@@ -593,8 +593,8 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst, Region &R,
   return false;
 }
 
-bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
-                                      Region &R, ParamSetType &Params) {
+bool SCoPDetection::isValidBasicBlock(BasicBlock &BB, Region &R,
+                                      ParamSetType &Params) const {
 
   // Check all instructions, except the terminator instruction.
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I)
@@ -604,7 +604,7 @@ bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
   return true;
 }
 
-bool SCoPDetection::hasValidLoopBounds(Region &R, ParamSetType &Params) {
+bool SCoPDetection::hasValidLoopBounds(Region &R, ParamSetType &Params) const {
   // Find the parameters used in loop bounds
   if (Loop *L = castToLoop(R, *LI)) {
 
@@ -714,7 +714,7 @@ TempSCoP *SCoPDetection::buildTempSCoP(Region &R) {
 }
 
 bool SCoPDetection::tryMergeParams(Region &R, ParamSetType &Params,
-                                   ParamSetType &SubParams) {
+                                   ParamSetType &SubParams) const {
   Loop *L = castToLoop(R, *LI);
   // Merge the parameters.
   for (ParamSetType::iterator I = SubParams.begin(),
@@ -778,8 +778,8 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) {
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
       // Check CFG and all non terminator inst
       if (!isValidCFG(BB, R) || !isValidBasicBlock(BB, R, Params)){
-          DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
-          isValid = false;
+        DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
+        isValid = false;
       }
     }
   }
@@ -787,18 +787,15 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) {
   return isValid && hasValidLoopBounds(R, Params);
 }
 
-void SCoPDetection::killAllTempValFor(Region &R) {
+void SCoPDetection::killAllTempValFor(const Region &R) {
   // Do not kill tempval in not valid region
-  if (!RegionToSCoPs.count(&R))
-    return;
+  assert(RegionToSCoPs.count(&R)
+    && "killAllTempValFor only work on valid region");
 
-  for (Region::element_iterator I = R.element_begin(), E = R.element_end();
-      I != E; ++I)
-    if (I->isSubRegion())
-      killAllTempValFor(*I->getNodeAs<Region>());
-    else
+  for (Region::const_element_iterator I = R.element_begin(),
+      E = R.element_end();I != E; ++I)
+    if (!I->isSubRegion())
       killAllTempValFor(*I->getNodeAs<BasicBlock>());
-
 
   if (Loop *L = castToLoop(R, *LI))
     killAllTempValFor(*L);
@@ -858,7 +855,9 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
     rememberValidRegion(TopRegion);
 
   // Kill all temporary value that can be rewrite by SCEVExpander.
-  killAllTempValFor(*TopRegion);
+  for (TempSCoPMapType::iterator I = RegionToSCoPs.begin(),
+      E = RegionToSCoPs.end(); I != E; ++I)
+    killAllTempValFor(*I->first);
 
   return false;
 }

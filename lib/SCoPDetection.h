@@ -303,24 +303,28 @@ class SCoPDetection : public FunctionPass {
   static bool isValidCallInst(CallInst &CI);
 
   // Check is a memory access is valid.
-  bool isValidMemoryAccess(Instruction &Inst, Region &R, ParamSetType &Params);
+  bool isValidMemoryAccess(Instruction &Inst, Region &R,
+                           ParamSetType &Params) const;
 
   // Check if all parameters in Params valid in Region R.
-  bool tryMergeParams(Region &R, ParamSetType &Params, ParamSetType &SubParams);
+  bool tryMergeParams(Region &R, ParamSetType &Params,
+                      ParamSetType &SubParams) const;
 
   // Check if the Instruction is a valid part of SCoP, return true and extract
   // the corresponding information, return false otherwise.
-  bool isValidInstruction(Instruction &I, Region &R, ParamSetType &Params);
+  bool isValidInstruction(Instruction &I, Region &R,
+                          ParamSetType &Params) const;
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
-  bool isValidBasicBlock(BasicBlock &BB, Region &R, ParamSetType &Params);
+  bool isValidBasicBlock(BasicBlock &BB, Region &R,
+                         ParamSetType &Params) const;
 
   // Check if the CFG is valid for SCoP.
-  bool isValidCFG(BasicBlock &BB, Region &R);
+  bool isValidCFG(BasicBlock &BB, Region &R) const;
 
   // Check if the loop bounds in SCoP is valid.
-  bool hasValidLoopBounds(Region &R, ParamSetType &Params);
+  bool hasValidLoopBounds(Region &R, ParamSetType &Params) const;
 
 
   void rememberValidRegion(Region *R) {
@@ -346,7 +350,7 @@ class SCoPDetection : public FunctionPass {
   void captureScalarDataRef(Instruction &I, AccFuncSetType &ScalarAccs);
 
   // Kill all temporary value that can be rewrite by SCEV Expander.
-  void killAllTempValFor(Region &R);
+  void killAllTempValFor(const Region &R);
 
   void killAllTempValFor(Loop &L);
 
