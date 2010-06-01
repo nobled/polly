@@ -289,7 +289,12 @@ class SCoPDetection : public FunctionPass {
   // Clear the context.
   void clear();
 
-  void detectValidRegions(Region &R);
+  // Run on region to:
+  // 1. check if the region is a valid part of SCoP,
+  // 2. remember valid regions
+  // 3. kill all temporary instructions that can be rewrite
+  //    in the codegen phase.
+  void runOnRegion(Region &R);
 
   /////////////////////////////////////////////////////////////////////////////
   // We need to check if valid parameters from child SCoP also valid in

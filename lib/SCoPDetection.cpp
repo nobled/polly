@@ -745,11 +745,11 @@ bool SCoPDetection::tryMergeParams(Region &R, ParamSetType &Params,
   return true;
 }
 
-void SCoPDetection::detectValidRegions(Region &R) {
+void SCoPDetection::runOnRegion(Region &R) {
   // FIXME: We visit the same region multiple times.
   for (Region::iterator I = R.begin(), E = R.end(); I != E; ++I)
     // TODO: Analyse the failure and hide the region.
-    detectValidRegions(**I);
+    runOnRegion(**I);
 
   // Check current region.
   if (!isValidRegion(R))
@@ -865,8 +865,7 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   Region *TopRegion = RI->getTopLevelRegion();
 
   ParamSetType Params;
-  // Check if regions in functions is valid.
-  detectValidRegions(*TopRegion);
+  runOnRegion(*TopRegion);
   return false;
 }
 
