@@ -774,32 +774,34 @@ bool SCoPDetection::detectValidRegions(Region &R, ParamSetType &Params) {
 }
 
 bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) const {
-  bool isValid = true;
-
   // Check if getScopeLoop work on the current loop nest and region tree,
   // if it not work, we could not handle any further
   if (getScopeLoop(R, *LI) != LI->getLoopFor(R.getEntry())) {
     STATSCOP(LoopNest);
-    isValid = false;
+    return false;
   }
 
   // Visit all sub region node.
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
-      I != E; ++I){
-    // Do not check the BBs that not immediately contain by this region.
-    // Because we may hide some invalid regions or bbs as black boxes.
-    // We check the basic blocks only the region is valid.
-    if (isValid && (!I->isSubRegion())) {
-      BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-      // Check CFG and all non terminator inst
-      if (!isValidCFG(BB, R) || !isValidBasicBlock(BB, R, Params)){
-        DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
-        isValid = false;
-      }
+      I != E; ++I) {
+
+    // These will be checked separately to be able to hide some invalid regions
+    // or bbs as black boxes.
+    if (I->isSubRegion())
+      continue;
+
+    BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
+
+    if (!(isValidCFG(BB, R) && isValidBasicBlock(BB, R, Params))) {
+      DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
+      return false;
     }
   }
 
-  return isValid && hasValidLoopBounds(R, Params);
+  if (!hasValidLoopBounds(R, Params))
+    return false;
+
+  return true;
 }
 
 void SCoPDetection::killAllTempValFor(const Region &R) {
