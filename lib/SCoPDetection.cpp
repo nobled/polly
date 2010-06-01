@@ -745,29 +745,20 @@ bool SCoPDetection::tryMergeParams(Region &R, ParamSetType &Params,
   return true;
 }
 
-bool SCoPDetection::detectValidRegions(Region &R) {
-  bool isAllChildValid = true;
-
-  // If all child of this region is valid?
-  // FIXME: We visit the same region multiple times, try to avoid
-  //        this.
+void SCoPDetection::detectValidRegions(Region &R) {
+  // FIXME: We visit the same region multiple times.
   for (Region::iterator I = R.begin(), E = R.end(); I != E; ++I)
-    // TODO: Analysis the failure reason and hide the region
-    // if possible
-    isAllChildValid &= detectValidRegions(**I);
-
-  if (!isAllChildValid)
-    return false;
+    // TODO: Analyse the failure and hide the region.
+    detectValidRegions(**I);
 
   // Check current region.
   if (!isValidRegion(R))
-    return false;
+    return;
 
-  rememberValidRegion(&R);
+  RegionToSCoPs.insert(std::make_pair(&R, (TempSCoP*)0));
 
-  // Kill all temporary value that can be rewrite by SCEVExpander.
+  // Kill all temporary values that can be rewrite by SCEVExpander.
   killAllTempValFor(R);
-  return true;
 }
 
 bool SCoPDetection::isValidRegion(Region &R) const {
@@ -783,31 +774,27 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) const {
     return false;
   }
 
-  bool isValid = true;
   ParamSetType SubParams;
 
   // Visit all sub region node.
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
       I != E; ++I) {
-    // These will be checked separately to be able to hide some invalid regions
-    // or bbs as black boxes.
     if (I->isSubRegion()) {
       Region &subR = *(I->getNodeAs<Region>());
       if (isValidRegion(subR, SubParams)
           && tryMergeParams(R, Params, SubParams))
         continue;
-      isValid = false;
-    } else if (isValid) {
+      return false;
+    } else {
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-      if (!(isValidCFG(BB, R) && isValidBasicBlock(BB, R, Params))) {
-        DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
-        isValid = false;
-      }
+
+      if (isValidCFG(BB, R) && isValidBasicBlock(BB, R, Params))
+        continue;
+
+      DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
+      return false;
     }
   }
-
-  if (!isValid)
-    return false;
 
   if (!hasValidLoopBounds(R, Params))
     return false;

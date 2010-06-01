@@ -289,7 +289,7 @@ class SCoPDetection : public FunctionPass {
   // Clear the context.
   void clear();
 
-  bool detectValidRegions(Region &R);
+  void detectValidRegions(Region &R);
 
   /////////////////////////////////////////////////////////////////////////////
   // We need to check if valid parameters from child SCoP also valid in
@@ -330,11 +330,6 @@ class SCoPDetection : public FunctionPass {
 
   // Check if the loop bounds in SCoP is valid.
   bool hasValidLoopBounds(Region &R, ParamSetType &Params) const;
-
-
-  void rememberValidRegion(Region *R) {
-    RegionToSCoPs.insert(std::make_pair(R, (TempSCoP*)0));
-  }
 
   /////////////////////////////////////////////////////////////////////////////
   // If the Region not a valid part of a SCoP,
