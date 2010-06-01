@@ -1,11 +1,10 @@
 #define N 20
 #include "limits.h"
+#include <stdio.h>
 volatile  int A[N];
 
-int main () {
+void single_do_loop_int_max_iterations() {
   int i;
-
-  A[0] = 0;
 
   __sync_synchronize();
 
@@ -17,6 +16,16 @@ int main () {
   } while (i < INT_MAX);
 
   __sync_synchronize();
+}
+
+int main () {
+  int i;
+
+  A[0] = 0;
+
+  single_do_loop_int_max_iterations();
+
+  fprintf(stderr, "Output %d\n", A[0]);
 
   if (A[0] == INT_MAX - 1)
     return 0;

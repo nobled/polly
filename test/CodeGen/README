@@ -1,4 +1,0 @@
-The code was produced using this shell commands:
-% for i in `ls *.c`; do echo $i; clang -S -emit-llvm -O0 $i; done
-% for i in `ls *.s`; do echo $i ; opt -mem2reg -indvars $i -S > `echo $i \ 
-  | sed -e 's/\.s/.ll/' `; done
