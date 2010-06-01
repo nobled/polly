@@ -508,7 +508,15 @@ bool SCoPExporter::runOnRegion(Region *R, RGPassManager &RGM) {
     return false;
 
   std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-  std::string Filename = FunctionName + "_-_" + R->getNameStr() + ".scop";
+  std::string ExitName;
+
+  if (R->getExit())
+    ExitName = R->getExit()->getNameStr();
+  else
+    ExitName = "FunctionExit";
+
+  std::string RegionName = R->getEntry()->getNameStr() + "---" + ExitName;
+  std::string Filename = FunctionName + "___" + RegionName + ".scop";
 
   errs() << "Writing SCoP '" << R->getNameStr() << "' in function '"
     << FunctionName << "' to '" << Filename << "'...\n";
