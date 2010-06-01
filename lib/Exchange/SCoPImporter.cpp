@@ -33,6 +33,7 @@ struct SCoPImporter : public RegionPass {
   explicit SCoPImporter() : RegionPass(&ID) {}
 
   virtual bool runOnRegion(Region *R, RGPassManager &RGM);
+  virtual void print(raw_ostream &OS, const Module *) const;
   void getAnalysisUsage(AnalysisUsage &AU) const;
 };
 
@@ -53,7 +54,7 @@ isl_constraint *constraintFromMatrixRow(isl_int *row, isl_dim *dim) {
   unsigned NbIn = isl_dim_size(dim, isl_dim_in);
   unsigned NbParam = isl_dim_size(dim, isl_dim_param);
 
-  if (row[0])
+  if (isl_int_is_zero(row[0]))
     c = isl_equality_alloc(isl_dim_copy(dim));
   else
     c = isl_inequality_alloc(isl_dim_copy(dim));
@@ -149,6 +150,13 @@ bool updateScattering(SCoP *S, openscop_scop_p OSCoP) {
   }
 
   return true;
+}
+
+void SCoPImporter::print(raw_ostream &OS, const Module *) const {
+  if (S)
+    S->print(OS);
+  else
+    OS << "Invalid SCoP!\n";
 }
 
 bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
