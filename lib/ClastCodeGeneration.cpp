@@ -410,6 +410,7 @@ class ClastCodeGeneration : public RegionPass {
       delete(C);
 
     C = new CLooG(S);
+    C->generate();
 
     CPCodeGenerationActions cpa = CPCodeGenerationActions(dbgs());
     ClastParser cp = ClastParser(cpa);

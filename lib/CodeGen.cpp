@@ -52,6 +52,7 @@ public:
     }
     OS << "SCoP: " << S->getRegion().getNameStr() << "\n";
     CLooG C = CLooG(S);
+    C.generate();
     struct clast_stmt *clast = C.getClast();
     OS << "Generated CLAST '" << clast << "'\n";
     C.pprint();

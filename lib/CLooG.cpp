@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/CLooG.h"
+#include "polly/CLooGExporter.h"
 #include "polly/SCoPInfo.h"
 #include "cloog/cloog.h"
 #include "cloog/isl/domain.h"
@@ -21,6 +22,7 @@
 #endif
 
 using namespace llvm;
+using namespace polly;
 
 namespace polly {
 
@@ -29,6 +31,9 @@ CLooG::CLooG(SCoP *Scop) : S(Scop) {
   State = cloog_state_malloc();
   buildCloogOptions();
   buildCloogProgram();
+}
+
+void CLooG::generate() {
   ScatterProgram();
 
   // XXX: Necessary as otherwise cloog would free the blocks twice.
@@ -60,9 +65,9 @@ CLooG::~CLooG() {
 
 /// Print a .cloog input file, that is equivalent to this program.
 // TODO: use raw_ostream as parameter.
-void CLooG::dump() {
-  cloog_program_dump_cloog(stdout, Program);
-  fflush(stdout);
+void CLooG::dump(FILE *F) {
+  cloog_program_dump_cloog(F, Program);
+  fflush(F);
 }
 
 /// Print a source code representation of the program.
@@ -241,3 +246,57 @@ void CLooG::buildCloogProgram() {
   Program->scaldims = buildScaldims(Program);
 }
 }
+
+
+namespace {
+
+struct CLooGExporter : public RegionPass {
+  static char ID;
+  SCoP *S;
+  explicit CLooGExporter() : RegionPass(&ID) {}
+
+  virtual bool runOnRegion(Region *R, RGPassManager &RGM);
+  void getAnalysisUsage(AnalysisUsage &AU) const;
+};
+
+}
+
+char CLooGExporter::ID = 0;
+bool CLooGExporter::runOnRegion(Region *R, RGPassManager &RGM) {
+  S = getAnalysis<SCoPInfo>().getSCoP();
+
+  if (!S)
+    return false;
+
+  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
+  std::string Filename = FunctionName + "_-_" + R->getNameStr() + ".cloog";
+
+  errs() << "Writing SCoP '" << R->getNameStr() << "' in function '"
+    << FunctionName << "' to '" << Filename << "'...\n";
+
+  FILE *F = fopen(Filename.c_str(), "w");
+
+  CLooG C(S);
+  C.dump(F);
+  C.pprint();
+  fclose(F);
+
+  return false;
+}
+
+void CLooGExporter::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.setPreservesAll();
+  AU.addRequired<SCoPInfo>();
+}
+
+static RegisterPass<CLooGExporter> A("polly-export-cloog",
+                                    "Polly - Export the CLooG input file"
+                                    " (Writes a .cloog file for each SCoP)"
+                                    );
+
+namespace polly {
+  llvm::RegionPass *createCLooGExporterPass() {
+    return new CLooGExporter();
+  }
+}
+

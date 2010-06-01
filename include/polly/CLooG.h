@@ -29,16 +29,20 @@ class CLooG {
   CloogState *State;
 
   unsigned StatementNumber;
+  void ScatterProgram();
 public:
   CLooG(SCoP *Scop);
 
-  void ScatterProgram();
+  /// @brief Run CLooG code generation.
+  ///
+  /// Run this before using methods like pprint or getClast.
+  void generate();
 
   ~CLooG();
 
   /// Print a .cloog input file, that is equivalent to this program.
   // TODO: use raw_ostream as parameter.
-  void dump();
+  void dump(FILE *F);
 
   /// Print a source code representation of the program.
   // TODO: use raw_ostream as parameter.
