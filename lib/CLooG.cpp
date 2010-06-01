@@ -92,6 +92,7 @@ struct clast_stmt *CLooG::getClast() {
 void CLooG::buildCloogOptions() {
   Options = cloog_options_malloc(State);
   Options->quiet = 1;
+  Options->strides = 1;
 }
 
 /// Allocate a CloogLoop data structure containing information about stmt.
