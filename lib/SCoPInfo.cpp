@@ -180,7 +180,7 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP, BasicBlock &bb,
   );
   Scattering = buildScattering(ctx, parent.getNumParams(),
                                           Scatter,
-                                          parent.getScatterDim(),
+                                          parent.getMaxLoopDepth() * 2 + 1,
                                           NestLoops.size());
   DEBUG(std::cerr << "\nScattering:\n");
   DEBUG(isl_map_print(Scattering, stderr, 20, ISL_FORMAT_ISL));
@@ -221,8 +221,13 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP, BasicBlock &bb,
 unsigned SCoPStmt::getNumParams() {
   return isl_set_n_param(Domain);
 }
+
 unsigned SCoPStmt::getNumIterators() {
   return isl_set_n_dim(Domain);
+}
+
+unsigned SCoPStmt::getNumScattering() {
+  return isl_map_dim(Scattering, isl_dim_out);
 }
 
 PHINode *SCoPStmt::getIVatLevel(unsigned L) {

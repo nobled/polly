@@ -182,6 +182,8 @@ public:
 
   unsigned getNumParams();
   unsigned getNumIterators();
+  unsigned getNumScattering();
+
   SCoP *getParent() { return &Parent; }
 
   /// @brief Get the induction variable of the loop a given level.
@@ -315,7 +317,15 @@ public:
   /// @brief Get the scattering dimension number of this SCoP.
   ///
   /// @return The scattering dimension number of this SCoP.
-  inline unsigned getScatterDim() const { return 2 * MaxLoopDepth + 1; }
+  inline unsigned getScatterDim() const {
+    unsigned maxScatterDim = 0;
+
+    for (const_iterator SI = begin(), SE = end(); SI != SE; ++SI)
+      maxScatterDim = std::max(maxScatterDim, (*SI)->getNumScattering());
+
+    return maxScatterDim;
+  }
+
 
   /// @brief Get the constraint on parameter of this SCoP.
   ///
