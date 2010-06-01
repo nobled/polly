@@ -81,8 +81,8 @@ void createLoop(IRBuilder<> *Builder, Value *UB, APInt Stride, PHINode **IV,
   Builder->SetInsertPoint(HeaderBB);
 
   // Use the type of UB, because IV will compare to UB.
-  const IntegerType *LoopIVType = UB->getType();
-  assert(LoopIVType->isIntegerTy() && "UB is not integer?");
+  const IntegerType *LoopIVType = dyn_cast<IntegerType>(UB->getType());
+  assert(LoopIVType && "UB is not integer?");
 
   // IV
   PHINode *Variable = Builder->CreatePHI(LoopIVType, "polly.loopiv");
