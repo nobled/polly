@@ -745,24 +745,22 @@ bool SCoPDetection::tryMergeParams(Region &R, ParamSetType &Params,
   return true;
 }
 
-bool SCoPDetection::detectValidRegions(Region &R, ParamSetType &Params) {
-  // Parameters from sub regions
-  ParamSetType SubParams;
-
+bool SCoPDetection::detectValidRegions(Region &R) {
   bool isAllChildValid = true;
 
   // If all child of this region is valid?
+  // FIXME: We visit the same region multiple times, try to avoid
+  //        this.
   for (Region::iterator I = R.begin(), E = R.end(); I != E; ++I)
-    isAllChildValid &= detectValidRegions(**I, SubParams);
+    // TODO: Analysis the failure reason and hide the region
+    // if possible
+    isAllChildValid &= detectValidRegions(**I);
 
-  // The region will not be valid if any of its child not valid
-  // TODO: We can hide some invalid region
-  // And check if parameters from sub region is valid in this region.
-  if (!isAllChildValid || !tryMergeParams(R, Params, SubParams))
+  if (!isAllChildValid)
     return false;
 
   // Check current region.
-  if (!isValidRegion(R, Params))
+  if (!isValidRegion(R))
     return false;
 
   rememberValidRegion(&R);
@@ -770,7 +768,11 @@ bool SCoPDetection::detectValidRegions(Region &R, ParamSetType &Params) {
   // Kill all temporary value that can be rewrite by SCEVExpander.
   killAllTempValFor(R);
   return true;
+}
 
+bool SCoPDetection::isValidRegion(Region &R) const {
+  ParamSetType Params;
+  return isValidRegion(R, Params);
 }
 
 bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) const {
@@ -781,22 +783,31 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) const {
     return false;
   }
 
+  bool isValid = true;
+  ParamSetType SubParams;
+
   // Visit all sub region node.
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
       I != E; ++I) {
-
     // These will be checked separately to be able to hide some invalid regions
     // or bbs as black boxes.
-    if (I->isSubRegion())
-      continue;
-
-    BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-
-    if (!(isValidCFG(BB, R) && isValidBasicBlock(BB, R, Params))) {
-      DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
-      return false;
+    if (I->isSubRegion()) {
+      Region &subR = *(I->getNodeAs<Region>());
+      if (isValidRegion(subR, SubParams)
+          && tryMergeParams(R, Params, SubParams))
+        continue;
+      isValid = false;
+    } else if (isValid) {
+      BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
+      if (!(isValidCFG(BB, R) && isValidBasicBlock(BB, R, Params))) {
+        DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
+        isValid = false;
+      }
     }
   }
+
+  if (!isValid)
+    return false;
 
   if (!hasValidLoopBounds(R, Params))
     return false;
@@ -868,7 +879,7 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
 
   ParamSetType Params;
   // Check if regions in functions is valid.
-  detectValidRegions(*TopRegion, Params);
+  detectValidRegions(*TopRegion);
   return false;
 }
 

@@ -220,7 +220,8 @@ public:
   // @return The bounds of the loop L in { Lower bound, Upper bound } form.
   const AffBoundType *getLoopBound(const Loop *L) const {
     BoundMapType::const_iterator at = LoopBounds.find(L);
-    return at != LoopBounds.end()? &(at->second) : 0;
+    assert(at != LoopBounds.end() && "Only valid loop is allow!");
+    return &(at->second);
   }
 
   const AccFuncSetType *getAccessFunctions(const BasicBlock* BB) const {
@@ -288,7 +289,7 @@ class SCoPDetection : public FunctionPass {
   // Clear the context.
   void clear();
 
-  bool detectValidRegions(Region &R, ParamSetType &Params);
+  bool detectValidRegions(Region &R);
 
   /////////////////////////////////////////////////////////////////////////////
   // We need to check if valid parameters from child SCoP also valid in
@@ -300,6 +301,8 @@ class SCoPDetection : public FunctionPass {
   //
   // NOTE: All this function will increase the statistic counters.
   bool isValidRegion(Region &R, ParamSetType &Params) const;
+
+  bool isValidRegion(Region &R) const;
 
   // Check if the instruction is a valid function call.
   static bool isValidCallInst(CallInst &CI);
