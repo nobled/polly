@@ -64,8 +64,8 @@ struct codegenctx : cp_ctx {
 // @param UB      The upper bound of the loop iv.
 // @param Stride  The number by which the loop iv is incremented after every
 //                iteration.
-void createLoop(IRBuilder<> *Builder, Value *UB, APInt Stride, PHINode **IV,
-                BasicBlock** AB, Value** NV) {
+void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
+                PHINode **IV, BasicBlock** AB, Value** NV) {
   Function *F = Builder->GetInsertBlock()->getParent();
   LLVMContext &Context = F->getContext();
 
@@ -86,7 +86,7 @@ void createLoop(IRBuilder<> *Builder, Value *UB, APInt Stride, PHINode **IV,
 
   // IV
   PHINode *Variable = Builder->CreatePHI(LoopIVType, "polly.loopiv");
-  Variable->addIncoming(ConstantInt::get(LoopIVType, 0), PreheaderBB);
+  Variable->addIncoming(LB, PreheaderBB);
 
   // IV increment.
   Stride.zext(64);
@@ -95,7 +95,7 @@ void createLoop(IRBuilder<> *Builder, Value *UB, APInt Stride, PHINode **IV,
                                       "polly.next_loopiv");
 
   // Exit condition.
-  Value *CMP = Builder->CreateICmpSGE(UB, Variable);
+  Value *CMP = Builder->CreateICmpSLE(Variable, UB);
   Builder->CreateCondBr(CMP, BodyBB, AfterBB);
 
   //Variable->addIncoming(NextVar, BodyBB);
@@ -206,10 +206,10 @@ class CPCodeGenerationActions : public CPActions {
         Value *NV;
         BasicBlock *AB;
 	eval(f->LB, ctx);
-        //Value *LB = ctx->exprValue;
+        Value *LB = ctx->exprValue;
 	eval(f->UB, ctx);
         Value *UB = ctx->exprValue;
-        createLoop(ctx->B, UB, stride, &IV, &AB, &NV);
+        createLoop(ctx->B, LB, UB, stride, &IV, &AB, &NV);
         (ctx->CharMap)[f->iterator] = IV;
         ctx->NV.push_back(NV);
         ctx->ab.push_back(AB);
@@ -232,7 +232,7 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   void print(struct clast_guard *g, codegenctx *ctx) {
-    llvm_unreachable("Clast guards not yet supported");
+    //llvm_unreachable("Clast guards not yet supported");
     switch(ctx->dir) {
       case DFS_IN:
 	break;
@@ -288,19 +288,42 @@ class CPCodeGenerationActions : public CPActions {
     }
   }
 
+  Value *redmin(Value *old, Value *exprValue, IRBuilder<> *Builder) {
+    Value *cmp = Builder->CreateICmpSLT(old, exprValue);
+    return Builder->CreateSelect(cmp, old, exprValue);
+  }
+
+  Value *redmax(Value *old, Value *exprValue, IRBuilder<> *Builder) {
+    Value *cmp = Builder->CreateICmpSGT(old, exprValue);
+    return Builder->CreateSelect(cmp, old, exprValue);
+  }
+
+  Value *redsum(Value *old, Value *exprValue, IRBuilder<> *Builder) {
+    return Builder->CreateAdd(old, exprValue);
+  }
+
   void print(clast_reduction *r, codegenctx *ctx) {
     if (ctx->dir == DFS_IN) {
       assert((   r->type == clast_red_min
               || r->type == clast_red_max
               || r->type == clast_red_sum)
              && "Reduction type not supported");
-      assert(r->n == 1
-             && "Reductions with more than one element not supported");
       eval(r->elts[0], ctx);
 
+      Value *old = ctx->exprValue;
+
       // TODO: Support reductions with more than one element.
-      for (int i=1; i < r->n; ++i)
+      for (int i=1; i < r->n; ++i) {
         eval(r->elts[i], ctx);
+        if (r->type == clast_red_min)
+          old = redmin(old, ctx->exprValue, ctx->B);
+        else if (r->type == clast_red_max)
+          old = redmax(old, ctx->exprValue, ctx->B);
+        else if (r->type == clast_red_sum)
+          old = redsum(old, ctx->exprValue, ctx->B);
+      }
+
+      ctx->exprValue = old;
     }
   }
 
@@ -352,11 +375,14 @@ class ClastCodeGeneration : public RegionPass {
   Region *region;
   SCoP *S;
   DominatorTree *DT;
+  CLooG *C;
 
   public:
   static char ID;
 
-  ClastCodeGeneration() : RegionPass(&ID) {}
+  ClastCodeGeneration() : RegionPass(&ID) {
+    C = 0;
+  }
 
   void createSeSeEdges(Region *R) {
     BasicBlock *newEntry = createSingleEntryEdge(R, this);
@@ -373,12 +399,17 @@ class ClastCodeGeneration : public RegionPass {
     S = getAnalysis<SCoPInfo>().getSCoP();
     DT = &getAnalysis<DominatorTree>();
 
-    if (!S)
+    if (!S) {
+      C = 0;
       return false;
+    }
 
     createSeSeEdges(R);
 
-    CLooG C = CLooG(S);
+    if (C)
+      delete(C);
+
+    C = new CLooG(S);
 
     CPCodeGenerationActions cpa = CPCodeGenerationActions(dbgs());
     ClastParser cp = ClastParser(cpa);
@@ -390,7 +421,7 @@ class ClastCodeGeneration : public RegionPass {
     IRBuilder<> Builder(PollyBB);
 
     codegenctx ctx (S, &Builder);
-    cp.parse(C.getClast(), &ctx);
+    cp.parse(C->getClast(), &ctx);
     Builder.CreateBr(R->getExit());
 
     // Update old PHI nodes to pass LLVM verification.
@@ -408,12 +439,17 @@ class ClastCodeGeneration : public RegionPass {
   }
 
   void print(raw_ostream &OS, const Module *) const {
+    if (C)
+      C->pprint();
   }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<SCoPInfo>();
     AU.addRequired<DominatorTree>();
     AU.addPreserved<DominatorTree>();
+    AU.addPreserved<SCoPInfo>();
+    AU.addPreserved<RegionInfo>();
+    AU.setPreservesAll();
   }
 };
 }
