@@ -745,7 +745,35 @@ bool SCoPDetection::tryMergeParams(Region &R, ParamSetType &Params,
   return true;
 }
 
-bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) {
+bool SCoPDetection::detectValidRegions(Region &R, ParamSetType &Params) {
+  // Parameters from sub regions
+  ParamSetType SubParams;
+
+  bool isAllChildValid = true;
+
+  // If all child of this region is valid?
+  for (Region::iterator I = R.begin(), E = R.end(); I != E; ++I)
+    isAllChildValid &= detectValidRegions(**I, SubParams);
+
+  // The region will not be valid if any of its child not valid
+  // TODO: We can hide some invalid region
+  // And check if parameters from sub region is valid in this region.
+  if (!isAllChildValid || !tryMergeParams(R, Params, SubParams))
+    return false;
+
+  // Check current region.
+  if (!isValidRegion(R, Params))
+    return false;
+
+  rememberValidRegion(&R);
+
+  // Kill all temporary value that can be rewrite by SCEVExpander.
+  killAllTempValFor(R);
+  return true;
+
+}
+
+bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) const {
   bool isValid = true;
 
   // Check if getScopeLoop work on the current loop nest and region tree,
@@ -754,27 +782,14 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) {
     STATSCOP(LoopNest);
     isValid = false;
   }
-  ParamSetType SubParams;
+
   // Visit all sub region node.
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
       I != E; ++I){
-    if (I->isSubRegion()) {
-      SubParams.clear();
-      Region *SubR = I->getNodeAs<Region>();
-      // Extract information of sub scop and merge them.
-      if (isValidRegion(*SubR, Params) ) {
-        // We found a valid region.
-        rememberValidRegion(SubR);
-        // Check if parameters from inner regions is also ok, and add it to the
-        // parameters list of the outer region.
-        if (tryMergeParams(R, Params, SubParams))
-          continue;
-        // Merge fail only because bad parameter occur in expression
-        STATSCOP(AffFunc);
-      }
-      isValid = false;
-    } else if (isValid) {
-      // We check the basic blocks only the region is valid.
+    // Do not check the BBs that not immediately contain by this region.
+    // Because we may hide some invalid regions or bbs as black boxes.
+    // We check the basic blocks only the region is valid.
+    if (isValid && (!I->isSubRegion())) {
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
       // Check CFG and all non terminator inst
       if (!isValidCFG(BB, R) || !isValidBasicBlock(BB, R, Params)){
@@ -851,14 +866,7 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
 
   ParamSetType Params;
   // Check if regions in functions is valid.
-  if (isValidRegion(*TopRegion, Params))
-    rememberValidRegion(TopRegion);
-
-  // Kill all temporary value that can be rewrite by SCEVExpander.
-  for (TempSCoPMapType::iterator I = RegionToSCoPs.begin(),
-      E = RegionToSCoPs.end(); I != E; ++I)
-    killAllTempValFor(*I->first);
-
+  detectValidRegions(*TopRegion, Params);
   return false;
 }
 

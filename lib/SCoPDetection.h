@@ -288,6 +288,8 @@ class SCoPDetection : public FunctionPass {
   // Clear the context.
   void clear();
 
+  bool detectValidRegions(Region &R, ParamSetType &Params);
+
   /////////////////////////////////////////////////////////////////////////////
   // We need to check if valid parameters from child SCoP also valid in
   // parent SCoP. So all the isValidXXX functions will extract parameters
@@ -297,7 +299,7 @@ class SCoPDetection : public FunctionPass {
   // false otherwise.
   //
   // NOTE: All this function will increase the statistic counters.
-  bool isValidRegion(Region &R, ParamSetType &Params);
+  bool isValidRegion(Region &R, ParamSetType &Params) const;
 
   // Check if the instruction is a valid function call.
   static bool isValidCallInst(CallInst &CI);
