@@ -460,9 +460,6 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &R) {
   // And we only support instruction as condition now
   if (!Cond) return false;
 
-  // Hide the Instructions for computing conditions.
-  killAllTempValFor(*Cond);
-
   if (Loop *L = getScopeLoop(R, *LI)) {
     // Only allow branches that are loop exits. This stops anything
     // except loops that have just one exit and are detected by our LoopInfo
@@ -530,14 +527,6 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
   }
   // FIXME: Why expression like int *j = **k; where k has int ** type can pass
   //        affine function check?
-
-  DEBUG(dbgs() << "Reduce ptr of " << Inst << "\n");
-  // Try to remove the temporary value for address computation
-  // Do this in the Checking phase, so we will get the final result
-  // when we try to get SCoP by "getTempSCoPFor";
-  if (Instruction *GEP = dyn_cast<Instruction>(MemAcc.getPointer()))
-    killAllTempValFor(*GEP);
-
   return true;
 }
 
@@ -633,10 +622,6 @@ bool SCoPDetection::hasValidLoopBounds(Region &R, ParamSetType &Params) {
       STATSCOP(IndVar);
       return false;
     }
-
-    // Take away the Induction Variable and its increment
-    killAllTempValFor(*IndVar);
-    killAllTempValFor(*IndVarInc);
 
     const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
 
@@ -779,7 +764,7 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) {
       // Extract information of sub scop and merge them.
       if (isValidRegion(*SubR, Params) ) {
         // We found a valid region.
-        RegionToSCoPs.insert(std::make_pair(SubR, (TempSCoP*)0));
+        rememberValidRegion(SubR);
         // Check if parameters from inner regions is also ok, and add it to the
         // parameters list of the outer region.
         if (tryMergeParams(R, Params, SubParams))
@@ -792,8 +777,7 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) {
       // We check the basic blocks only the region is valid.
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
       // Check CFG and all non terminator inst
-      if (!isValidCFG(BB, R)
-          || !isValidBasicBlock(BB, R, Params)){
+      if (!isValidCFG(BB, R) || !isValidBasicBlock(BB, R, Params)){
           DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
           isValid = false;
       }
@@ -801,6 +785,55 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) {
   }
 
   return isValid && hasValidLoopBounds(R, Params);
+}
+
+void SCoPDetection::killAllTempValFor(Region &R) {
+  // Do not kill tempval in not valid region
+  if (!RegionToSCoPs.count(&R))
+    return;
+
+  for (Region::element_iterator I = R.element_begin(), E = R.element_end();
+      I != E; ++I)
+    if (I->isSubRegion())
+      killAllTempValFor(*I->getNodeAs<Region>());
+    else
+      killAllTempValFor(*I->getNodeAs<BasicBlock>());
+
+
+  if (Loop *L = castToLoop(R, *LI))
+    killAllTempValFor(*L);
+}
+
+void SCoPDetection::killAllTempValFor(Loop &L) {
+  PHINode *IndVar = L.getCanonicalInductionVariable();
+  Instruction *IndVarInc = L.getCanonicalInductionVariableIncrement();
+
+  assert(IndVar && IndVarInc && "Why these are null in a valid region?");
+
+  // Take away the Induction Variable and its increment
+  SDR->reduceTempRefFor(*IndVar);
+  SDR->reduceTempRefFor(*IndVarInc);
+}
+
+void SCoPDetection::killAllTempValFor(BasicBlock &BB) {
+  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I){
+    Instruction &Inst = *I;
+    if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
+      SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(Inst);
+      DEBUG(dbgs() << "Reduce ptr of " << Inst << "\n");
+      // The address express as affine function can be rewrite by SCEV.
+      // FIXME: Do not kill the not affine one in irregular scop?
+      if (Instruction *GEP = dyn_cast<Instruction>(MemAcc.getPointer()))
+        SDR->reduceTempRefFor(*GEP);
+    }
+  }
+
+  // TODO: support switch
+  if(BranchInst *Br = dyn_cast<BranchInst>(BB.getTerminator()))
+    if (Br->getNumSuccessors() > 1)
+      if(Instruction *Cond = dyn_cast<Instruction>(Br->getCondition()))
+        // The affine condition also could be rewrite.
+        SDR->reduceTempRefFor(*Cond);
 }
 
 TempSCoP *SCoPDetection::getTempSCoPFor(const Region* R) const {
@@ -822,7 +855,10 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   ParamSetType Params;
   // Check if regions in functions is valid.
   if (isValidRegion(*TopRegion, Params))
-    RegionToSCoPs.insert(std::make_pair(TopRegion, (TempSCoP*)0));
+    rememberValidRegion(TopRegion);
+
+  // Kill all temporary value that can be rewrite by SCEVExpander.
+  killAllTempValFor(*TopRegion);
 
   return false;
 }

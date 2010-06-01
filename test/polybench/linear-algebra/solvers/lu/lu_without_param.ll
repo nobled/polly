@@ -73,9 +73,9 @@ return:                                           ; preds = %bb9
 ; CHECK: Bounds of Loop: bb2.preheader: { 0, 1023}
 ; CHECK:   Bounds of Loop: bb1: { 0, -1 * {0,+,1}<%bb2.preheader> + 1022}
 ; CHECK:     BB: bb1{
-; CHECK:     Reads @A[8 * {0,+,1}<%bb1> + 8200 * {0,+,1}<%bb2.preheader> + 8]
+; CHECK:     Reads @A[8200 * {0,+,1}<%bb2.preheader> + 8 * {0,+,1}<%bb1> + 8]
 ; CHECK:     Reads @A[8200 * {0,+,1}<%bb2.preheader> + 0]
-; CHECK:     Writes @A[8 * {0,+,1}<%bb1> + 8200 * {0,+,1}<%bb2.preheader> + 8]
+; CHECK:     Writes @A[8200 * {0,+,1}<%bb2.preheader> + 8 * {0,+,1}<%bb1> + 8]
 ; CHECK:     }
 ; CHECK:   Bounds of Loop: bb6.preheader:       { 0, -1 * {0,+,1}<%bb2.preheader> + 1022}
 ; CHECK:     Bounds of Loop: bb5:       { 0, -1 * {0,+,1}<%bb2.preheader> + 1022}
