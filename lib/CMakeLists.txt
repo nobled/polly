@@ -6,6 +6,7 @@ add_polly_library(LLVMPolly
   ClastParser.cpp
   ClastPrinter.cpp
   CodeGen.cpp
+  SCoPCondition.cpp
   SCoPDetection.cpp
   SCoPInfo.cpp
   ScalarDataRef.cpp
