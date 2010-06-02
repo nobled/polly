@@ -14,6 +14,7 @@
 
 #include "polly/SCoPExchange.h"
 #include "polly/SCoPInfo.h"
+#include "llvm/Support/CommandLine.h"
 
 #define OPENSCOP_INT_T_IS_MP
 #include "openscop/openscop.h"
@@ -26,12 +27,17 @@ using namespace llvm;
 using namespace polly;
 
 namespace {
+static cl::opt<std::string>
+ImportDir("polly-import-dir",
+          cl::desc("The directory to import the .scop files from."), cl::Hidden,
+          cl::value_desc("Directory path"), cl::ValueRequired, cl::init("."));
 
 struct SCoPImporter : public RegionPass {
   static char ID;
   SCoP *S;
   explicit SCoPImporter() : RegionPass(&ID) {}
 
+  std::string getFileName(Region *R) const;
   virtual bool runOnRegion(Region *R, RGPassManager &RGM);
   virtual void print(raw_ostream &OS, const Module *) const;
   void getAnalysisUsage(AnalysisUsage &AU) const;
@@ -152,19 +158,7 @@ bool updateScattering(SCoP *S, openscop_scop_p OSCoP) {
   return true;
 }
 
-void SCoPImporter::print(raw_ostream &OS, const Module *) const {
-  if (S)
-    S->print(OS);
-  else
-    OS << "Invalid SCoP!\n";
-}
-
-bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
-  S = getAnalysis<SCoPInfo>().getSCoP();
-
-  if (!S)
-    return false;
-
+std::string SCoPImporter::getFileName(Region *R) const {
   std::string FunctionName = R->getEntry()->getParent()->getNameStr();
   std::string ExitName;
 
@@ -174,12 +168,41 @@ bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
     ExitName = "FunctionExit";
 
   std::string RegionName = R->getEntry()->getNameStr() + "---" + ExitName;
-  std::string Filename = FunctionName + "___" + RegionName + ".scop";
+  std::string FileName = FunctionName + "___" + RegionName + ".scop";
 
-  errs() << "Reading SCoP '" << R->getNameStr() << "' in function '"
-    << FunctionName << "' from '" << Filename << "'...\n";
+  return FileName;
+}
 
-  FILE *F = fopen(Filename.c_str(), "r");
+void SCoPImporter::print(raw_ostream &OS, const Module *) const {
+  if (S) {
+    Region *R = const_cast<Region*>(&S->getRegion());
+    std::string FunctionName = R->getEntry()->getParent()->getNameStr();
+    std::string FileName = getFileName(R);
+
+    OS << "Reading SCoP '" << R->getNameStr() << "' in function '"
+      << FunctionName << "' from '" << FileName << "'...\n\n";
+
+    S->print(OS);
+  } else {
+    OS << "Invalid SCoP!\n";
+  }
+}
+
+bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
+  S = getAnalysis<SCoPInfo>().getSCoP();
+
+  if (!S)
+    return false;
+
+  std::string FileName = ImportDir + "/" + getFileName(R);
+  FILE *F = fopen(FileName.c_str(), "r");
+
+  if (!F) {
+    errs() << "Cannot open file: " << FileName << "\n";
+    errs() << "Skipping import.\n";
+    return false;
+  }
+
   openscop_scop_p scop = openscop_scop_read(F);
   fclose(F);
 

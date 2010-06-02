@@ -14,6 +14,8 @@
 #include "polly/SCoPExchange.h"
 #include "polly/SCoPInfo.h"
 
+#include "llvm/Support/CommandLine.h"
+
 #define OPENSCOP_INT_T_IS_MP
 #include "openscop/openscop.h"
 
@@ -25,13 +27,20 @@ using namespace llvm;
 using namespace polly;
 
 namespace {
+static cl::opt<std::string>
+ExportDir("polly-export-dir",
+          cl::desc("The directory to export the .scop files to."), cl::Hidden,
+          cl::value_desc("Directory path"), cl::ValueRequired, cl::init("."));
 
 struct SCoPExporter : public RegionPass {
   static char ID;
   SCoP *S;
   explicit SCoPExporter() : RegionPass(&ID) {}
 
+  std::string getFileName(Region *R) const;
+
   virtual bool runOnRegion(Region *R, RGPassManager &RGM);
+  void print(raw_ostream &OS, const Module *) const;
   void getAnalysisUsage(AnalysisUsage &AU) const;
 };
 
@@ -501,12 +510,7 @@ OpenSCoP::~OpenSCoP() {
   openscop_scop_free(openscop);
 }
 
-bool SCoPExporter::runOnRegion(Region *R, RGPassManager &RGM) {
-  S = getAnalysis<SCoPInfo>().getSCoP();
-
-  if (!S)
-    return false;
-
+std::string SCoPExporter::getFileName(Region *R) const {
   std::string FunctionName = R->getEntry()->getParent()->getNameStr();
   std::string ExitName;
 
@@ -516,12 +520,39 @@ bool SCoPExporter::runOnRegion(Region *R, RGPassManager &RGM) {
     ExitName = "FunctionExit";
 
   std::string RegionName = R->getEntry()->getNameStr() + "---" + ExitName;
-  std::string Filename = FunctionName + "___" + RegionName + ".scop";
+  std::string FileName = FunctionName + "___" + RegionName + ".scop";
 
-  errs() << "Writing SCoP '" << R->getNameStr() << "' in function '"
-    << FunctionName << "' to '" << Filename << "'...\n";
+  return FileName;
+}
 
-  FILE *F = fopen(Filename.c_str(), "w");
+void SCoPExporter::print(raw_ostream &OS, const Module *) const {
+  if (S) {
+    Region *R = const_cast<Region*>(&S->getRegion());
+    std::string FunctionName = R->getEntry()->getParent()->getNameStr();
+    std::string FileName = getFileName(R);
+
+    OS << "Writing SCoP '" << R->getNameStr() << "' in function '"
+      << FunctionName << "' to '" << FileName << "'...\n";
+  } else {
+    OS << "Invalid SCoP!\n";
+  }
+}
+
+bool SCoPExporter::runOnRegion(Region *R, RGPassManager &RGM) {
+  S = getAnalysis<SCoPInfo>().getSCoP();
+
+  if (!S)
+    return false;
+
+  std::string FileName = ExportDir + "/" + getFileName(R);
+  FILE *F = fopen(FileName.c_str(), "w");
+
+  if (!F) {
+    errs() << "Cannot open file: " << FileName << "\n";
+    errs() << "Skipping export.\n";
+    return false;
+  }
+
   OpenSCoP openscop(S);
   openscop.print(F);
   fclose(F);

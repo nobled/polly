@@ -25,7 +25,7 @@ int main () {
 
   single_do_loop_int_max_iterations();
 
-  fprintf(stderr, "Output %d\n", A[0]);
+  fprintf(stdout, "Output %d\n", A[0]);
 
   if (A[0] == INT_MAX - 1)
     return 0;

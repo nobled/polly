@@ -2,7 +2,7 @@
 ; RUN: opt -O3 < %s | lli
 ; RUN: opt -polly-codegen -O3 < %s | lli
 ; RUN: opt -polly-import -polly-codegen -O3 < %s | lli
-
+; RUN: opt -polly-import -polly-import-dir=%d -polly-codegen < %s | lli
 ; ModuleID = 'single_do_loop_int_max_iterations.s'
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
@@ -11,7 +11,7 @@ target triple = "x86_64-unknown-linux-gnu"
 %struct._IO_marker = type { %struct._IO_marker*, %struct._IO_FILE*, i32 }
 
 @A = common global [20 x i32] zeroinitializer, align 4 ; <[20 x i32]*> [#uses=1]
-@stderr = external global %struct._IO_FILE*       ; <%struct._IO_FILE**> [#uses=1]
+@stdout = external global %struct._IO_FILE*       ; <%struct._IO_FILE**> [#uses=1]
 @.str = private constant [11 x i8] c"Output %d\0A\00" ; <[11 x i8]*> [#uses=1]
 
 define void @single_do_loop_int_max_iterations() nounwind {
@@ -40,7 +40,7 @@ define i32 @main() nounwind {
 entry:
   volatile store i32 0, i32* getelementptr inbounds ([20 x i32]* @A, i32 0, i32 0)
   call void @single_do_loop_int_max_iterations()
-  %tmp = load %struct._IO_FILE** @stderr          ; <%struct._IO_FILE*> [#uses=1]
+  %tmp = load %struct._IO_FILE** @stdout          ; <%struct._IO_FILE*> [#uses=1]
   %tmp1 = volatile load i32* getelementptr inbounds ([20 x i32]* @A, i32 0, i32 0) ; <i32> [#uses=1]
   %call = call i32 (%struct._IO_FILE*, i8*, ...)* @fprintf(%struct._IO_FILE* %tmp, i8* getelementptr inbounds ([11 x i8]* @.str, i32 0, i32 0), i32 %tmp1) ; <i32> [#uses=0]
   %tmp2 = volatile load i32* getelementptr inbounds ([20 x i32]* @A, i32 0, i32 0) ; <i32> [#uses=1]
@@ -59,4 +59,4 @@ return:                                           ; preds = %if.else, %if.then
 }
 
 declare i32 @fprintf(%struct._IO_FILE*, i8*, ...)
-; CHECK:for (s2=0;s1<=2147483646;s1++) {
+; CHECK:for (s1=0;s1<=2147483646;s1++) {
