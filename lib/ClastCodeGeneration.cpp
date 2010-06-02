@@ -41,25 +41,35 @@ namespace polly {
 typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
 
+//=== Code generation global state -------//
 struct codegenctx : cp_ctx {
-  //=== Code generation global state -------//
+  // The SCoP we code generate.
+  SCoP *S;
 
-  // The open merge basic blocks of Guards/Conditions.
+  // The Builder specifies the current location to code generate at.
+  IRBuilder<> *Builder;
+
+  // For each open condition the merge basic block.
   std::vector<BasicBlock*> GuardMergeBBs;
 
-  std::vector<BasicBlock*> ab;
-  ValueMapT ValueMap;
-  std::vector<PHINode*> loop_ivs;
-  std::vector<Value*> NV;
+  // For each open loop the induction variable.
+  std::vector<PHINode*> LoopIVs;
+
+  // For each open loop the induction variable after it was incremented.
+  std::vector<Value*> LoopIncrementedIVs;
+
+  // For each open loop the basic block following the loop exit.
+  std::vector<BasicBlock*> LoopAfterBBs;
+
+  // The last value calculated by a subexpression.
   Value *exprValue;
+
+  ValueMapT ValueMap;
   CharMapT CharMap;
-  SCoP *S;
   SCoPStmt *stmt;
-  BasicBlock *BB;
   unsigned assignmentCount;
-  IRBuilder<> *B;
   codegenctx(SCoP *scop, IRBuilder<> *builder):
-   S(scop), B(builder) {}
+   S(scop), Builder(builder) {}
 };
 
 // Create a new loop.
@@ -70,14 +80,14 @@ struct codegenctx : cp_ctx {
 // @param Stride  The number by which the loop iv is incremented after every
 //                iteration.
 void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
-                PHINode **IV, BasicBlock** AB, Value** NV) {
+                PHINode*& IV, BasicBlock*& AfterBB, Value*& IncrementedIV) {
   Function *F = Builder->GetInsertBlock()->getParent();
   LLVMContext &Context = F->getContext();
 
   BasicBlock *PreheaderBB = Builder->GetInsertBlock();
   BasicBlock *HeaderBB = BasicBlock::Create(Context, "polly.loop_header", F);
   BasicBlock *BodyBB = BasicBlock::Create(Context, "polly.loop_body", F);
-  BasicBlock *AfterBB = BasicBlock::Create(Context, "polly.after_loop", F);
+  AfterBB = BasicBlock::Create(Context, "polly.after_loop", F);
 
   Builder->CreateBr(HeaderBB);
 
@@ -90,25 +100,19 @@ void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   assert(LoopIVType && "UB is not integer?");
 
   // IV
-  PHINode *Variable = Builder->CreatePHI(LoopIVType, "polly.loopiv");
-  Variable->addIncoming(LB, PreheaderBB);
+  IV = Builder->CreatePHI(LoopIVType, "polly.loopiv");
+  IV->addIncoming(LB, PreheaderBB);
 
   // IV increment.
   Stride.zext(64);
   Value *StrideValue = ConstantInt::get(Context, Stride);
-  Value *NextVar = Builder->CreateAdd(Variable, StrideValue,
-                                      "polly.next_loopiv");
+  IncrementedIV = Builder->CreateAdd(IV, StrideValue, "polly.next_loopiv");
 
   // Exit condition.
-  Value *CMP = Builder->CreateICmpSLE(Variable, UB);
+  Value *CMP = Builder->CreateICmpSLE(IV, UB);
   Builder->CreateCondBr(CMP, BodyBB, AfterBB);
 
-  //Variable->addIncoming(NextVar, BodyBB);
   Builder->SetInsertPoint(BodyBB);
-
-  *IV = Variable;
-  *AB = AfterBB;
-  *NV = NextVar;
 }
 
 // Insert a copy of a basic block in the newly generated code.
@@ -183,13 +187,11 @@ class CPCodeGenerationActions : public CPActions {
     BasicBlock *BB = stmt->getBasicBlock();
     switch(ctx->dir) {
       case DFS_IN:
-        ctx->BB = BB;
         ctx->stmt = stmt;
         ctx->assignmentCount = 0;
 	break;
       case DFS_OUT:
-        copyBB(ctx->B, BB, ctx->ValueMap);
-        ctx->BB = 0;
+        copyBB(ctx->Builder, BB, ctx->ValueMap);
 	break;
     }
   }
@@ -204,30 +206,40 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   void print(struct clast_for *f, codegenctx *ctx) {
+    IRBuilder<> *Builder = ctx->Builder;
+
     switch(ctx->dir) {
       case DFS_IN: {
 	APInt stride = APInt_from_MPZ(f->stride);
         PHINode *IV;
-        Value *NV;
-        BasicBlock *AB;
+        Value *IncrementedIV;
+        BasicBlock *AfterBB;
 	eval(f->LB, ctx);
         Value *LB = ctx->exprValue;
 	eval(f->UB, ctx);
         Value *UB = ctx->exprValue;
-        createLoop(ctx->B, LB, UB, stride, &IV, &AB, &NV);
+        createLoop(Builder, LB, UB, stride, IV, AfterBB, IncrementedIV);
         (ctx->CharMap)[f->iterator] = IV;
-        ctx->NV.push_back(NV);
-        ctx->ab.push_back(AB);
-        ctx->loop_ivs.push_back(IV);
+
+        ctx->LoopIncrementedIVs.push_back(IncrementedIV);
+        ctx->LoopAfterBBs.push_back(AfterBB);
+        ctx->LoopIVs.push_back(IV);
 	break;
       }
       case DFS_OUT:
-        ctx->B->CreateBr(*pred_begin(ctx->ab.back()));
-        ctx->loop_ivs.back()->addIncoming(ctx->NV.back(),
-                                          ctx->B->GetInsertBlock());
-        ctx->B->SetInsertPoint(ctx->ab.back());
-        ctx->loop_ivs.pop_back();
-        ctx->ab.pop_back();
+        BasicBlock *AfterBB = ctx->LoopAfterBBs.back();
+        BasicBlock *HeaderBB = *pred_begin(AfterBB);
+        BasicBlock *LastBodyBB = Builder->GetInsertBlock();
+        Value *IncrementedIV = ctx->LoopIncrementedIVs.back();
+        PHINode *IV = ctx->LoopIVs.back();
+
+        Builder->CreateBr(HeaderBB);
+        IV->addIncoming(IncrementedIV, LastBodyBB);
+        Builder->SetInsertPoint(AfterBB);
+
+        ctx->LoopIncrementedIVs.pop_back();
+        ctx->LoopIVs.pop_back();
+        ctx->LoopAfterBBs.pop_back();
 	break;
     }
   }
@@ -247,13 +259,13 @@ class CPCodeGenerationActions : public CPActions {
     else
       P = ICmpInst::ICMP_SLE;
 
-    Result = ctx->B->CreateICmp(P, LHS, RHS);
+    Result = ctx->Builder->CreateICmp(P, LHS, RHS);
 
     ctx->exprValue = Result;
   }
 
   void print(struct clast_guard *g, codegenctx *ctx) {
-    IRBuilder<> *Builder = ctx->B;
+    IRBuilder<> *Builder = ctx->Builder;
 
     switch(ctx->dir) {
       case DFS_IN:
@@ -318,7 +330,7 @@ class CPCodeGenerationActions : public CPActions {
     APInt a = APInt_from_MPZ(e->val);
     if (ctx->dir == DFS_IN) {
       a.zext(64);
-      Value *ConstOne = ConstantInt::get(ctx->B->getContext(), a);
+      Value *ConstOne = ConstantInt::get(ctx->Builder->getContext(), a);
       ctx->exprValue = ConstOne;
     }
   }
@@ -332,13 +344,13 @@ class CPCodeGenerationActions : public CPActions {
 
         APInt RHS_AP = APInt_from_MPZ(e->RHS);
         RHS_AP.zext(64);
-        Value *RHS = ConstantInt::get(ctx->B->getContext(), RHS_AP);
+        Value *RHS = ConstantInt::get(ctx->Builder->getContext(), RHS_AP);
 
         Value *Result;
 
         switch (e->type) {
         case clast_bin_mod:
-          Result = ctx->B->CreateURem(LHS, RHS);
+          Result = ctx->Builder->CreateURem(LHS, RHS);
           llvm_unreachable("mod binary expression not supported");
           break;
         case clast_bin_fdiv:
@@ -386,15 +398,14 @@ class CPCodeGenerationActions : public CPActions {
 
       Value *old = ctx->exprValue;
 
-      // TODO: Support reductions with more than one element.
       for (int i=1; i < r->n; ++i) {
         eval(r->elts[i], ctx);
         if (r->type == clast_red_min)
-          old = redmin(old, ctx->exprValue, ctx->B);
+          old = redmin(old, ctx->exprValue, ctx->Builder);
         else if (r->type == clast_red_max)
-          old = redmax(old, ctx->exprValue, ctx->B);
+          old = redmax(old, ctx->exprValue, ctx->Builder);
         else if (r->type == clast_red_sum)
-          old = redsum(old, ctx->exprValue, ctx->B);
+          old = redsum(old, ctx->exprValue, ctx->Builder);
       }
 
       ctx->exprValue = old;
