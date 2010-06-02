@@ -1,5 +1,6 @@
-; RUN: opt -indvars -polly-print-scop -S -analyze < %s | FileCheck %s
-; RUN: opt -indvars -polly-codegen < %s
+; RUN: opt -polly-print-scop -S -analyze < %s | FileCheck %s
+; RUN: opt -polly-codegen < %s
+; RUN: opt -polly-import -polly-import-dir=`dirname %s` -polly-print-scop -S -analyze < %s | FileCheck -check-prefix=IMPORT %s
 ; ModuleID = 'pluto-matmul.s'
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
@@ -91,3 +92,20 @@ declare void @print_array(...)
 ; CHECK:      }
 ; CHECK:    }
 ; CHECK:  }
+
+
+; IMPORT: for (s1=0;s1<=2048;s1+=64) {
+; IMPORT:   for (s2=max(0,s1);s2<=min(2048,s1+31);s2++) {
+; IMPORT:     for (s5=0;s5<=2048;s5+=64) {
+; IMPORT:       for (s6=max(0,s5);s6<=min(2048,s5+31);s6++) {
+; IMPORT:         for (s9=0;s9<=2048;s9+=64) {
+; IMPORT:           for (s10=max(0,s9);s10<=min(2048,s9+31);s10++)
+; IMPORT:             {
+; IMPORT:               S0(s2,s6,s10);
+; IMPORT:             }
+; IMPORT:         }
+; IMPORT:       }
+; IMPORT:     }
+; IMPORT:   }
+; IMPORT: }
+
