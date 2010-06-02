@@ -65,7 +65,7 @@ int &ScalarDataRef::getDataRefFor(const Instruction &Inst){
   return ret;
 }
 
-bool ScalarDataRef::killedAsTempVal(const Instruction &Inst) const {
+bool ScalarDataRef::isKilledAsTempVal(const Instruction &Inst) const {
   SDRDataRefMapTy::const_iterator at = DataRefs.find(&Inst);
   return at != DataRefs.end() && at->second == 0;
 }
@@ -73,7 +73,7 @@ bool ScalarDataRef::killedAsTempVal(const Instruction &Inst) const {
 void ScalarDataRef::getAllUsing(Instruction &Inst,
                                 SmallVectorImpl<Value*> &Defs) {
   // XXX: temporary value not using anything?
-  if (killedAsTempVal(Inst))
+  if (isKilledAsTempVal(Inst))
     return;
 
   DEBUG(dbgs() << "get the reading values of :" << Inst << "\n");
@@ -98,7 +98,7 @@ void ScalarDataRef::getAllUsing(Instruction &Inst,
       continue;
     else if (Instruction *opInst = dyn_cast<Instruction>(*I)) {
       // Ignore the temporary values.
-      if (killedAsTempVal(*opInst))
+      if (isKilledAsTempVal(*opInst))
         continue;
 
       // If operand is from others BBs, we need to read it explicitly
@@ -110,10 +110,12 @@ void ScalarDataRef::getAllUsing(Instruction &Inst,
     }
   }
 
-  for (SmallVector<Value*, 4>::iterator VI = Defs.begin(),
+  DEBUG(
+    for (SmallVector<Value*, 4>::iterator VI = Defs.begin(),
       VE = Defs.end(); VI != VE; ++VI)
-    DEBUG(dbgs() << "get read: " << **VI << "\n");
-  DEBUG(dbgs() << "\n");
+    dbgs() << "get read: " << **VI << "\n";
+  dbgs() << "\n";
+  );
 }
 
 bool ScalarDataRef::isDefExported(Instruction &Inst) const {
@@ -124,7 +126,7 @@ bool ScalarDataRef::isDefExported(Instruction &Inst) const {
   SDRDataRefMapTy::const_iterator at = DataRefs.find(&Inst);
 
   // if all use of DataDefs is reduced, it is not export.
-  if (killedAsTempVal(Inst))
+  if (isKilledAsTempVal(Inst))
     return false;
 
   BasicBlock *defBB = Inst.getParent();
@@ -133,7 +135,7 @@ bool ScalarDataRef::isDefExported(Instruction &Inst) const {
     I != E; ++I) {
       Instruction *U = cast<Instruction>(*I);
       // Just ignore it if the Instruction using Inst had been kill as temporary value
-      if(killedAsTempVal(*U))
+      if(isKilledAsTempVal(*U))
         continue;
 
       if (defBB != U->getParent())
@@ -146,10 +148,10 @@ bool ScalarDataRef::isDefExported(Instruction &Inst) const {
   return false;
 }
 
-void ScalarDataRef::reduceTempRefFor(const Instruction &Inst) {
+void ScalarDataRef::killTempRefFor(const Instruction &Inst) {
   assert(Inst.hasNUsesOrMore(1) && "The instruction have no use cant be reduced!");
 
-  // And the value of load instruction is not "temporary value"
+  // The value of load instruction is not "temporary value"
   if (isa<LoadInst>(Inst))
     return;
 
@@ -159,9 +161,7 @@ void ScalarDataRef::reduceTempRefFor(const Instruction &Inst) {
   if (--getDataRefFor(Inst) > 0)
     return;
 
-
   // XXX: Stop when we reach a parameter.
-
   for (Instruction::const_op_iterator I = Inst.op_begin(), E = Inst.op_end();
        I != E; ++I) {
     if (const Instruction *opInst = dyn_cast<Instruction>(*I)) {
@@ -169,7 +169,7 @@ void ScalarDataRef::reduceTempRefFor(const Instruction &Inst) {
       if (!isCyclicUse(&Inst, opInst)) {
         DEBUG(dbgs().indent(4) << "Going to reduce: " << *opInst << " use left: ");
         DEBUG(dbgs().indent(4) << getDataRefFor(*opInst) << "\n");
-        reduceTempRefFor(*opInst);
+        killTempRefFor(*opInst);
       }
     }
   }

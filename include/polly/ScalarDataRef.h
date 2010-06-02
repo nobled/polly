@@ -28,21 +28,42 @@
 using namespace llvm;
 
 namespace polly {
-
-typedef DenseMap<const Instruction*, int> SDRDataRefMapTy;
-
-typedef std::set<const Instruction*> SDRInstSetTy;
-
-typedef std::vector<const Instruction*> SDRInstVecTy;
-
-typedef std::set<const BasicBlock*> SDRBBSetTy;
-
 //===----------------------------------------------------------------------===//
 /// @brief Scalar data reference - Analysis that provides scalar data
 ///        read/write reference in BasicBlocks or Regions.
 ///
+/// All instructions that is read by other BB(statement, the schedule unit
+/// of SCOP) should be consider as it have a "write" in its defining BB, and
+/// have a "read" access in others BB that reading it, so we can preserve the
+/// scalar data dependence between bbs.
+///
+/// But the dependence for instructions that only help to compute the affine
+/// function of conditions or address is no need to consider because we
+/// already express them in access functions and iterate domain, so what we
+/// need to do is "kill" them and not expose them as scalar access functions.
+///
+/// The ScalarDataRef pass to compute which instructions should be expose as
+/// scalar data access, and which should not.
+///
+/// ScalarDataRef will kill the unnecessary scalar data reference by:
+/// 1. maintain a map that mapping a instruction to its use number.
+/// 2. if we try to kill an instruction, it will reduce the use number in
+/// the map by one.
+/// 3. if the use number is zero after the reduction, then the instruction
+/// is "kill" and will not expose as scalar data access, since the
+/// instruction is killed, all its operand maybe useless, so we just perform
+/// step 2 - step 3 on all of its instruction operand.
 ///
 class ScalarDataRef : public FunctionPass {
+  // Mapping instruction to use number.
+  typedef DenseMap<const Instruction*, int> SDRDataRefMapTy;
+
+  typedef std::set<const Instruction*> SDRInstSetTy;
+
+  typedef std::vector<const Instruction*> SDRInstVecTy;
+
+  typedef std::set<const BasicBlock*> SDRBBSetTy;
+
   // DO NOT IMPLEMENT
   ScalarDataRef(const ScalarDataRef &);
   // DO NOT IMPLEMENT
@@ -56,13 +77,19 @@ class ScalarDataRef : public FunctionPass {
   // DominatorTree to compute cyclic reference.
   DominatorTree *DT;
 
-  Function *Func;
-
+  // Clear the context.
   void clear();
 
+  // Get the use number of Inst
   int &getDataRefFor(const Instruction &Inst);
 
-  bool killedAsTempVal(const Instruction &Inst) const;
+  // If Inst is killed as temporary value and should not be expose
+  // as scalar data reference?
+  bool isKilledAsTempVal(const Instruction &Inst) const;
+
+  // If use dominates def, and use is a PHINode? (This means we found a
+  // loop dependence pair?)
+  bool isCyclicUse(const Instruction* def, const Instruction* use) const;
 
 public:
   static char ID;
@@ -70,14 +97,26 @@ public:
   explicit ScalarDataRef() : FunctionPass(&ID) {}
   ~ScalarDataRef();
 
-  bool isCyclicUse(const Instruction* def, const Instruction* use) const;
-
+  /// @brief If an Instruction should be expose as a "write memory" access?
+  ///
+  /// @param I The Instruction to query.
+  ///
+  /// @return Return true if the instruction should be export
+  //          as a "write memory" access.
   bool isDefExported(Instruction &I) const;
 
+  /// @brief Get all Instructions that use by Inst and should be expose as
+  ///        a "read memory" access.
+  ///
+  /// @param Inst The Instruction that reading others.
+  /// @param Defs The Instructions that are read by Inst.
   void getAllUsing(Instruction &Inst, SmallVectorImpl<Value*> &Defs);
 
-  void reduceTempRefFor(const Instruction& Inst);
-
+  /// @brief Hide all instructions that only contribute to the computation of
+  ///        Inst
+  ///
+  /// @param Inst The final result of all killed instruction.
+  void killTempRefFor(const Instruction& Inst);
 
   /// @name FunctionPass interface
   //@{

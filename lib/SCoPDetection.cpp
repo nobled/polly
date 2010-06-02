@@ -823,8 +823,8 @@ void SCoPDetection::killAllTempValFor(Loop &L) {
   assert(IndVar && IndVarInc && "Why these are null in a valid region?");
 
   // Take away the Induction Variable and its increment
-  SDR->reduceTempRefFor(*IndVar);
-  SDR->reduceTempRefFor(*IndVarInc);
+  SDR->killTempRefFor(*IndVar);
+  SDR->killTempRefFor(*IndVarInc);
 }
 
 void SCoPDetection::killAllTempValFor(BasicBlock &BB) {
@@ -836,7 +836,7 @@ void SCoPDetection::killAllTempValFor(BasicBlock &BB) {
       // The address express as affine function can be rewrite by SCEV.
       // FIXME: Do not kill the not affine one in irregular scop?
       if (Instruction *GEP = dyn_cast<Instruction>(MemAcc.getPointer()))
-        SDR->reduceTempRefFor(*GEP);
+        SDR->killTempRefFor(*GEP);
     }
   }
 
@@ -845,7 +845,7 @@ void SCoPDetection::killAllTempValFor(BasicBlock &BB) {
     if (Br->getNumSuccessors() > 1)
       if(Instruction *Cond = dyn_cast<Instruction>(Br->getCondition()))
         // The affine condition also could be rewrite.
-        SDR->reduceTempRefFor(*Cond);
+        SDR->killTempRefFor(*Cond);
 }
 
 TempSCoP *SCoPDetection::getTempSCoPFor(const Region* R) const {
