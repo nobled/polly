@@ -95,11 +95,11 @@ declare void @print_array(...)
 
 
 ; IMPORT: for (s1=0;s1<=2048;s1+=64) {
-; IMPORT:   for (s2=max(0,s1);s2<=min(2048,s1+31);s2++) {
+; IMPORT:   for (s2=max(0,s1);s2<=min(2048,s1+63);s2++) {
 ; IMPORT:     for (s5=0;s5<=2048;s5+=64) {
-; IMPORT:       for (s6=max(0,s5);s6<=min(2048,s5+31);s6++) {
+; IMPORT:       for (s6=max(0,s5);s6<=min(2048,s5+63);s6++) {
 ; IMPORT:         for (s9=0;s9<=2048;s9+=64) {
-; IMPORT:           for (s10=max(0,s9);s10<=min(2048,s9+31);s10++)
+; IMPORT:           for (s10=max(0,s9);s10<=min(2048,s9+63);s10++)
 ; IMPORT:             {
 ; IMPORT:               S0(s2,s6,s10);
 ; IMPORT:             }
