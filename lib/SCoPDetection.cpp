@@ -24,6 +24,7 @@
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/ErrorHandling.h"
 
 #define DEBUG_TYPE "polly-scop-detect"
 #include "llvm/Support/Debug.h"
@@ -89,9 +90,9 @@ Loop *polly::castToLoop(const Region &R, LoopInfo &LI) {
 
   if (exit != R.getExit()) {
     // SubRegion/ParentRegion with the same entry.
-    assert((R.getNode(R.getEntry())->isSubRegion() ||
-      R.getParent()->getEntry() == entry) &&
-      "Expect the loop is the smaller or bigger region");
+    assert((R.getNode(R.getEntry())->isSubRegion()
+            || R.getParent()->getEntry() == entry)
+           && "Expect the loop is the smaller or bigger region");
     return 0;
   }
 
@@ -127,13 +128,12 @@ static bool isParameter(const SCEV *Var, Region &R,
   if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)) {
     // The indvar only expect come from outer loop
     // Or from a loop whose backend taken count could not compute.
-    assert((AddRec->getLoop()->contains(getScopeLoop(R, LI)) ||
-      isa<SCEVCouldNotCompute>(
-        SE.getBackedgeTakenCount(AddRec->getLoop()))) &&
-      "Where comes the indvar?");
+    assert((AddRec->getLoop()->contains(getScopeLoop(R, LI))
+            || isa<SCEVCouldNotCompute>(
+                 SE.getBackedgeTakenCount(AddRec->getLoop())))
+           && "Where comes the indvar?");
     return true;
-  }
-  else if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(Var)) {
+  } else if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(Var)) {
     // Some SCEVUnknown will depend on loop variant or conditions:
     // 1. Phi node depend on conditions
     if (PHINode *phi = dyn_cast<PHINode>(U->getValue()))
@@ -158,10 +158,10 @@ static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative) {
     const APInt &CI = C->getValue()->getValue();
     // Convert i >= expr to i - expr >= 0
     MPZ_from_APInt(v, negative ?(-CI):CI);
-  }
-  else
+  } else
     isl_int_set_si(v, 0);
 }
+
 // TODO: Move to LoopInfo?
 static bool isPreHeader(BasicBlock *BB, LoopInfo *LI) {
   TerminatorInst *TI = BB->getTerminator();
@@ -183,7 +183,8 @@ static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
   } else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
     Pointer = store->getPointerOperand();
     AccType = SCEVAffFunc::Write;
-  } // else unreachable because of the previous assert!
+  } else
+    llvm_unreachable("Already check in the assert");
 
   assert(Pointer && "Why pointer is null?");
   return SCEVAffFunc::MemAccTy(Pointer, AccType);
@@ -192,10 +193,11 @@ static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
 //===----------------------------------------------------------------------===//
 // SCEVAffFunc Implement
 
-bool SCEVAffFunc::buildAffineFunc(const SCEV *S, Region &R, ParamSetType &Params,
-                                  SCEVAffFunc *FuncToBuild,
-                                  LoopInfo &LI, ScalarEvolution &SE,
-                                  AccessType AccType) {
+bool SCEVAffFunc::buildAffineFunc(const SCEV *S, Region &R,
+                                  ParamSetType &Params, SCEVAffFunc
+                                  *FuncToBuild, LoopInfo &LI,
+                                  ScalarEvolution &SE, AccessType AccType)
+{
   assert(S && "S can not be null!");
 
   bool PtrExist = false;
@@ -210,7 +212,7 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, Region &R, ParamSetType &Params
 
   // FIXME: Simplify these code.
   for (AffineSCEVIterator I = affine_begin(S, &SE), E = affine_end();
-      I != E; ++I){
+      I != E; ++I) {
     // The constant part must be a SCEVConstant.
     // TODO: support sizeof in coefficient.
     if (!isa<SCEVConstant>(I->second)) return false;
@@ -252,10 +254,10 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, Region &R, ParamSetType &Params
     if (!isParameter(Var, R, LI, SE)) {
       // If Var not a parameter, it may be the indvar of current loop
       if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)){
-        assert((AddRec->getLoop() == Scope ||
-          isa<SCEVCouldNotCompute>(
-            SE.getBackedgeTakenCount(AddRec->getLoop())))
-          && "getAtScope not work?");
+        assert((AddRec->getLoop() == Scope
+                || isa<SCEVCouldNotCompute>(
+                     SE.getBackedgeTakenCount(AddRec->getLoop())))
+               && "getAtScope not work?");
         continue;
       }
       // A bad SCEV found.
@@ -270,9 +272,9 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, Region &R, ParamSetType &Params
   }
 
   // The SCEV is valid if it is not a memory access
-  return AccType == SCEVAffFunc::None ||
+  return AccType == SCEVAffFunc::None
     // Otherwise, there must a pointer in exist in the expression.
-    PtrExist;
+    || PtrExist;
 }
 
 bool SCEVAffFunc::buildMemoryAccess(MemAccTy MemAcc, Region &R, ParamSetType &Params,
@@ -300,9 +302,10 @@ polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
      isl_constraint_set_coefficient(c, isl_dim_set, i, v);
    }
 
-   assert(!getCoeff(IndVars[num_in - 1]) &&
-     "Current iterator should not have any coff.");
-   // Set the coefficient of current iterator, convert i <= expr to expr - i >= 0
+   assert(!getCoeff(IndVars[num_in - 1])
+          && "Current iterator should not have any coff.");
+   // Set the coefficient of current iterator, convert i <= expr to
+   // expr - i >= 0
    isl_int_set_si(v, isLower?1:(-1));
    isl_constraint_set_coefficient(c, isl_dim_set, num_in - 1, v);
 
@@ -315,8 +318,8 @@ polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
    // Set the const.
    setCoefficient(TransComp, v, isLower);
    isl_constraint_set_constant(c, v);
-   // Free v
    isl_int_clear(v);
+
    return c;
 }
 
@@ -331,7 +334,7 @@ polly_constraint *SCEVAffFunc::toAccessFunction(polly_ctx *ctx, polly_dim* dim,
   isl_int_set_si(v, 1);
   isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
 
-  // Dont touch the current iterator.
+  // Do not touch the current iterator.
   for (unsigned i = 0, e = NestLoops.size(); i != e; ++i) {
     Loop *L = NestLoops[i];
     Value *IndVar = L->getCanonicalInductionVariable();
@@ -348,8 +351,8 @@ polly_constraint *SCEVAffFunc::toAccessFunction(polly_ctx *ctx, polly_dim* dim,
   // Set the const.
   setCoefficient(TransComp, v, true);
   isl_constraint_set_constant(c, v);
-
   isl_int_clear(v);
+
   return c;
 }
 
@@ -445,10 +448,10 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &R) const {
   if (numSucc < 2) return true;
 
   BranchInst *Br = dyn_cast<BranchInst>(TI);
-  // We dose not support switch at the moment.
+  // We do not support switch at the moment.
   if (!Br) return false;
 
-  // XXX: Should us preform some optimization to eliminate this?
+  // XXX: Should we preform some optimization to eliminate this?
   // It is the same as unconditional branch if the condition is constant.
   if (isa<Constant>(Br->getCondition())) return true;
 
@@ -614,7 +617,8 @@ bool SCoPDetection::hasValidLoopBounds(Region &R, ParamSetType &Params) const {
     Instruction *IndVarInc = L->getCanonicalInductionVariableIncrement();
 
     if ((IndVar == 0) || (IndVarInc == 0)) {
-      DEBUG(dbgs() << "No CanIV for loop : " << L->getHeader()->getName() <<"?\n");
+      DEBUG(dbgs() << "No CanIV for loop : " << L->getHeader()->getName()
+            << "?\n");
       STATSCOP(IndVar);
       return false;
     }
@@ -654,12 +658,15 @@ void SCoPDetection::extractLoopBounds(TempSCoP &SCoP) {
 
     AffBoundType &affbounds = LoopBounds[L];
     // Build the affine function of loop bounds
-    bool buildSuccessful =
-      SCEVAffFunc::buildAffineFunc(
-        LB, SCoP.getMaxRegion(), SCoP.getParamSet(), &affbounds.first, *LI, *SE)
-      &&
-      SCEVAffFunc::buildAffineFunc(
-        UB, SCoP.getMaxRegion(), SCoP.getParamSet(), &affbounds.second, *LI, *SE);
+    bool buildSuccessful = SCEVAffFunc::buildAffineFunc(LB, SCoP.getMaxRegion(),
+                                                        SCoP.getParamSet(),
+                                                        &affbounds.first, *LI,
+                                                        *SE)
+                           && SCEVAffFunc::buildAffineFunc(UB,
+                                                           SCoP.getMaxRegion(),
+                                                           SCoP.getParamSet(),
+                                                           &affbounds.second,
+                                                           *LI, *SE);
 
     assert(buildSuccessful && "Expect loop bounds of SCoP are valid!");
     // Increase the loop depth because we found a loop.
