@@ -64,10 +64,29 @@ struct codegenctx : cp_ctx {
   // The last value calculated by a subexpression.
   Value *exprValue;
 
+  // Map the Values from the old code to their counterparts in the new code.
   ValueMapT ValueMap;
+
+  // Map the textual representation of variables in clast to the actual
+  // Values* created during code generation.  It is used to map every
+  // appearance of such a string in the clast to the value created
+  // because of a loop iv or an assignment.
   CharMapT CharMap;
-  SCoPStmt *stmt;
+
+  // Count the current assignment.  This is for user statements
+  // to track how an IV from the old code corresponds to a value
+  // or expression in the new code.
+  //
+  // There is one assignment with an empty LHS for every IV dimension
+  // of each statement.
   unsigned assignmentCount;
+
+  // The current statement we are working on.
+  //
+  // Also used to track the assignment of old IVS to new values or
+  // expressions.
+  SCoPStmt *stmt;
+
   codegenctx(SCoP *scop, IRBuilder<> *builder):
    S(scop), Builder(builder) {}
 };
@@ -165,17 +184,22 @@ class CPCodeGenerationActions : public CPActions {
   void print(struct clast_assignment *a, codegenctx *ctx) {
     switch(ctx->dir) {
       case DFS_IN:
-	eval(a->RHS, ctx);
+        {
+          eval(a->RHS, ctx);
+          Value *RHS = ctx->exprValue;
 
-        if (!a->LHS) {
-          PHINode *PN = ctx->stmt->IVS[ctx->assignmentCount];
-          ctx->assignmentCount++;
-          Value *V = PN;
-          if (PN->getNumOperands() == 2)
-            V = *(PN->use_begin());
-          ctx->ValueMap[V] = ctx->exprValue;
+          if (!a->LHS) {
+            PHINode *PN = ctx->stmt->IVS[ctx->assignmentCount];
+            ctx->assignmentCount++;
+            Value *V = PN;
+
+            if (PN->getNumOperands() == 2)
+              V = *(PN->use_begin());
+
+            ctx->ValueMap[V] = RHS;
+          }
+          break;
         }
-	break;
       case DFS_OUT:
 	break;
     }
