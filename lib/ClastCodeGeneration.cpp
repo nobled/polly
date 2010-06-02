@@ -46,6 +46,8 @@ struct codegenctx : cp_ctx {
   // The SCoP we code generate.
   SCoP *S;
 
+  DominatorTree *DT;
+
   // The Builder specifies the current location to code generate at.
   IRBuilder<> *Builder;
 
@@ -87,8 +89,8 @@ struct codegenctx : cp_ctx {
   // expressions.
   SCoPStmt *stmt;
 
-  codegenctx(SCoP *scop, IRBuilder<> *builder):
-   S(scop), Builder(builder) {}
+  codegenctx(SCoP *scop, DominatorTree *DomTree, IRBuilder<> *builder):
+    S(scop), DT(DomTree), Builder(builder) {}
 };
 
 // Create a new loop.
@@ -99,7 +101,8 @@ struct codegenctx : cp_ctx {
 // @param Stride  The number by which the loop iv is incremented after every
 //                iteration.
 void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
-                PHINode*& IV, BasicBlock*& AfterBB, Value*& IncrementedIV) {
+                PHINode*& IV, BasicBlock*& AfterBB, Value*& IncrementedIV,
+                DominatorTree *DT) {
   Function *F = Builder->GetInsertBlock()->getParent();
   LLVMContext &Context = F->getContext();
 
@@ -109,6 +112,7 @@ void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   AfterBB = BasicBlock::Create(Context, "polly.after_loop", F);
 
   Builder->CreateBr(HeaderBB);
+  DT->addNewBlock(HeaderBB, PreheaderBB);
 
   Builder->SetInsertPoint(BodyBB);
 
@@ -130,6 +134,8 @@ void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   // Exit condition.
   Value *CMP = Builder->CreateICmpSLE(IV, UB);
   Builder->CreateCondBr(CMP, BodyBB, AfterBB);
+  DT->addNewBlock(BodyBB, HeaderBB);
+  DT->addNewBlock(AfterBB, HeaderBB);
 
   Builder->SetInsertPoint(BodyBB);
 }
@@ -144,13 +150,15 @@ void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
 //                For new statements a relation old->new is inserted in this
 //                map.
 //
-void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap) {
+void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
+             DominatorTree *DT) {
   Function *F = Builder->GetInsertBlock()->getParent();
   LLVMContext &Context = F->getContext();
 
   BasicBlock *CopyBB = BasicBlock::Create(Context,
                                           "polly.stmt_" + BB->getNameStr(), F);
   Builder->CreateBr(CopyBB);
+  DT->addNewBlock(CopyBB, Builder->GetInsertBlock());
   Builder->SetInsertPoint(CopyBB);
 
   for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
@@ -173,6 +181,7 @@ void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap) {
           NewOp = Builder->CreateTruncOrBitCast(NewOp, (*UI)->getType());
 
         NewInst->replaceUsesOfWith(*UI, NewOp);
+      } else {
       }
 
     Builder->Insert(NewInst);
@@ -215,7 +224,7 @@ class CPCodeGenerationActions : public CPActions {
         ctx->assignmentCount = 0;
 	break;
       case DFS_OUT:
-        copyBB(ctx->Builder, BB, ctx->ValueMap);
+        copyBB(ctx->Builder, BB, ctx->ValueMap, ctx->DT);
 	break;
     }
   }
@@ -242,7 +251,8 @@ class CPCodeGenerationActions : public CPActions {
         Value *LB = ctx->exprValue;
 	eval(f->UB, ctx);
         Value *UB = ctx->exprValue;
-        createLoop(Builder, LB, UB, stride, IV, AfterBB, IncrementedIV);
+        createLoop(Builder, LB, UB, stride, IV, AfterBB, IncrementedIV,
+                   ctx->DT);
         (ctx->CharMap)[f->iterator] = IV;
 
         ctx->LoopIncrementedIVs.push_back(IncrementedIV);
@@ -298,6 +308,8 @@ class CPCodeGenerationActions : public CPActions {
           LLVMContext &Context = F->getContext();
           BasicBlock *ThenBB = BasicBlock::Create(Context, "polly.then", F);
           BasicBlock *MergeBB = BasicBlock::Create(Context, "polly.merge", F);
+          ctx->DT->addNewBlock(ThenBB, Builder->GetInsertBlock());
+          ctx->DT->addNewBlock(MergeBB, Builder->GetInsertBlock());
 
           print(&(g->eq[0]), ctx);
           Value *Predicate = ctx->exprValue;
@@ -541,8 +553,9 @@ class ClastCodeGeneration : public RegionPass {
     // Create a basic block in which to start code generation.
     BasicBlock *PollyBB = BasicBlock::Create(F->getContext(), "pollyBB", F);
     IRBuilder<> Builder(PollyBB);
+    DT->addNewBlock(PollyBB, R->getEntry());
 
-    codegenctx ctx (S, &Builder);
+    codegenctx ctx (S, DT, &Builder);
     clast_stmt *clast = C->getClast();
 
     addParameters(((clast_root*)clast)->names, ctx.CharMap);
@@ -557,6 +570,9 @@ class ClastCodeGeneration : public RegionPass {
         PHINode *PN = static_cast<PHINode *>(&*SI);
         PN->removeIncomingValue(R->getEntry());
       }
+
+    if (DT->dominates(R->getEntry(), R->getExit()))
+      DT->changeImmediateDominator(R->getExit(), Builder.GetInsertBlock());
 
     // Enable the new polly code.
     R->getEntry()->getTerminator()->setSuccessor(0, PollyBB);
