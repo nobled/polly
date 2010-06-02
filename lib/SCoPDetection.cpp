@@ -145,6 +145,9 @@ static bool isParameter(const SCEV *Var, Region &R,
     // TODO: add others conditions.
     return true;
   }
+  // FIXME: Should us accept cast?
+  else if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var))
+    return isParameter(Cast->getOperand(), R, LI, SE);
   // Not a SCEVUnknown.
   return false;
 }
@@ -239,13 +242,6 @@ bool SCEVAffFunc::buildAffineFunc(const SCEV *S, Region &R, ParamSetType &Params
       if (FuncToBuild)
         FuncToBuild->BaseAddr.setPointer(BaseAddr->getValue());
       continue;
-    }
-
-    // Dirty Hack: Some pre-processing for parameter.
-    if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var)) {
-      DEBUG(dbgs() << "Warning: Ignore cast expression: " << *Cast << "\n");
-      // Dirty hack. replace the cast expression by its operand.
-      Var = Cast->getOperand();
     }
 
     // Build the affine function.
