@@ -503,6 +503,18 @@ class ClastCodeGeneration : public RegionPass {
     createSingleExitEdge(R, this);
   }
 
+  void addParameters(CloogNames *names, CharMapT &VariableMap) {
+    int i = 0;
+
+    for (SCoP::param_iterator PI = S->param_begin(), PE = S->param_end();
+         PI != PE; ++PI) {
+      llvm_unreachable("SCoPs with parameters cannot be code generated");
+      assert(i < names->nb_parameters && "Not enough parameter names");
+      // VariableMap[names->parameters[i]] = *PI;
+      ++i;
+    }
+  }
+
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
     S = getAnalysis<SCoPInfo>().getSCoP();
@@ -531,7 +543,11 @@ class ClastCodeGeneration : public RegionPass {
     IRBuilder<> Builder(PollyBB);
 
     codegenctx ctx (S, &Builder);
-    cp.parse(C->getClast(), &ctx);
+    clast_stmt *clast = C->getClast();
+
+    addParameters(((clast_root*)clast)->names, ctx.CharMap);
+
+    cp.parse(clast, &ctx);
     Builder.CreateBr(R->getExit());
 
     // Update old PHI nodes to pass LLVM verification.
