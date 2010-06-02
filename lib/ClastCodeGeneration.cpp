@@ -151,7 +151,7 @@ void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
 //                map.
 //
 void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
-             DominatorTree *DT) {
+             DominatorTree *DT, const Region *R) {
   Function *F = Builder->GetInsertBlock()->getParent();
   LLVMContext &Context = F->getContext();
 
@@ -161,13 +161,34 @@ void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
   DT->addNewBlock(CopyBB, Builder->GetInsertBlock());
   Builder->SetInsertPoint(CopyBB);
 
+  std::vector<const Instruction*> ToCopy;
+
   for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
-       II != IE; ++II) {
-    if (II->isTerminator() || dyn_cast<PHINode>(II))
+       II != IE; ++II)
+    if (!(II->isTerminator() || dyn_cast<PHINode>(II)))
+      ToCopy.push_back(&(*II));
+
+  while (ToCopy.size() != 0) {
+    const Instruction *Inst = ToCopy.back();
+    bool NeedFurtherInsts = false;
+
+    // Replace old operands with the new ones.
+    for (Instruction::const_op_iterator UI = Inst->op_begin(),
+         UE = Inst->op_end(); UI != UE; ++UI)
+      if (VMap.find(*UI) == VMap.end() && Instruction::classof(*UI)) {
+        Instruction *I = static_cast<Instruction*>((*UI).get());
+
+        if (R->contains((I)->getParent())) {
+          ToCopy.push_back(I);
+          NeedFurtherInsts = true;
+        }
+      }
+
+    if (NeedFurtherInsts)
       continue;
 
-    Instruction *NewInst = II->clone();
-    VMap[II] = NewInst;
+    Instruction *NewInst = Inst->clone();
+    VMap[Inst] = NewInst;
 
     // Replace old operands with the new ones.
     for (Instruction::op_iterator UI = NewInst->op_begin(),
@@ -181,10 +202,10 @@ void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
           NewOp = Builder->CreateTruncOrBitCast(NewOp, (*UI)->getType());
 
         NewInst->replaceUsesOfWith(*UI, NewOp);
-      } else {
       }
 
     Builder->Insert(NewInst);
+    ToCopy.pop_back();
   }
 }
 
@@ -224,7 +245,7 @@ class CPCodeGenerationActions : public CPActions {
         ctx->assignmentCount = 0;
 	break;
       case DFS_OUT:
-        copyBB(ctx->Builder, BB, ctx->ValueMap, ctx->DT);
+        copyBB(ctx->Builder, BB, ctx->ValueMap, ctx->DT, &ctx->S->getRegion());
 	break;
     }
   }
