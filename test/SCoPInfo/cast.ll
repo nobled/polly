@@ -1,6 +1,6 @@
 ; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s
 ; RUN: opt -polly-scop-detect  -analyze %s | FileCheck %s
-
+; XFAIL: *
 ;void f(long a[], long N, long M) {
 ;  long i, j, k;
 ;  for (j = 0; j < M; ++j)

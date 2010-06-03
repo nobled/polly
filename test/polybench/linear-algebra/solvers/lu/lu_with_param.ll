@@ -74,19 +74,19 @@ return:                                           ; preds = %bb9, %entry
   ret void
 }
 
-; CHECK: SCoP: entry => <Function Return>       Parameters: (%n, ), Max Loop Depth: 3
-; CHECK: Bounds of Loop: bb2.preheader: { 0, 1 * %n + -1}
-; CHECK:   Bounds of Loop: bb1: { 0, -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2}
-; CHECK:     BB: bb1{
-; CHECK:       Reads @A[8200 * {0,+,1}<%bb2.preheader> + 8 * {0,+,1}<%bb1> + 8]
-; CHECK:       Reads @A[8200 * {0,+,1}<%bb2.preheader> + 0]
-; CHECK:       Writes @A[8200 * {0,+,1}<%bb2.preheader> + 8 * {0,+,1}<%bb1> + 8]
+; CHECK: SCoP: bb1 => bb8.loopexit      Parameters: ({0,+,1}<%bb2.preheader>, %n, ), Max Loop Depth: 1
+; CHECK: Bounds of Loop: bb1:   { 0, -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2}
+; CHECK:   BB: bb1{
+; CHECK:     Reads @A[8 * {0,+,1}<%bb1> + 8200 * {0,+,1}<%bb2.preheader> + 8]
+; CHECK:     Reads @A[8200 * {0,+,1}<%bb2.preheader> + 0]
+; CHECK:     Writes @A[8 * {0,+,1}<%bb1> + 8200 * {0,+,1}<%bb2.preheader> + 8]
+; CHECK:   }
+; CHECK: SCoP: bb6.preheader => bb9.loopexit    Parameters: ({0,+,1}<%bb2.preheader>, %n, ), Max Loop Depth: 2
+; CHECK: Bounds of Loop: bb6.preheader: { 0, -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2}
+; CHECK:   Bounds of Loop: bb5: { 0, -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2}
+; CHECK:     BB: bb5{
+; CHECK:       Reads @A[8 * {0,+,1}<%bb5> + 8200 * {0,+,1}<%bb2.preheader> + 8192 * {0,+,1}<%bb6.preheader> + 8200]
+; CHECK:       Reads @A[8200 * {0,+,1}<%bb2.preheader> + 8192 * {0,+,1}<%bb6.preheader> + 8192]
+; CHECK:       Reads @A[8 * {0,+,1}<%bb5> + 8200 * {0,+,1}<%bb2.preheader> + 8]
+; CHECK:       Writes @A[8 * {0,+,1}<%bb5> + 8200 * {0,+,1}<%bb2.preheader> + 8192 * {0,+,1}<%bb6.preheader> + 8200]
 ; CHECK:     }
-; CHECK:   Bounds of Loop: bb6.preheader:       { 0, -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2}
-; CHECK:     Bounds of Loop: bb5:       { 0, -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2}
-; CHECK:       BB: bb5{
-; CHECK:         Reads @A[8 * {0,+,1}<%bb5> + 8200 * {0,+,1}<%bb2.preheader> + 8192 * {0,+,1}<%bb6.preheader> + 8200]
-; CHECK:         Reads @A[8200 * {0,+,1}<%bb2.preheader> + 8192 * {0,+,1}<%bb6.preheader> + 8192]
-; CHECK:         Reads @A[8 * {0,+,1}<%bb5> + 8200 * {0,+,1}<%bb2.preheader> + 8]
-; CHECK:         Writes @A[8 * {0,+,1}<%bb5> + 8200 * {0,+,1}<%bb2.preheader> + 8192 * {0,+,1}<%bb6.preheader> + 8200]
-; CHECK:       }

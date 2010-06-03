@@ -72,11 +72,7 @@ return:                                           ; preds = %bb9, %bb10.preheade
   ret void
 }
 
-; CHECK: SCoP: entry => <Function Return>       Parameters: (%ny, %nx, ), Max Loop Depth: 2
-; CHECK: Bounds of Loop: bb:    { 0, 1 * %nx + -1}
-; CHECK:   BB: bb{
-; CHECK:     Writes @y[8 * {0,+,1}<%bb> + 0]
-; CHECK:   }
+; CHECK: SCoP: bb.nph => return.loopexit        Parameters: (%ny, ), Max Loop Depth: 2
 ; CHECK: Bounds of Loop: bb.nph:        { 0, 1 * %ny + -1}
 ; CHECK:   BB: bb.nph{
 ; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph> + 0]
@@ -100,3 +96,8 @@ return:                                           ; preds = %bb9, %bb10.preheade
 ; CHECK:       Reads %.lcssa[]
 ; CHECK:       Writes @y[8 * {0,+,1}<%bb7> + 0]
 ; CHECK:     }
+; CHECK: SCoP: bb => bb10.preheader.loopexit    Parameters: (%nx, ), Max Loop Depth: 1
+; CHECK: Bounds of Loop: bb:    { 0, 1 * %nx + -1}
+; CHECK:   BB: bb{
+; CHECK:     Writes @y[8 * {0,+,1}<%bb> + 0]
+; CHECK:   }

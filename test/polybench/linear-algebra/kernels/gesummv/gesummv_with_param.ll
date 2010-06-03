@@ -63,13 +63,7 @@ return:                                           ; preds = %bb3.us, %entry
   ret void
 }
 
-; CHECK: SCoP: entry => <Function Return>       Parameters: (%n, ), Max Loop Depth: 2
-; CHECK: BB: bb.nph10.split.us{
-; CHECK:   Writes %1[]
-; CHECK:   Reads @alpha[0]
-; CHECK:   Writes %2[]
-; CHECK:   Reads @beta[0]
-; CHECK: }
+; CHECK: SCoP: bb.nph.us => return.loopexit     Parameters: (%n, ), Max Loop Depth: 2
 ; CHECK: Bounds of Loop: bb.nph.us:     { 0, 1 * %n + -1}
 ; CHECK:   BB: bb.nph.us{
 ; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
