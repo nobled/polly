@@ -162,13 +162,6 @@ static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative) {
     isl_int_set_si(v, 0);
 }
 
-// TODO: Move to LoopInfo?
-static bool isPreHeader(BasicBlock *BB, LoopInfo *LI) {
-  TerminatorInst *TI = BB->getTerminator();
-  return (TI->getNumSuccessors() == 1)
-    && LI->isLoopHeader(TI->getSuccessor(0));
-}
-
 static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
   assert((isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst))
     && "Only accept Load or Store!");
@@ -456,42 +449,16 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &R) const {
         || isa<Instruction>(Br->getCondition())))
     return false;
 
-  if (Loop *L = getScopeLoop(R, *LI)) {
-    // Only allow branches that are loop exits. This stops anything
-    // except loops that have just one exit and are detected by our LoopInfo
-    // analysis
-    // It is ok if BB is branching out of the loop
-    if (L->isLoopExiting(&BB))
-      return true;
+  Loop *L = LI->getLoopFor(&BB);
 
-    assert(L->getExitingBlock()
-           && "The Loop return from getScopeLoop will always have 1 exit!");
-
-    // Now bb is not the exit block of the loop.
-    // Is BB branching to inner loop?
-    unsigned int numSucc = TI->getNumSuccessors();
-    for (unsigned int i = 0; i < numSucc; ++i) {
-      BasicBlock *SuccBB = TI->getSuccessor(i);
-      if (isPreHeader(SuccBB, LI) || LI->isLoopHeader(SuccBB)) {
-        // If branching to inner loop
-        // FIXME: We can only handle a bb branching to preheader or not.
-        if (numSucc > 2) {
-          STATSCOP(CFG);
-          return false;
-        }
-        return true;
-      }
-    }
-
-    // Now bb is not branching to inner loop.
-    // FIXME: Handle the branch condition
+  // Conditions are not yet supported, except at loop exits.
+  // TODO: Allow conditions in structured CFGs.
+  if (!L || L->getExitingBlock() != &BB) {
     DEBUG(dbgs() << "Bad BB in cfg: " << BB.getName() << "\n");
     STATSCOP(CFG);
     return false;
   }
 
-  // BB is not in any loop.
-  // TODO: handle the branch condition
   return true;
 }
 
