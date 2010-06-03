@@ -568,47 +568,39 @@ bool SCoPDetection::isValidBasicBlock(BasicBlock &BB, Region &R,
   return true;
 }
 
-bool SCoPDetection::hasValidLoopBounds(Region &R, ParamSetType &Params) const {
-  // Find the parameters used in loop bounds
-  if (Loop *L = castToLoop(R, *LI)) {
+bool SCoPDetection::isValidLoop(Loop *L, Region &R, ParamSetType &Params) const {
+  // We can only handle loops whose induction variables in are in canonical
+  // form.
+  PHINode *IndVar = L->getCanonicalInductionVariable();
+  Instruction *IndVarInc = L->getCanonicalInductionVariableIncrement();
 
-    DEBUG(dbgs() << "Region : " << R.getNameStr()
-      << " also is a loop: " <<(L ? L->getHeader()->getName() : "Not a loop")
-      << "\n");
+  if (!IndVar || !IndVarInc) {
+    DEBUG(dbgs() << "No canonical iv for loop : " << L->getHeader()->getName()
+          << "\n");
+    STATSCOP(IndVar);
+    return false;
+  }
 
-    // We can only handle loops whose induction variables in are in canonical
-    // form.
-    PHINode *IndVar = L->getCanonicalInductionVariable();
-    Instruction *IndVarInc = L->getCanonicalInductionVariableIncrement();
+  const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
 
-    if ((IndVar == 0) || (IndVarInc == 0)) {
-      DEBUG(dbgs() << "No CanIV for loop : " << L->getHeader()->getName()
-            << "?\n");
-      STATSCOP(IndVar);
-      return false;
-    }
+  DEBUG(dbgs() << "Backedge taken count: " << *LoopCount << "\n");
 
-    const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
+  // We can not handle the loop if its loop bounds can not be computed.
+  if (isa<SCEVCouldNotCompute>(LoopCount)) {
+    STATSCOP(LoopBound);
+    return false;
+  }
 
-    DEBUG(dbgs() << "Backedge taken count: "<< *LoopCount <<"\n");
+  // The AffineSCEVIterator will always return the induction variable
+  // which start from 0, and step by 1.
+  const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType()),
+        *UB = LoopCount;
 
-    // We can not handle the loop if its loop bounds can not be computed.
-    if (isa<SCEVCouldNotCompute>(LoopCount)) {
-      STATSCOP(LoopBound);
-      return false;
-    }
-
-    // The AffineSCEVIterator will always return the induction variable
-    // which start from 0, and step by 1.
-    const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType()),
-               *UB = LoopCount;
-
-    // Build the lower bound.
-    if (!SCEVAffFunc::buildAffineFunc(LB, R, Params, 0, *LI, *SE)
-        || !SCEVAffFunc::buildAffineFunc(UB, R, Params, 0, *LI, *SE)) {
-      STATSCOP(AffFunc);
-      return false;
-    }
+  // Build the lower bound.
+  if (!SCEVAffFunc::buildAffineFunc(LB, R, Params, 0, *LI, *SE)
+      || !SCEVAffFunc::buildAffineFunc(UB, R, Params, 0, *LI, *SE)) {
+    STATSCOP(AffFunc);
+    return false;
   }
 
   return true;
@@ -764,7 +756,9 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) const {
     }
   }
 
-  if (!hasValidLoopBounds(R, Params))
+  Loop *L = castToLoop(R, *LI);
+
+  if (L && !isValidLoop(L, R, Params))
     return false;
 
   return true;

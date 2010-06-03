@@ -240,8 +240,13 @@ class SCoPDetection : public FunctionPass {
   // Check if the CFG is valid for SCoP.
   bool isValidCFG(BasicBlock &BB, Region &R) const;
 
-  // Check if the loop bounds in SCoP is valid.
-  bool hasValidLoopBounds(Region &R, ParamSetType &Params) const;
+  /// @brief Is a loop valid with respect to a given region.
+  ///
+  /// @param L The loop to check.
+  /// @param R The region we analyse the loop in.
+  ///
+  /// @return True if the loop is valid in the region.
+  bool isValidLoop(Loop *L, Region &R, ParamSetType &Params) const;
 
   /////////////////////////////////////////////////////////////////////////////
   // If the Region not a valid part of a SCoP,
