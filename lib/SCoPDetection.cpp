@@ -443,7 +443,7 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &R) const {
   TerminatorInst *TI = BB.getTerminator();
 
   // Return instructions are only valid if the region is the top level region.
-  if (isa<ReturnInst>(TI) && !R.getExit())
+  if (isa<ReturnInst>(TI) && !R.getExit() && TI->getNumOperands() == 0)
     return true;
 
   BranchInst *Br = dyn_cast<BranchInst>(TI);
