@@ -52,6 +52,9 @@ Loop *castToLoop(const Region &R, LoopInfo &LI);
 ///
 /// @param R  The "Scope"
 /// @param LI The LoopInfo to help the casting.
+///
+/// @return If there is a loop have the same entry and exit with R or its parent,
+///          return the loop, otherwise, return null.
 Loop *getScopeLoop(const Region &R, LoopInfo &LI);
 
 //===---------------------------------------------------------------------===//
