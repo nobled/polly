@@ -437,27 +437,24 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
 }
 
 //===----------------------------------------------------------------------===//
-// SCoPDetection Implement
+// SCoPDetection Implementation.
 
 bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &R) const {
   TerminatorInst *TI = BB.getTerminator();
 
-  unsigned int numSucc = TI->getNumSuccessors();
-
-  // Return and unconditional branch is ok.
-  if (numSucc < 2) return true;
+  // Return instructions are only valid if the region is the top level region.
+  if (isa<ReturnInst>(TI) && !R.getExit())
+    return true;
 
   BranchInst *Br = dyn_cast<BranchInst>(TI);
-  // We do not support switch at the moment.
+
   if (!Br) return false;
+  if (Br->isUnconditional()) return true;
 
-  // XXX: Should we preform some optimization to eliminate this?
-  // It is the same as unconditional branch if the condition is constant.
-  if (isa<Constant>(Br->getCondition())) return true;
-
-  Instruction *Cond = dyn_cast<Instruction>(Br->getCondition());
-  // And we only support instruction as condition now
-  if (!Cond) return false;
+  // Only instructions and constant expressions are valid branch conditions.
+  if (!(isa<Constant>(Br->getCondition())
+        || isa<Instruction>(Br->getCondition())))
+    return false;
 
   if (Loop *L = getScopeLoop(R, *LI)) {
     // Only allow branches that are loop exits. This stops anything
@@ -472,6 +469,7 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &R) const {
 
     // Now bb is not the exit block of the loop.
     // Is BB branching to inner loop?
+    unsigned int numSucc = TI->getNumSuccessors();
     for (unsigned int i = 0; i < numSucc; ++i) {
       BasicBlock *SuccBB = TI->getSuccessor(i);
       if (isPreHeader(SuccBB, LI) || LI->isLoopHeader(SuccBB)) {
