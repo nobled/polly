@@ -568,47 +568,39 @@ bool SCoPDetection::isValidBasicBlock(BasicBlock &BB, Region &R,
   return true;
 }
 
-bool SCoPDetection::hasValidLoopBounds(Region &R, ParamSetType &Params) const {
-  // Find the parameters used in loop bounds
-  if (Loop *L = castToLoop(R, *LI)) {
+bool SCoPDetection::isValidLoop(Loop *L, Region &R, ParamSetType &Params) const {
+  // We can only handle loops whose induction variables in are in canonical
+  // form.
+  PHINode *IndVar = L->getCanonicalInductionVariable();
+  Instruction *IndVarInc = L->getCanonicalInductionVariableIncrement();
 
-    DEBUG(dbgs() << "Region : " << R.getNameStr()
-      << " also is a loop: " <<(L ? L->getHeader()->getName() : "Not a loop")
-      << "\n");
+  if (!IndVar || !IndVarInc) {
+    DEBUG(dbgs() << "No canonical iv for loop : " << L->getHeader()->getName()
+          << "\n");
+    STATSCOP(IndVar);
+    return false;
+  }
 
-    // We can only handle loops whose induction variables in are in canonical
-    // form.
-    PHINode *IndVar = L->getCanonicalInductionVariable();
-    Instruction *IndVarInc = L->getCanonicalInductionVariableIncrement();
+  const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
 
-    if ((IndVar == 0) || (IndVarInc == 0)) {
-      DEBUG(dbgs() << "No CanIV for loop : " << L->getHeader()->getName()
-            << "?\n");
-      STATSCOP(IndVar);
-      return false;
-    }
+  DEBUG(dbgs() << "Backedge taken count: " << *LoopCount << "\n");
 
-    const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
+  // We can not handle the loop if its loop bounds can not be computed.
+  if (isa<SCEVCouldNotCompute>(LoopCount)) {
+    STATSCOP(LoopBound);
+    return false;
+  }
 
-    DEBUG(dbgs() << "Backedge taken count: "<< *LoopCount <<"\n");
+  // The AffineSCEVIterator will always return the induction variable
+  // which start from 0, and step by 1.
+  const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType()),
+        *UB = LoopCount;
 
-    // We can not handle the loop if its loop bounds can not be computed.
-    if (isa<SCEVCouldNotCompute>(LoopCount)) {
-      STATSCOP(LoopBound);
-      return false;
-    }
-
-    // The AffineSCEVIterator will always return the induction variable
-    // which start from 0, and step by 1.
-    const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType()),
-               *UB = LoopCount;
-
-    // Build the lower bound.
-    if (!SCEVAffFunc::buildAffineFunc(LB, R, Params, 0, *LI, *SE)
-        || !SCEVAffFunc::buildAffineFunc(UB, R, Params, 0, *LI, *SE)) {
-      STATSCOP(AffFunc);
-      return false;
-    }
+  // Build the lower bound.
+  if (!SCEVAffFunc::buildAffineFunc(LB, R, Params, 0, *LI, *SE)
+      || !SCEVAffFunc::buildAffineFunc(UB, R, Params, 0, *LI, *SE)) {
+    STATSCOP(AffFunc);
+    return false;
   }
 
   return true;
@@ -720,7 +712,7 @@ void SCoPDetection::runOnRegion(Region &R) {
     runOnRegion(**I);
 
   // Check current region.
-  if (!isValidRegion(R))
+  if (!isSCoP(R))
     return;
 
   RegionToSCoPs.insert(std::make_pair(&R, (TempSCoP*)0));
@@ -729,15 +721,18 @@ void SCoPDetection::runOnRegion(Region &R) {
   killAllTempValFor(R);
 }
 
-bool SCoPDetection::isValidRegion(Region &R) const {
+bool SCoPDetection::isSCoP(Region &R) const {
   ParamSetType Params;
-  return isValidRegion(R, Params);
+  return isValidRegion(R, R, Params);
 }
 
-bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) const {
+bool SCoPDetection::isValidRegion(Region &ReferenceRegion,
+                                  Region &CurrentRegion,
+                                  ParamSetType &Params) const {
   // Check if getScopeLoop work on the current loop nest and region tree,
   // if it not work, we could not handle any further
-  if (getScopeLoop(R, *LI) != LI->getLoopFor(R.getEntry())) {
+  if (getScopeLoop(CurrentRegion, *LI)
+      != LI->getLoopFor(CurrentRegion.getEntry())) {
     STATSCOP(LoopNest);
     return false;
   }
@@ -745,18 +740,19 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) const {
   ParamSetType SubParams;
 
   // Visit all sub region node.
-  for (Region::element_iterator I = R.element_begin(), E = R.element_end();
-      I != E; ++I) {
+  for (Region::element_iterator I = CurrentRegion.element_begin(),
+       E = CurrentRegion.element_end(); I != E; ++I) {
     if (I->isSubRegion()) {
       Region &subR = *(I->getNodeAs<Region>());
-      if (isValidRegion(subR, SubParams)
-          && tryMergeParams(R, Params, SubParams))
+      if (isValidRegion(ReferenceRegion, subR, SubParams)
+          && tryMergeParams(CurrentRegion, Params, SubParams))
         continue;
       return false;
     } else {
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
 
-      if (isValidCFG(BB, R) && isValidBasicBlock(BB, R, Params))
+      if (isValidCFG(BB, ReferenceRegion)
+          && isValidBasicBlock(BB, CurrentRegion, Params))
         continue;
 
       DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
@@ -764,7 +760,9 @@ bool SCoPDetection::isValidRegion(Region &R, ParamSetType &Params) const {
     }
   }
 
-  if (!hasValidLoopBounds(R, Params))
+  Loop *L = castToLoop(CurrentRegion, *LI);
+
+  if (L && !isValidLoop(L, ReferenceRegion, Params))
     return false;
 
   return true;

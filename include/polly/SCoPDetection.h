@@ -212,9 +212,23 @@ class SCoPDetection : public FunctionPass {
   // false otherwise.
   //
   // NOTE: All this function will increase the statistic counters.
-  bool isValidRegion(Region &R, ParamSetType &Params) const;
 
-  bool isValidRegion(Region &R) const;
+  /// @brief Check is a Region is a SCoP.
+  ///
+  /// @param The region to check.
+  bool isSCoP(Region &R) const;
+
+  /// @brief Check if a Region is a valid element of a SCoP.
+  ///
+  ///
+  /// @param ReferenceRegion The region in respect to which the correctness is
+  ///                        checked.
+  /// @param CurrentRegion The region that is checked to be a valid element of
+  ///                      the ReferenceRegion.
+  ///
+  /// @return Return true if R is a valid subregion of R.
+  bool isValidRegion(Region &ReferenceRegion, Region &CurrentRegion,
+                     ParamSetType &Params) const;
 
   // Check if the instruction is a valid function call.
   static bool isValidCallInst(CallInst &CI);
@@ -237,11 +251,24 @@ class SCoPDetection : public FunctionPass {
   bool isValidBasicBlock(BasicBlock &BB, Region &R,
                          ParamSetType &Params) const;
 
-  // Check if the CFG is valid for SCoP.
-  bool isValidCFG(BasicBlock &BB, Region &R) const;
+  /// @brief Check if the control flow in a basic block is valid.
+  ///
+  /// @param BB The BB to check the control flow.
+  /// @param ReferenceRegion The region in respect to which we check the control
+  ///                        flow.
+  ///
+  /// @return True if the BB contains only valid control flow.
+  ///
+  bool isValidCFG(BasicBlock &BB, Region &ReferenceRegion) const;
 
-  // Check if the loop bounds in SCoP is valid.
-  bool hasValidLoopBounds(Region &R, ParamSetType &Params) const;
+  /// @brief Is a loop valid with respect to a given region.
+  ///
+  /// @param L The loop to check.
+  /// @param ReferenceRegion The region we analyse the loop in.
+  ///
+  /// @return True if the loop is valid in the region.
+  bool isValidLoop(Loop *L, Region &ReferenceRegion,
+                   ParamSetType &Params) const;
 
   /////////////////////////////////////////////////////////////////////////////
   // If the Region not a valid part of a SCoP,
