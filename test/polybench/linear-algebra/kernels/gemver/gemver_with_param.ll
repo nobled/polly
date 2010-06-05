@@ -1,5 +1,5 @@
 ; RUN: opt -O3 -indvars -polly-scop-detect -polly-print-temp-scop-in-detail -print-top-scop-only  -analyze %s | FileCheck %s
-; XFAIL: *
+
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
 %struct._IO_FILE = type { i32, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, %struct._IO_marker*, %struct._IO_FILE*, i32, i32, i64, i16, i8, [1 x i8], i8*, i64, i8*, i8*, i8*, i8*, i64, i32, [20 x i8] }
@@ -138,51 +138,6 @@ return:                                           ; preds = %bb18, %bb19.prehead
   ret void
 }
 
-; CHECK: SCoP: bb.nph => return.loopexit        Parameters: (%n, ), Max Loop Depth: 2
-; CHECK: Bounds of Loop: bb.nph:        { 0, 1 * %n + -1}
-; CHECK:   BB: bb.nph{
-; CHECK:     Writes %.promoted[]
-; CHECK:     Reads @w[8 * {0,+,1}<%bb.nph> + 0]
-; CHECK:   }
-; CHECK:   Bounds of Loop: bb16:        { 0, 1 * %n + -1}
-; CHECK:     BB: bb16{
-; CHECK:       Reads %.promoted[]
-; CHECK:       Reads %28[]
-; CHECK:       Reads @A[8 * {0,+,1}<%bb16> + 32000 * {0,+,1}<%bb.nph> + 0]
-; CHECK:       Reads %31[]
-; CHECK:       Reads @x[8 * {0,+,1}<%bb16> + 0]
-; CHECK:       Writes %28[]
-; CHECK:     }
-; CHECK:   BB: bb18{
-; CHECK:     Reads %28[]
-; CHECK:     Writes @w[8 * {0,+,1}<%bb.nph> + 0]
-; CHECK:   }
-; CHECK: SCoP: bb12 => bb19.preheader   Parameters: (%n, ), Max Loop Depth: 1
-; CHECK: Bounds of Loop: bb12:  { 0, 1 * %n + -1}
-; CHECK:   BB: bb12{
-; CHECK:     Reads @x[8 * {0,+,1}<%bb12> + 0]
-; CHECK:     Reads @z[8 * {0,+,1}<%bb12> + 0]
-; CHECK:     Writes @x[8 * {0,+,1}<%bb12> + 0]
-; CHECK:   }
-; CHECK: SCoP: bb.nph30 => bb13.preheader       Parameters: (%n, ), Max Loop Depth: 2
-; CHECK: Bounds of Loop: bb.nph30:      { 0, 1 * %n + -1}
-; CHECK:   BB: bb.nph30{
-; CHECK:     Writes %.promoted31[]
-; CHECK:     Reads @x[8 * {0,+,1}<%bb.nph30> + 0]
-; CHECK:   }
-; CHECK:   Bounds of Loop: bb7: { 0, 1 * %n + -1}
-; CHECK:     BB: bb7{
-; CHECK:       Reads %.promoted31[]
-; CHECK:       Reads %16[]
-; CHECK:       Reads @A[8 * {0,+,1}<%bb.nph30> + 32000 * {0,+,1}<%bb7> + 0]
-; CHECK:       Reads %19[]
-; CHECK:       Reads @y[8 * {0,+,1}<%bb7> + 0]
-; CHECK:       Writes %16[]
-; CHECK:     }
-; CHECK:   BB: bb9{
-; CHECK:     Reads %16[]
-; CHECK:     Writes @x[8 * {0,+,1}<%bb.nph30> + 0]
-; CHECK:   }
 ; CHECK: SCoP: bb.nph40 => bb10.preheader       Parameters: (%n, ), Max Loop Depth: 2
 ; CHECK: Bounds of Loop: bb.nph40:      { 0, 1 * %n + -1}
 ; CHECK:   BB: bb.nph40{

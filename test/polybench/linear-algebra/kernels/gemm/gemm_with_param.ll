@@ -78,14 +78,6 @@ return:                                           ; preds = %bb.nph26, %bb6, %en
   ret void
 }
 
-; CHECK: SCoP: bb4.preheader => return.loopexit Parameters: (%nj, %ni, ), Max Loop Depth: 2
-; CHECK: Bounds of Loop: bb4.preheader: { 0, 1 * %ni + -1}
-; CHECK:   Bounds of Loop: bb4: { 0, 1 * %nj + -1}
-; CHECK:     BB: bb4{
-; CHECK:       Reads @C[8 * {0,+,1}<%bb4> + 4096 * {0,+,1}<%bb4.preheader> + 0]
-; CHECK:       Reads %5[]
-; CHECK:       Writes @C[8 * {0,+,1}<%bb4> + 4096 * {0,+,1}<%bb4.preheader> + 0]
-; CHECK:     }
 ; CHECK: SCoP: bb.nph.us.preheader.us => return.loopexit13      Parameters: (%nj, %nk, %ni, ), Max Loop Depth: 3
 ; CHECK: Bounds of Loop: bb.nph.us.preheader.us:        { 0, 1 * %ni + -1}
 ; CHECK:   Bounds of Loop: bb.nph.us.us:        { 0, 1 * %nj + -1}

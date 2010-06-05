@@ -1,5 +1,5 @@
 ; RUN: opt -O3 -indvars -polly-scop-detect -polly-print-temp-scop-in-detail -print-top-scop-only -analyze %s | FileCheck %s
-; XFAIL: *
+
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
 %struct._IO_FILE = type { i32, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, %struct._IO_marker*, %struct._IO_FILE*, i32, i32, i64, i16, i8, [1 x i8], i8*, i64, i8*, i8*, i8*, i8*, i64, i32, [20 x i8] }
@@ -74,13 +74,6 @@ return:                                           ; preds = %bb9, %entry
   ret void
 }
 
-; CHECK: SCoP: bb1 => bb8.loopexitXFAIL      Parameters: ({0,+,1}<%bb2.preheader>, %n, ), Max Loop Depth: 1
-; CHECK: Bounds of Loop: bb1:   { 0, -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2}
-; CHECK:   BB: bb1{
-; CHECK:     Reads @A[8 * {0,+,1}<%bb1> + 8200 * {0,+,1}<%bb2.preheader> + 8]
-; CHECK:     Reads @A[8200 * {0,+,1}<%bb2.preheader> + 0]
-; CHECK:     Writes @A[8 * {0,+,1}<%bb1> + 8200 * {0,+,1}<%bb2.preheader> + 8]
-; CHECK:   }
 ; CHECK: SCoP: bb6.preheader => bb9.loopexit    Parameters: ({0,+,1}<%bb2.preheader>, %n, ), Max Loop Depth: 2
 ; CHECK: Bounds of Loop: bb6.preheader: { 0, -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2}
 ; CHECK:   Bounds of Loop: bb5: { 0, -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2}
