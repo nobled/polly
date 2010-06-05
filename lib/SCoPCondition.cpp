@@ -157,6 +157,7 @@ const SCoPCnd *SCoPCondition::getOrCnd(const SCoPCnd *LHS,
 
 const SCoPCnd *SCoPCondition::getOrCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
   DEBUG(
+    dbgs() << "dump or ops:\n";
     for (unsigned i = 0, e = Ops.size(); i != e; ++i) {
       dbgs() << "Cnd in or cnd: ";
       Ops[i]->print(dbgs());
