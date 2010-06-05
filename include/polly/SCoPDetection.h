@@ -16,8 +16,8 @@
 #define POLLY_SCOP_DETECTION_H
 
 #include "polly/PollyType.h"
-#include "polly/SCEVAffFunc.h"
 #include "polly/ScalarDataRef.h"
+#include "polly/Support/AffineSCEVIterator.h"
 
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/Passes.h"
@@ -30,8 +30,12 @@
 using namespace llvm;
 
 namespace polly {
+typedef std::set<const SCEV*> ParamSetType;
+typedef std::pair<const SCEV*, const SCEV*> AffCmptType;
 
+class TempSCoP;
 class SCoPDetection;
+class SCEVAffFunc;
 
 //===----------------------------------------------------------------------===//
 /// Temporary Hack for extended regiontree.
@@ -56,6 +60,82 @@ Loop *castToLoop(const Region &R, LoopInfo &LI);
 /// @return If there is a loop have the same entry and exit with R or its parent,
 ///          return the loop, otherwise, return null.
 Loop *getScopeLoop(const Region &R, LoopInfo &LI);
+
+//===---------------------------------------------------------------------===//
+/// @brief Affine function represent in llvm SCEV expressions.
+///
+/// A helper class for collect affine function information
+class SCEVAffFunc {
+  // Temporary hack
+  friend class SCoPDetection;
+  // The translation component
+  const SCEV *TransComp;
+
+  // { Variable, Coefficient }
+  typedef std::map<const SCEV*, const SCEV*> LnrTransSet;
+  LnrTransSet LnrTrans;
+
+public:
+  enum AccessType {
+    None = 0,
+    Read = 1, // Or we could call it "Use"
+    Write = 2 // Or define
+  };
+  // Pair of {address, read/write}
+  typedef PointerIntPair<Value*, 2, AccessType> MemAccTy;
+private:
+  // The base address of the address SCEV, if the Value is a pointer, this is
+  // an array access, otherwise, this is a value access.
+  // And the Write/Read modifier
+  MemAccTy BaseAddr;
+
+  // getCoeff - Get the Coefficient of a given variable.
+  const SCEV *getCoeff(const SCEV *Var) const {
+    LnrTransSet::const_iterator At = LnrTrans.find(Var);
+    return At == LnrTrans.end() ? 0 : At->second;
+  }
+
+public:
+  /// @brief Create a new SCEV affine function.
+  explicit SCEVAffFunc() : TransComp(0), BaseAddr(0, SCEVAffFunc::None) {}
+
+  /// @brief Create a new SCEV affine function with memory access type.
+
+  explicit SCEVAffFunc(AccessType Type, Value* baseAddr = 0)
+    : TransComp(0), BaseAddr(baseAddr, Type) {}
+
+  /// @brief Build a loop bound constrain from an affine function.
+  ///
+  /// @param ctx      The context of isl objects.
+  /// @param dim      The dimension of the the constrain.
+  /// @param IndVars  The induction variable may appear in the affine function.
+  /// @param Params   The parameters may appear in the affine funcion.
+  /// @param isLower  Is this the lower bound?
+  ///
+  /// @return         The isl_constrain represent by this affine function.
+  polly_constraint *toLoopBoundConstrain(polly_ctx *ctx, polly_dim *dim,
+    const SmallVectorImpl<const SCEV*> &IndVars,
+    const SmallVectorImpl<const SCEV*> &Params,
+    bool isLower) const;
+
+  polly_constraint *toAccessFunction(polly_ctx *ctx, polly_dim* dim,
+    const SmallVectorImpl<Loop*> &NestLoops,
+    const SmallVectorImpl<const SCEV*> &Params,
+    ScalarEvolution &SE) const;
+
+
+  bool isDataRef() const { return BaseAddr.getInt() != SCEVAffFunc::None; }
+
+  bool isRead() const { return BaseAddr.getInt() == SCEVAffFunc::Read; }
+
+  const Value *getBaseAddr() const { return BaseAddr.getPointer(); }
+
+  /// @brief Print the affine function.
+  ///
+  /// @param OS The output stream the affine function is printed to.
+  /// @param SE The ScalarEvolution that help printing the affine function.
+  void print(raw_ostream &OS, ScalarEvolution *SE) const;
+};
 
 //===---------------------------------------------------------------------===//
 /// Types
@@ -204,10 +284,6 @@ class SCoPDetection : public FunctionPass {
   void runOnRegion(Region &R);
 
   /////////////////////////////////////////////////////////////////////////////
-  // We need to check if valid parameters from child SCoP also valid in
-  // parent SCoP. So all the isValidXXX functions will extract parameters
-  // to Params.
-  //
   // Check if the max region of SCoP is valid, return true if it is valid
   // false otherwise.
   //
@@ -221,54 +297,64 @@ class SCoPDetection : public FunctionPass {
   /// @brief Check if a Region is a valid element of a SCoP.
   ///
   ///
-  /// @param ReferenceRegion The region in respect to which the correctness is
+  /// @param RefRegion The region in respect to which the correctness is
   ///                        checked.
-  /// @param CurrentRegion The region that is checked to be a valid element of
-  ///                      the ReferenceRegion.
+  /// @param CurRegion The region that is checked to be a valid element of
+  ///                      the RefRegion.
   ///
   /// @return Return true if R is a valid subregion of R.
-  bool isValidRegion(Region &ReferenceRegion, Region &CurrentRegion,
-                     ParamSetType &Params) const;
+  bool isValidRegion(Region &RefRegion, Region &CurRegion) const;
 
   // Check if the instruction is a valid function call.
   static bool isValidCallInst(CallInst &CI);
 
   // Check is a memory access is valid.
-  bool isValidMemoryAccess(Instruction &Inst, Region &R,
-                           ParamSetType &Params) const;
+  bool isValidMemoryAccess(Instruction &Inst, Region &RefRegion, Region &CurRegion) const;
 
   // Check if all parameters in Params valid in Region R.
-  bool tryMergeParams(Region &R, ParamSetType &Params,
-                      ParamSetType &SubParams) const;
+  void mergeParams(Region &R, ParamSetType &Params,
+                   ParamSetType &SubParams) const;
 
   // Check if the Instruction is a valid part of SCoP, return true and extract
   // the corresponding information, return false otherwise.
-  bool isValidInstruction(Instruction &I, Region &R,
-                          ParamSetType &Params) const;
+  bool isValidInstruction(Instruction &I,
+                          Region &RefRegion, Region &CurRegion) const;
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
-  bool isValidBasicBlock(BasicBlock &BB, Region &R,
-                         ParamSetType &Params) const;
+  bool isValidBasicBlock(BasicBlock &BB, Region &RefRegion, Region &CurRegion) const;
 
   /// @brief Check if the control flow in a basic block is valid.
   ///
   /// @param BB The BB to check the control flow.
-  /// @param ReferenceRegion The region in respect to which we check the control
+  /// @param RefRegion The region in respect to which we check the control
   ///                        flow.
+  /// @param CurRegion The smallest region that containing BB.
   ///
   /// @return True if the BB contains only valid control flow.
   ///
-  bool isValidCFG(BasicBlock &BB, Region &ReferenceRegion) const;
+  bool isValidCFG(BasicBlock &BB, Region &RefRegion, Region &CurRegion) const;
 
   /// @brief Is a loop valid with respect to a given region.
   ///
   /// @param L The loop to check.
-  /// @param ReferenceRegion The region we analyse the loop in.
+  /// @param RefRegion The region we analyse the loop in.
   ///
   /// @return True if the loop is valid in the region.
-  bool isValidLoop(Loop *L, Region &ReferenceRegion,
-                   ParamSetType &Params) const;
+  bool isValidLoop(Loop *L, Region &RefRegion, Region &CurRegion) const;
+
+  /// @brief Build an affine function from a SCEV expression.
+  ///
+  /// @param S            The SCEV expression to be converted to affine
+  ///                     function.
+  /// @param SCoP         The Scope of this expression.
+  /// @param FuncToBuild  The SCEVAffFunc to hold the result.
+  ///
+  void buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
+                           TempSCoP &SCoP) const;
+
+  bool isValidAffineFunction(const SCEV *S, Region &RefRegion, Region &CurRegion,
+                             bool isMemAcc) const;
 
   /////////////////////////////////////////////////////////////////////////////
   // If the Region not a valid part of a SCoP,
@@ -279,14 +365,14 @@ class SCoPDetection : public FunctionPass {
   TempSCoP *buildTempSCoP(Region &R);
 
   // Extract the access functions from a BasicBlock to ScalarAccs
-  void extractAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
+  void buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
                               AccFuncSetType &AccessFunctions);
 
-  void extractLoopBounds(TempSCoP &SCoP);
+  void buildLoopBounds(TempSCoP &SCoP);
 
   // Capture scalar data reference. Fill the scalar "memory access" to the
   // access function map.
-  void captureScalarDataRef(Instruction &I, AccFuncSetType &ScalarAccs);
+  void buildScalarDataRef(Instruction &I, AccFuncSetType &ScalarAccs);
 
   // Kill all temporary value that can be rewrite by SCEV Expander.
   void killAllTempValFor(const Region &R);
