@@ -228,6 +228,7 @@ class SCoPCondition : public FunctionPass {
     return at == BBtoInDomCond.end() ? 0 : at->second;
   }
   const SCoPCnd *getInDomCnd(DomTreeNode *BB, DomTreeNode *DomBB);
+  const SCoPCnd *getInDomCnd(DomTreeNode *BB);
 
   const SCoPCnd *getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB);
 

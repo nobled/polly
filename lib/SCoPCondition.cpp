@@ -160,6 +160,7 @@ const SCoPCnd *SCoPCondition::getOrCnd(const SCoPCnd *LHS,
 }
 
 const SCoPCnd *SCoPCondition::getOrCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
+  assert(!Ops.empty() && "Why ops is empty?");
   DEBUG(
     dbgs() << "dump or ops:\n";
     for (unsigned i = 0, e = Ops.size(); i != e; ++i) {
@@ -193,11 +194,15 @@ const SCoPCnd *SCoPCondition::getOrCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
     if (isOppBrCnd(cast<SCoPBrCnd>(Ops[idx]), cast<SCoPBrCnd>(Ops[idx+1]))) {
       // Erase both conditions
       Ops.erase(Ops.begin() + idx, Ops.begin() + idx + 2);
+      if (Ops.empty())
+        // If all ops reduced, this is always true
+        return getAlwaysTrue();
       // Do not increase idx;
       continue;
     }
     ++idx;
   }
+
 
   // Flatten the expression tree of Or Condition?
   for (unsigned i = 0, e = Ops.size(); i != e; ++i)
@@ -233,6 +238,7 @@ const SCoPCnd *SCoPCondition::getAndCnd(const SCoPCnd *LHS,
 
 
 const SCoPCnd *SCoPCondition::getAndCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
+  assert(!Ops.empty() && "Why ops is empty?");
   // Handle the trival condition
   if (Ops.size() == 1)
     return Ops[0];
@@ -294,20 +300,35 @@ bool SCoPCondition::isOppBrCnd(const SCoPBrCnd *BrLHS,
   return false;
 }
 
-const SCoPCnd * polly::SCoPCondition::getInDomCnd(DomTreeNode *Node,
-                                                  DomTreeNode *DomNode) {
+const SCoPCnd *SCoPCondition::getInDomCnd(DomTreeNode *Node,
+                                          DomTreeNode *DomNode) {
   if (Node == DomNode)
     return getAlwaysTrue();
 
+  DomTreeNode *IDom = Node->getIDom();
+
+  assert(DT->dominates(DomNode, IDom)
+         && "DomNode must dominate Node and its idom!");
+  SmallVector<const SCoPCnd*, 4> AndCnds;
+  if (IDom != DomNode) {
+    // Compute InDomCond(IDom(BB), DomBB)
+    const SCoPCnd *PredDomCnd = getInDomCnd(IDom, DomNode);
+    AndCnds.push_back(PredDomCnd);
+  }
+  // // Compute InDomCond(BB, IDom(BB))
+  const SCoPCnd *InDomCond = getInDomCnd(Node);
+  AndCnds.push_back(InDomCond);
+  // Compute InDomCond(BB, IDom(BB)) & InDomCond(IDom(BB), DomBB)
+  const SCoPCnd *DomCond = getAndCnd(AndCnds);
+  return DomCond;
+}
+
+const SCoPCnd *SCoPCondition::getInDomCnd(DomTreeNode *Node) {
   BasicBlock *BB = Node->getBlock();
   if (const SCoPCnd *Cnd = lookUpInDomCond(BB))
     return Cnd;
 
   DomTreeNode *IDom = Node->getIDom();
-
-  assert(DT->dominates(DomNode, IDom) && "DomNode must dominate Node and its idom!");
-  // Compute InDomCond(IDom(BB), DomBB)
-  const SCoPCnd *PredDomCnd = getInDomCnd(IDom, DomNode);
 
   // Compute Union(CondOfEdge(BB, pred(BB)) & InDomCond(pred(BB), IDom(BB)))
   assert(IDom && "Expect IDom not be null!");
@@ -322,14 +343,10 @@ const SCoPCnd * polly::SCoPCondition::getInDomCnd(DomTreeNode *Node,
     UnionCnds.push_back(DomCond);
   }
   const SCoPCnd *InDomCond = getOrCnd(UnionCnds);
-
-  // Compute InDomCond(BB, IDom(BB)) & InDomCond(IDom(BB), DomBB)
-  InDomCond = getAndCnd(PredDomCnd, InDomCond);
   // Remember the result
   BBtoInDomCond.insert(std::make_pair(BB, InDomCond));
   return InDomCond;
 }
-
 
 const SCoPCnd *SCoPCondition::getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB) {
   BranchInst *Br = dyn_cast<BranchInst>(SrcBB->getTerminator());
