@@ -139,16 +139,14 @@ const SCoPCnd *SCoPCondition::getBrCnd(BranchInst *Br, bool Side) {
   // Get the condition of Conditional Branch
   Value *Cnd = Br->getCondition();
   if (ConstantInt *ConstCnd = dyn_cast<ConstantInt>(Cnd)) {
-    Cnd = 0;
     // Evaluate the constant condition.
     if (ConstCnd->isOne() == Side)
       return getAlwaysTrue();
     else
       return getAlwaysFalse();
   }
-  // TODO: FoldingSet logic?
-  SCoPCnd *C = new (SCoPCndAllocator) SCoPBrCnd(Cnd, Side);
-  return C;
+
+  return createBrCnd(Cnd, Side);
 }
 
 const SCoPCnd *SCoPCondition::getOrCnd(const SCoPCnd *LHS,
@@ -222,10 +220,7 @@ const SCoPCnd *SCoPCondition::getOrCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
 
 
   // Create the condition
-  const SCoPCnd **O = SCoPCndAllocator.Allocate<const SCoPCnd*>(Ops.size());
-  std::uninitialized_copy(Ops.begin(), Ops.end(), O);
-  const SCoPCnd *C = new (SCoPCndAllocator) SCoPOrCnd(O, Ops.size());
-  return C;
+  return createNAryCnd<scopOrCnd>(Ops);
 }
 
 const SCoPCnd *SCoPCondition::getAndCnd(const SCoPCnd *LHS,
@@ -267,6 +262,8 @@ const SCoPCnd *SCoPCondition::getAndCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
     ++idx;
   }
 
+  // ... How should us handle the Or Condition?
+
   // Flatten the expression tree of and Condition?
   for (unsigned i = 0, e = Ops.size(); i != e; ++i)
     if (const SCoPAndCnd *Or = dyn_cast<SCoPAndCnd>(Ops[i])) {
@@ -279,12 +276,8 @@ const SCoPCnd *SCoPCondition::getAndCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
   if (Ops.size() == 1)
     return Ops[0];
 
-  // ... How should us handle the And Condition?
   // Create the condition
-  const SCoPCnd **O = SCoPCndAllocator.Allocate<const SCoPCnd*>(Ops.size());
-  std::uninitialized_copy(Ops.begin(), Ops.end(), O);
-  const SCoPCnd *C = new (SCoPCndAllocator) SCoPAndCnd(O, Ops.size());
-  return C;
+  return createNAryCnd<scopAndCnd>(Ops);
 }
 
 bool SCoPCondition::isOppBrCnd(const SCoPBrCnd *BrLHS,

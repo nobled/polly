@@ -17,6 +17,7 @@
 #include "llvm/Instructions.h"
 #include "llvm/Analysis/Dominators.h"
 #include "llvm/ADT/PointerIntPair.h"
+#include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Allocator.h"
@@ -33,17 +34,24 @@ enum SCoPCndTypes {
 
 //===----------------------------------------------------------------------===//
 // @brief Class to express and help to evaluate conditions in SCoPs.
-class SCoPCnd {
+class SCoPCnd : public FoldingSetNode {
   SCoPCnd(const SCoPCnd &);
   void operator=(const SCoPCnd &);
+  /// FastID - A reference to an Interned FoldingSetNodeID for this node.
+  /// The ScalarEvolution's BumpPtrAllocator holds the data.
+  FoldingSetNodeIDRef FastID;
 
   // The SCoPCnd baseclass this node corresponds to
   const unsigned short SCoPCndType;
 
 protected:
-  SCoPCnd(unsigned SCoPCndTy) : SCoPCndType(SCoPCndTy) {}
+  SCoPCnd(const FoldingSetNodeIDRef ID, unsigned SCoPCndTy)
+    : FastID(ID), SCoPCndType(SCoPCndTy) {}
 
 public:
+  /// Profile - FoldingSet support.
+  void Profile(FoldingSetNodeID &ID) { ID = FastID; }
+
   unsigned getSCoPCndType() const { return SCoPCndType; }
 
   virtual void print(raw_ostream &OS) const = 0;
@@ -54,11 +62,11 @@ inline raw_ostream &operator<<(raw_ostream &OS, const SCoPCnd &C) {
   return OS;
 }
 
-template<unsigned CndType>
+template<enum SCoPCndTypes CndType>
 class SCoPConstCnd : public SCoPCnd {
   friend class SCoPCondition;
 protected:
-  explicit SCoPConstCnd() : SCoPCnd(CndType) {}
+  explicit SCoPConstCnd() : SCoPCnd(FoldingSetNodeIDRef(), CndType) {}
 public:
   void print(raw_ostream &OS) const {
     OS << (isa<SCoPConstCnd<scopTrueCnd> >(this) ? "True" : "False");
@@ -87,8 +95,8 @@ class SCoPBrCnd : public SCoPCnd {
   PointerIntPair<Value *, 1, bool> Cond;
 
 protected:
-  explicit SCoPBrCnd(Value *Cmp, bool WhichSide)
-    : SCoPCnd(scopBrCnd), Cond(Cmp, WhichSide) {
+  explicit SCoPBrCnd(const FoldingSetNodeIDRef ID, Value *Cmp, bool WhichSide)
+    : SCoPCnd(ID, scopBrCnd), Cond(Cmp, WhichSide) {
     assert(Cmp && "Cmp can not be null!");
   }
 
@@ -111,14 +119,15 @@ public:
 // @brief Class to provide common functionality for n'ary operators. e.g. Or
 //        operator for condtions or And operator for conditions. Note that
 //        Or and And is also commutative.
-template<unsigned CndType>
+template<enum SCoPCndTypes CndType>
 class SCoPNAryCnd : public SCoPCnd {
   friend class SCoPCondition;
   const SCoPCnd *const *Operands;
   size_t NumOperands;
 protected:
-  explicit SCoPNAryCnd(const SCoPCnd *const *O, size_t N)
-    : SCoPCnd(CndType), Operands(O), NumOperands(N) {
+  explicit SCoPNAryCnd(const FoldingSetNodeIDRef ID,
+    const SCoPCnd *const *O, size_t N)
+    : SCoPCnd(ID, CndType), Operands(O), NumOperands(N) {
     assert(NumOperands > 1 && "Expect more than 1 operands!");
   }
 public:
@@ -165,11 +174,17 @@ typedef SCoPNAryCnd<scopAndCnd> SCoPAndCnd;
 ///   IDom(BB) is the immediately dominator of BB
 ///   InDomCond(BB, DomBB) is the the condition that from DomBB to BB.
 ///   and DomBB must dominate BB.
-/// we could evaluate it by:
+/// we could evaluate InDomCond(BB, DomBB) with the following rules:
 ///   InDomCond(BB, IDom(BB)) & InDomCond(IDom(BB), DomBB) and
 ///   InDomCond(BB, BB) = Always True
 /// InDomCond(BB, IDom(BB)) could be evaluate by:
 ///   Union(CondOfEdge(BB, pred(BB)) & InDomCond(pred(BB), IDom(BB)))
+/// CondOfEdge(BB, pred(BB) means the condition from pred(BB) to BB, e.g.
+/// BB0:
+///     if(a > 0) goto BB1, else goto BB2
+/// in this example,
+///     CondOfEdge(BB1, BB0) = (a > 0, true)
+///     CondOfEdge(BB2, BB0) = (a > 0, false)
 ///
 class SCoPCondition : public FunctionPass {
   typedef DenseMap<const BasicBlock*, const SCoPCnd*> CndMapTy;
@@ -179,12 +194,32 @@ class SCoPCondition : public FunctionPass {
   // Allocator for SCoP conditions.
   BumpPtrAllocator SCoPCndAllocator;
 
+  FoldingSet<SCoPCnd> UniqueSCoPCnds;
+
   SCoPTrueCnd TrueCnd;
   SCoPFalseCnd FalseCnd;
 
   /// Return the SCoPBrCnd corresponding to the Side of Br.
   ///
   const SCoPCnd *getBrCnd(BranchInst *Br, bool Side);
+  const SCoPCnd *createBrCnd(Value *Cnd, bool Side) {
+    // Do not create a new condition when we already have one
+    FoldingSetNodeID ID;
+    ID.AddInteger(scopBrCnd);
+    ID.AddPointer(Cnd);
+    ID.AddBoolean(Side);
+
+    void *IP = 0;
+    if (const SCoPCnd *C = UniqueSCoPCnds.FindNodeOrInsertPos(ID, IP)) {
+      assert(0 && "Why we create the same br condition more than once?");
+      return C;
+    }
+   // If there are no the same br condition exist, just create one
+   SCoPCnd *C = new (SCoPCndAllocator) SCoPBrCnd(ID.Intern(SCoPCndAllocator),
+                                                 Cnd, Side);
+   UniqueSCoPCnds.InsertNode(C, IP);
+   return C;
+  }
 
   /// Return the Constant conditions
   ///
@@ -198,26 +233,34 @@ class SCoPCondition : public FunctionPass {
   const SCoPCnd *getAndCnd(const SCoPCnd *LHS, const SCoPCnd *RHS);
   const SCoPCnd *getAndCnd(SmallVectorImpl<const SCoPCnd *> &Ops);
 
+  template<enum SCoPCndTypes CndType>
+  const SCoPCnd *createNAryCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
+    // Do not create a new condition when we already have one
+    FoldingSetNodeID ID;
+    ID.AddInteger(CndType);
+    ID.AddInteger(Ops.size());
+    for (unsigned i = 0, e = Ops.size(); i != e; ++i)
+      ID.AddPointer(Ops[i]);
+
+    void *IP = 0;
+    if (const SCoPCnd *C = UniqueSCoPCnds.FindNodeOrInsertPos(ID, IP))
+      return C;
+
+    // If there are no the same nary condition exist, just create one
+    const SCoPCnd **O = SCoPCndAllocator.Allocate<const SCoPCnd*>(Ops.size());
+    std::uninitialized_copy(Ops.begin(), Ops.end(), O);
+    SCoPCnd *C =
+      new (SCoPCndAllocator) SCoPNAryCnd<CndType>(ID.Intern(SCoPCndAllocator),
+                                                  O, Ops.size());
+    UniqueSCoPCnds.InsertNode(C, IP);
+    return C;
+  }
+
   /// Try to reduce LHS and RHS to a one condition
   /// (not by create a new node to combining them)
   ///
   /// If LHS and RHS the opposite branch conditon?
   bool isOppBrCnd(const SCoPBrCnd *LHS, const SCoPBrCnd *RHS) const;
-
-  /// Get the immediately condition for BB
-  const SCoPCnd *getImmCndFor(BasicBlock *BB) const {
-    CndMapTy::const_iterator at = BBtoInDomCond.find(BB);
-    return at == BBtoInDomCond.end() ? 0 : at->second;
-  }
-
-  const SCoPCnd *getOrCreateImmCndFor(BasicBlock *BB) {
-    if (const SCoPCnd *C = getImmCndFor(BB))
-      return C;
-
-    // The BB is unreachable by default
-    BBtoInDomCond[BB] = getAlwaysFalse();
-    return getAlwaysFalse();
-  }
 
   //===--------------------------------------------------------------------===//
   DominatorTree *DT;
@@ -239,6 +282,7 @@ class SCoPCondition : public FunctionPass {
 
   void clear() {
     BBtoInDomCond.clear();
+    UniqueSCoPCnds.clear();
     SCoPCndAllocator.Reset();
   }
 
