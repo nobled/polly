@@ -43,6 +43,10 @@ struct SCoPCndComplexityCompare {
         // FIXME: How to compare the conditions?
         return LBr->getCnd() < RBr->getCnd();
       }
+      DEBUG(LBr->print(dbgs()));
+      DEBUG(dbgs()<< "\n");
+      DEBUG(LBr->print(dbgs()));
+      DEBUG(dbgs()<< "\n");
       // Branching with the same condition
       assert(LBr->getSide() != RBr->getSide()
         && "Why we get two same branching condition?");
@@ -278,7 +282,7 @@ const SCoPCnd *SCoPCondition::getAndCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
 }
 
 bool SCoPCondition::isOppBrCnd(const SCoPBrCnd *BrLHS,
-                                               const SCoPBrCnd *BrRHS) const {
+                               const SCoPBrCnd *BrRHS) const {
   // If both of them are according the same condition?
   if (BrLHS->getCnd() == BrRHS->getCnd())
     // If the two Conditions have difference side?
@@ -290,19 +294,51 @@ bool SCoPCondition::isOppBrCnd(const SCoPBrCnd *BrLHS,
   return false;
 }
 
+const SCoPCnd * polly::SCoPCondition::getInDomCnd(DomTreeNode *Node,
+                                                  DomTreeNode *DomNode) {
+  if (Node == DomNode)
+    return getAlwaysTrue();
 
-void SCoPCondition::visitBBWithCnd(BasicBlock *BB, const SCoPCnd *Cnd) {
-  if (const SCoPCnd *C = getImmCndFor(BB)) {
-    ImmCnd[BB] = getOrCnd(Cnd, C);
-  } else
-    ImmCnd[BB] = Cnd;
+  BasicBlock *BB = Node->getBlock();
+  if (const SCoPCnd *Cnd = lookUpInDomCond(BB))
+    return Cnd;
+
+  DomTreeNode *IDom = Node->getIDom();
+
+  assert(DT->dominates(DomNode, IDom) && "DomNode must dominate Node and its idom!");
+  // Compute InDomCond(IDom(BB), DomBB)
+  const SCoPCnd *PredDomCnd = getInDomCnd(IDom, DomNode);
+
+  // Compute Union(CondOfEdge(BB, pred(BB)) & InDomCond(pred(BB), IDom(BB)))
+  assert(IDom && "Expect IDom not be null!");
+  SmallVector<const SCoPCnd*, 4> UnionCnds;
+  for (pred_iterator I = pred_begin(BB), E = pred_end(BB); I != E; ++I) {
+    BasicBlock *PredBB = *I;
+    // TODO: Backedge
+    const SCoPCnd *EdgeCnd = getEdgeCnd(PredBB, BB),
+                  *PredInDomCond = getInDomCnd(DT->getNode(PredBB), IDom);
+
+    const SCoPCnd *DomCond = getAndCnd(EdgeCnd, PredInDomCond);
+    UnionCnds.push_back(DomCond);
+  }
+  const SCoPCnd *InDomCond = getOrCnd(UnionCnds);
+
+  // Compute InDomCond(BB, IDom(BB)) & InDomCond(IDom(BB), DomBB)
+  InDomCond = getAndCnd(PredDomCnd, InDomCond);
+  // Remember the result
+  BBtoInDomCond.insert(std::make_pair(BB, InDomCond));
+  return InDomCond;
 }
 
-void SCoPCondition::applyBBWithCnd(BasicBlock *BB, BasicBlock *DomBB) {
-  assert(ImmCnd.count(BB) && ImmCnd.count(DomBB)
-    && "Not visit BB and DomBB yet?");
 
-  ImmCnd[BB] = getAndCnd(ImmCnd[BB], ImmCnd[DomBB]);
+const SCoPCnd *SCoPCondition::getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB) {
+  BranchInst *Br = dyn_cast<BranchInst>(SrcBB->getTerminator());
+  // We only support BranchInst at this moment, so just return something if
+  // the terminator is not a br.
+  if (!Br)
+    return getAlwaysFalse();
+
+  return getBrCnd(Br, DstBB == Br->getSuccessor(0));
 }
 
 void SCoPCondition::getAnalysisUsage(AnalysisUsage &AU) const {
@@ -310,84 +346,19 @@ void SCoPCondition::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
 }
 
-void SCoPCondition::findAllPathForBB(BasicBlock *BB, DomTreeNode *Dst, DomTreeNode *Src,
-                                     SmallVectorImpl<const SCoPCnd *> &Cnds) {
-  // Reach Src
-  if (Src == Dst) {
-    const SCoPCnd *Res = getAndCnd(Cnds);
-    visitBBWithCnd(BB, Res);
-    DEBUG(dbgs() << Dst->getBlock()->getNameStr() << "\n");
-    DEBUG(Res->print(dbgs()));
-    DEBUG(dbgs() << "\n");
-    return;
-  }
-
-  BasicBlock *DstBB = Dst->getBlock();
-  for(pred_iterator I = pred_begin(DstBB), E = pred_end(DstBB); I != E; ++I) {
-    DEBUG(dbgs() << Dst->getBlock()->getNameStr() << ", ");
-    BasicBlock *PredBB = *I;
-    // TODO: Do not visit Back-edge.
-    if (DT->dominates(Dst, DT->getNode(PredBB))) {
-      DEBUG(dbgs() << "is back edge!\n");
-      continue;
-    }
-
-    BranchInst *Br = dyn_cast<BranchInst>(PredBB->getTerminator());
-    // We are not support Switch at this moment
-    if (!Br) return;
-    // Add the condition for conditional branch
-    if (Br->isConditional()) {
-      const SCoPCnd *Cnd = getBrCnd(Br, (Br->getSuccessor(0) == DstBB));
-      Cnds.push_back(Cnd);
-    }
-    findAllPathForBB(BB, DT->getNode(PredBB), Src, Cnds);
-    // Discard the condition when we leave this bb.
-    if (Br->isConditional())
-      Cnds.pop_back();
-  }
-}
-
-void SCoPCondition::visitBB(DomTreeNode *N) {
-  assert(N && "Root can not be null!");
-
-  typedef GraphTraits<DominatorTree*> GraphT;
-  typedef GraphTraits<DominatorTree*>::ChildIteratorType ChildIteratorType;
-
-  SmallVector<const SCoPCnd*, 8> Cnds;
-
-  for (GraphTraits<DominatorTree*>::ChildIteratorType
-      CI = GraphT::child_begin(N), CE = GraphT::child_end(N); CI != CE; ++CI) {
-    DomTreeNode *Node = *CI;
-    BasicBlock *BB = Node->getBlock();
-    DEBUG(dbgs() << "{\n");
-    findAllPathForBB(BB, Node, N, Cnds);
-    assert(Cnds.empty() && "All conditions expect to be poped!");
-    DEBUG(dbgs() << "}\n");
-    //
-    applyBBWithCnd(BB, N->getBlock());
-    visitBB(Node);
-  }
-}
-
 bool SCoPCondition::runOnFunction(Function &F) {
   DT = &getAnalysis<DominatorTree>();
-  DomTreeNode *Root = DT->getRootNode();
-  visitBBWithCnd(Root->getBlock(), getAlwaysTrue());
-  visitBB(Root);
+
   return false;
 }
 
 void SCoPCondition::print(raw_ostream &OS, const Module *) const {
+  SCoPCondition &SC = *const_cast<SCoPCondition*>(this);
   Function *F = DT->getRoot()->getParent();
   for (Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
     BasicBlock *BB = I;
-    CndMapTy::const_iterator at = ImmCnd.find(BB);
-    // Unreachable block?
-    if (at == ImmCnd.end())
-      continue;
-
-    OS << "Condition of BB: " << at->first->getName() << " is\n";
-    at->second->print(OS.indent(2));
+    OS << "Condition of BB: " << BB->getName() << " is\n";
+    SC.getCndForBB(BB)->print(OS.indent(2));
     OS << "\n";
   }
 }

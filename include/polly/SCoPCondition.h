@@ -156,12 +156,26 @@ typedef SCoPNAryCnd<scopOrCnd> SCoPOrCnd;
 typedef SCoPNAryCnd<scopAndCnd> SCoPAndCnd;
 
 //===----------------------------------------------------------------------===//
-// @brief The pass to extract all condition constraints for BBs.
+/// @brief The pass to extract all condition constraints for BBs.
+///
+/// The condition of a given BB Cond(BB) could be evaluate by:
+///   InDomCond(BB, entry) & Cond(entry)
+/// and we have Cond(entry) = Always True
+/// where
+///   IDom(BB) is the immediately dominator of BB
+///   InDomCond(BB, DomBB) is the the condition that from DomBB to BB.
+///   and DomBB must dominate BB.
+/// we could evaluate it by:
+///   InDomCond(BB, IDom(BB)) & InDomCond(IDom(BB), DomBB) and
+///   InDomCond(BB, BB) = Always True
+/// InDomCond(BB, IDom(BB)) could be evaluate by:
+///   Union(CondOfEdge(BB, pred(BB)) & InDomCond(pred(BB), IDom(BB)))
+///
 class SCoPCondition : public FunctionPass {
   typedef DenseMap<const BasicBlock*, const SCoPCnd*> CndMapTy;
 
   // Mapping BBs to its immediately condition
-  CndMapTy ImmCnd;
+  CndMapTy BBtoInDomCond;
   // Allocator for SCoP conditions.
   BumpPtrAllocator SCoPCndAllocator;
 
@@ -192,8 +206,8 @@ class SCoPCondition : public FunctionPass {
 
   /// Get the immediately condition for BB
   const SCoPCnd *getImmCndFor(BasicBlock *BB) const {
-    CndMapTy::const_iterator at = ImmCnd.find(BB);
-    return at == ImmCnd.end() ? 0 : at->second;
+    CndMapTy::const_iterator at = BBtoInDomCond.find(BB);
+    return at == BBtoInDomCond.end() ? 0 : at->second;
   }
 
   const SCoPCnd *getOrCreateImmCndFor(BasicBlock *BB) {
@@ -201,21 +215,29 @@ class SCoPCondition : public FunctionPass {
       return C;
 
     // The BB is unreachable by default
-    ImmCnd[BB] = getAlwaysFalse();
+    BBtoInDomCond[BB] = getAlwaysFalse();
     return getAlwaysFalse();
   }
 
-  void visitBBWithCnd(BasicBlock *BB, const SCoPCnd *Cnd);
-
-  void applyBBWithCnd(BasicBlock *BB, BasicBlock *DomBB);
-
   //===--------------------------------------------------------------------===//
   DominatorTree *DT;
-  void visitBB(DomTreeNode *Root);
-  void findAllPathForBB(BasicBlock *BB, DomTreeNode *Dst, DomTreeNode *Src,
-                   SmallVectorImpl<const SCoPCnd *> &Cnds);
+
+  const SCoPCnd *lookUpInDomCond(BasicBlock *BB) const {
+    CndMapTy::const_iterator at = BBtoInDomCond.find(BB);
+    // If the InDomCond already computed
+    return at == BBtoInDomCond.end() ? 0 : at->second;
+  }
+  const SCoPCnd *getInDomCnd(DomTreeNode *BB, DomTreeNode *DomBB);
+
+  const SCoPCnd *getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB);
+
+  const SCoPCnd *getCndForBB(BasicBlock *BB) {
+    DomTreeNode *Node = DT->getNode(BB);
+    return getInDomCnd(Node, DT->getRootNode());
+  }
+
   void clear() {
-    ImmCnd.clear();
+    BBtoInDomCond.clear();
     SCoPCndAllocator.Reset();
   }
 
