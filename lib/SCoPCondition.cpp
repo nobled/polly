@@ -14,6 +14,7 @@
 #include "polly/SCoPCondition.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Analysis/Dominators.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Assembly/Writer.h"
 #include "llvm/Support/ErrorHandling.h"
 #define DEBUG_TYPE "polly-scop-cond"
@@ -53,14 +54,31 @@ struct SCoPCndComplexityCompare {
       return LBr->getSide();
     }
 
+    if (const SCoPLoopCnd *LLC = dyn_cast<SCoPLoopCnd>(LHS)) {
+      const SCoPLoopCnd *RLC = cast<SCoPLoopCnd>(RHS);
+      // Compare the entry condition
+      if (operator()(LLC->getEntryCnd(), RLC->getEntryCnd()))
+        return true;
+      if (operator()(RLC->getEntryCnd(), LLC->getEntryCnd()))
+        return false;
+      // And the loop condition
+      if (operator()(LLC->getLoopCnd(), RLC->getLoopCnd()))
+        return true;
+      if (operator()(RLC->getLoopCnd(), LLC->getLoopCnd()))
+        return false;
+      // Compare the loop
+      return RLC->getLoop()->contains(LLC->getLoop());
+    }
+
+
     // Or condition
     if (const SCoPOrCnd *LOr = dyn_cast<SCoPOrCnd>(LHS)) {
-      const SCoPOrCnd *ROr = dyn_cast<SCoPOrCnd>(RHS);
+      const SCoPOrCnd *ROr = cast<SCoPOrCnd>(RHS);
       return SortNAryCnd(LOr, ROr);
     }
     // And condition
     if (const SCoPAndCnd *LAnd = dyn_cast<SCoPAndCnd>(LHS)) {
-      const SCoPAndCnd *RAnd = dyn_cast<SCoPAndCnd>(RHS);
+      const SCoPAndCnd *RAnd = cast<SCoPAndCnd>(RHS);
       return SortNAryCnd(LAnd, RAnd);
     }
 
@@ -125,6 +143,18 @@ void SCoPBrCnd::print(raw_ostream &OS) const {
   WriteAsOperand(OS, Cond.getPointer(), false);
 }
 
+void SCoPLoopCnd::print(raw_ostream &OS) const {
+  OS << "{" << *EntryCnd << "," << *LoopCnd << "}<";
+  WriteAsOperand(OS, L->getHeader(), false);
+  OS << ">";
+}
+
+const SCoPCnd *SCoPLoopCnd::evalAt(BasicBlock *BB, SCoPCondition &SC) const {
+  if (!L->contains(BB))
+    return getEntryCnd();
+
+  return this;
+}
 
 //===----------------------------------------------------------------------===//
 // Implementation of SCoPConditions
@@ -147,6 +177,25 @@ const SCoPCnd *SCoPCondition::getBrCnd(BranchInst *Br, bool Side) {
   }
 
   return createBrCnd(Cnd, Side);
+}
+
+const SCoPCnd *SCoPCondition::createBrCnd(Value *Cnd, bool Side) {
+  // Do not create a new condition when we already have one
+  FoldingSetNodeID ID;
+  ID.AddInteger(scopBrCnd);
+  ID.AddPointer(Cnd);
+  ID.AddBoolean(Side);
+
+  void *IP = 0;
+  if (const SCoPCnd *C = UniqueSCoPCnds.FindNodeOrInsertPos(ID, IP)) {
+    assert(0 && "Why we create the same br condition more than once?");
+    return C;
+  }
+  // If there are no the same br condition exist, just create one
+  SCoPCnd *C = new (SCoPCndAllocator) SCoPBrCnd(ID.Intern(SCoPCndAllocator),
+    Cnd, Side);
+  UniqueSCoPCnds.InsertNode(C, IP);
+  return C;
 }
 
 const SCoPCnd *SCoPCondition::getOrCnd(const SCoPCnd *LHS,
@@ -279,6 +328,38 @@ const SCoPCnd *SCoPCondition::getAndCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
   return createNAryCnd<scopAndCnd>(Ops);
 }
 
+
+
+const SCoPCnd *SCoPCondition::getLoopCnd(BasicBlock *Entry,
+                                         const SCoPCnd *EntryCnd,
+                                         const SCoPCnd *LoopCnd) {
+  const Loop *L = LI->getLoopFor(Entry);
+  assert(L && "Entry is not the entry of the loop!");
+
+  return createLoopCnd(L, EntryCnd, LoopCnd);
+}
+
+const SCoPCnd *SCoPCondition::createLoopCnd(const Loop *L,
+                                            const SCoPCnd *EntryCnd,
+                                            const SCoPCnd *LoopCnd) {
+  FoldingSetNodeID ID;
+  ID.AddInteger(scopLoopCnd);
+  ID.AddPointer(L);
+  ID.AddPointer(EntryCnd);
+  ID.AddPointer(LoopCnd);
+
+  void *IP = 0;
+  if (const SCoPCnd* C = UniqueSCoPCnds.FindNodeOrInsertPos(ID, IP)) {
+    assert(0 && "Why we create the same loop condition twice?");
+    return C;
+  }
+
+  SCoPCnd *C = new (SCoPCndAllocator) SCoPLoopCnd(ID.Intern(SCoPCndAllocator),
+                                                  L, EntryCnd, LoopCnd);
+  UniqueSCoPCnds.InsertNode(C, IP);
+  return C;
+}
+
 bool SCoPCondition::isOppBrCnd(const SCoPBrCnd *BrLHS,
                                const SCoPBrCnd *BrRHS) const {
   // If both of them are according the same condition?
@@ -312,7 +393,7 @@ const SCoPCnd *SCoPCondition::getInDomCnd(DomTreeNode *Node,
   AndCnds.push_back(InDomCond);
   // Compute InDomCond(BB, IDom(BB)) & InDomCond(IDom(BB), DomBB)
   const SCoPCnd *DomCond = getAndCnd(AndCnds);
-  return DomCond;
+  return DomCond->evalAt(Node->getBlock(), *this);
 }
 
 const SCoPCnd *SCoPCondition::getInDomCnd(DomTreeNode *Node) {
@@ -340,10 +421,7 @@ const SCoPCnd *SCoPCondition::getInDomCnd(DomTreeNode *Node) {
     DEBUG(dbgs() << "Backedge condition: ");
     DEBUG(BECnd->print(dbgs()));
     DEBUG(dbgs() << "\n");
-    // Add the condition that also considering backedges
-    BECnd = getAndCnd(InDomCond, BECnd);
-    // FIXME: This should be an "And" or "Or"?
-    InDomCond = getOrCnd(InDomCond, BECnd);
+    InDomCond = getLoopCnd(BB, InDomCond, BECnd);
   }
 
   // Remember the result
@@ -390,12 +468,13 @@ const SCoPCnd *SCoPCondition::getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB) {
 
 void SCoPCondition::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<DominatorTree>();
+  AU.addRequired<LoopInfo>();
   AU.setPreservesAll();
 }
 
 bool SCoPCondition::runOnFunction(Function &F) {
   DT = &getAnalysis<DominatorTree>();
-
+  LI = &getAnalysis<LoopInfo>();
   return false;
 }
 

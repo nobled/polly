@@ -13,7 +13,6 @@
 #ifndef POLLY_SCOP_CONDITION_H
 #define POLLY_SCOP_CONDITION_H
 
-#include "llvm/Pass.h"
 #include "llvm/Instructions.h"
 #include "llvm/Analysis/Dominators.h"
 #include "llvm/ADT/PointerIntPair.h"
@@ -21,6 +20,11 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Allocator.h"
+
+namespace llvm {
+  class Loop;
+  class LoopInfo;
+}
 using namespace llvm;
 
 namespace polly {
@@ -29,7 +33,8 @@ class SCoPCondition;
 //===----------------------------------------------------------------------===//
 /// Condition types
 enum SCoPCndTypes {
-  scopFalseCnd, scopTrueCnd, scopBrCnd, scopSWCnd, scopOrCnd, scopAndCnd
+  scopFalseCnd, scopTrueCnd, scopBrCnd, scopSWCnd, scopLoopCnd,
+  scopOrCnd, scopAndCnd
 };
 
 //===----------------------------------------------------------------------===//
@@ -53,6 +58,10 @@ public:
   void Profile(FoldingSetNodeID &ID) { ID = FastID; }
 
   unsigned getSCoPCndType() const { return SCoPCndType; }
+
+  virtual const SCoPCnd *evalAt(BasicBlock *BB, SCoPCondition &SC) const {
+    return this;
+  }
 
   virtual void print(raw_ostream &OS) const = 0;
 };
@@ -116,6 +125,34 @@ public:
 };
 
 //===----------------------------------------------------------------------===//
+// @brief Class to express condition for loops.
+//
+class SCoPLoopCnd : public SCoPCnd {
+  friend class SCoPCondition;
+
+  const Loop *L;
+  const SCoPCnd *EntryCnd, *LoopCnd;
+protected:
+  explicit SCoPLoopCnd(const FoldingSetNodeIDRef ID, const Loop *l,
+    const SCoPCnd *entryCnd, const SCoPCnd *loopCnd)
+    : SCoPCnd(ID, scopLoopCnd), L(l), EntryCnd(entryCnd), LoopCnd(loopCnd) {}
+public:
+  const SCoPCnd *getEntryCnd() const { return EntryCnd; }
+  const SCoPCnd *getLoopCnd() const { return LoopCnd; }
+  const Loop *getLoop() const { return L; }
+
+  const SCoPCnd *evalAt(BasicBlock *BB, SCoPCondition &SC) const;
+
+  void print(raw_ostream &OS) const;
+
+  /// Methods for support type inquiry through isa, cast, and dyn_cast:
+  static inline bool classof(const SCoPLoopCnd *C) { return true; }
+  static inline bool classof(const SCoPCnd *C) {
+    return C->getSCoPCndType() == scopLoopCnd;
+  }
+};
+
+//===----------------------------------------------------------------------===//
 // @brief Class to provide common functionality for n'ary operators. e.g. Or
 //        operator for condtions or And operator for conditions. Note that
 //        Or and And is also commutative.
@@ -151,6 +188,8 @@ public:
     OS << ")";
   }
 
+  const SCoPCnd *evalAt(BasicBlock *BB, SCoPCondition &SC) const;
+
   static inline bool classof(const SCoPCnd *C) {
     return C->getSCoPCndType() == CndType;
   }
@@ -166,6 +205,9 @@ typedef SCoPNAryCnd<scopAndCnd> SCoPAndCnd;
 
 //===----------------------------------------------------------------------===//
 /// @brief The pass to extract all condition constraints for BBs.
+///
+/// This pass can answer the question:
+///   "What condition should be satisfy if we start from BB0 and reach BB1?"
 ///
 /// The condition of a given BB Cond(BB) could be evaluate by:
 ///   InDomCond(BB, entry) & Cond(entry)
@@ -218,62 +260,27 @@ class SCoPCondition : public FunctionPass {
   SCoPTrueCnd TrueCnd;
   SCoPFalseCnd FalseCnd;
 
-  /// Return the SCoPBrCnd corresponding to the Side of Br.
-  ///
-  const SCoPCnd *getBrCnd(BranchInst *Br, bool Side);
-  const SCoPCnd *createBrCnd(Value *Cnd, bool Side) {
-    // Do not create a new condition when we already have one
-    FoldingSetNodeID ID;
-    ID.AddInteger(scopBrCnd);
-    ID.AddPointer(Cnd);
-    ID.AddBoolean(Side);
-
-    void *IP = 0;
-    if (const SCoPCnd *C = UniqueSCoPCnds.FindNodeOrInsertPos(ID, IP)) {
-      assert(0 && "Why we create the same br condition more than once?");
-      return C;
-    }
-   // If there are no the same br condition exist, just create one
-   SCoPCnd *C = new (SCoPCndAllocator) SCoPBrCnd(ID.Intern(SCoPCndAllocator),
-                                                 Cnd, Side);
-   UniqueSCoPCnds.InsertNode(C, IP);
-   return C;
-  }
-
   /// Return the Constant conditions
   ///
   const SCoPCnd *getAlwaysTrue() const { return &TrueCnd; }
   const SCoPCnd *getAlwaysFalse() const { return &FalseCnd; }
 
+  /// Return the SCoPBrCnd corresponding to the Side of Br.
+  ///
+  const SCoPCnd *getBrCnd(BranchInst *Br, bool Side);
+  const SCoPCnd *createBrCnd(Value *Cnd, bool Side);
+
+  /// Return the loop conditions
+  const SCoPCnd *getLoopCnd(BasicBlock *Entry,
+                            const SCoPCnd *EntryCnd, const SCoPCnd *LoopCnd);
+  const SCoPCnd *createLoopCnd(const Loop *L,
+                              const SCoPCnd *EntryCnd, const SCoPCnd *LoopCnd);
   /// Return the combine conditions
   ///
   const SCoPCnd *getOrCnd(const SCoPCnd *LHS, const SCoPCnd *RHS);
   const SCoPCnd *getOrCnd(SmallVectorImpl<const SCoPCnd *> &Ops);
   const SCoPCnd *getAndCnd(const SCoPCnd *LHS, const SCoPCnd *RHS);
   const SCoPCnd *getAndCnd(SmallVectorImpl<const SCoPCnd *> &Ops);
-
-  template<enum SCoPCndTypes CndType>
-  const SCoPCnd *createNAryCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
-    // Do not create a new condition when we already have one
-    FoldingSetNodeID ID;
-    ID.AddInteger(CndType);
-    ID.AddInteger(Ops.size());
-    for (unsigned i = 0, e = Ops.size(); i != e; ++i)
-      ID.AddPointer(Ops[i]);
-
-    void *IP = 0;
-    if (const SCoPCnd *C = UniqueSCoPCnds.FindNodeOrInsertPos(ID, IP))
-      return C;
-
-    // If there are no the same nary condition exist, just create one
-    const SCoPCnd **O = SCoPCndAllocator.Allocate<const SCoPCnd*>(Ops.size());
-    std::uninitialized_copy(Ops.begin(), Ops.end(), O);
-    SCoPCnd *C =
-      new (SCoPCndAllocator) SCoPNAryCnd<CndType>(ID.Intern(SCoPCndAllocator),
-                                                  O, Ops.size());
-    UniqueSCoPCnds.InsertNode(C, IP);
-    return C;
-  }
 
   /// Try to reduce LHS and RHS to a one condition
   /// (not by create a new node to combining them)
@@ -283,7 +290,7 @@ class SCoPCondition : public FunctionPass {
 
   //===--------------------------------------------------------------------===//
   DominatorTree *DT;
-
+  LoopInfo *LI;
   const SCoPCnd *lookUpInDomCond(BasicBlock *BB) const {
     CndMapTy::const_iterator at = BBtoInDomCond.find(BB);
     // If the InDomCond already computed
@@ -304,6 +311,7 @@ class SCoPCondition : public FunctionPass {
   // Compute CondofEdge(BB, pred(BB))
   const SCoPCnd *getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB);
 
+  // TODO: evaluate the loop condition
   const SCoPCnd *getCndForBB(BasicBlock *BB) {
     DomTreeNode *Node = DT->getNode(BB);
     return getInDomCnd(Node, DT->getRootNode());
@@ -317,8 +325,35 @@ class SCoPCondition : public FunctionPass {
 
 public:
   static char ID;
-  explicit SCoPCondition() : FunctionPass(&ID), DT(0) {}
+  explicit SCoPCondition() : FunctionPass(&ID), DT(0), LI(0) {}
   ~SCoPCondition() { clear(); }
+
+  template<enum SCoPCndTypes CndType>
+  inline const SCoPCnd *getNAryCnd(SmallVectorImpl<const SCoPCnd *> &Ops);
+
+  template<enum SCoPCndTypes CndType>
+  const SCoPCnd *createNAryCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
+    // Do not create a new condition when we already have one
+    FoldingSetNodeID ID;
+    ID.AddInteger(CndType);
+    ID.AddInteger(Ops.size());
+    for (unsigned i = 0, e = Ops.size(); i != e; ++i)
+      ID.AddPointer(Ops[i]);
+
+    void *IP = 0;
+    if (const SCoPCnd *C = UniqueSCoPCnds.FindNodeOrInsertPos(ID, IP))
+      return C;
+
+    // If there are no the same nary condition exist, just create one
+    const SCoPCnd **O = SCoPCndAllocator.Allocate<const SCoPCnd*>(Ops.size());
+    std::uninitialized_copy(Ops.begin(), Ops.end(), O);
+    SCoPCnd *C =
+      new (SCoPCndAllocator) SCoPNAryCnd<CndType>(ID.Intern(SCoPCndAllocator),
+      O, Ops.size());
+    UniqueSCoPCnds.InsertNode(C, IP);
+    return C;
+  }
+
   /// @name FunctionPass interface
   //@{
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
@@ -327,6 +362,35 @@ public:
   virtual void print(raw_ostream &OS, const Module *) const;
   //@}
 };
+
+template<>
+inline const SCoPCnd *
+SCoPCondition::getNAryCnd<scopAndCnd>(SmallVectorImpl<const SCoPCnd *> &Ops){
+  return getAndCnd(Ops);
+}
+
+template<>
+inline const SCoPCnd *
+SCoPCondition::getNAryCnd<scopOrCnd>(SmallVectorImpl<const SCoPCnd *> &Ops){
+  return getOrCnd(Ops);
+}
+
+template<enum SCoPCndTypes CndType>
+const SCoPCnd *SCoPNAryCnd<CndType>::evalAt(BasicBlock *BB,
+                                            SCoPCondition &SC) const {
+  bool Changed = false;
+  SmallVector<const SCoPCnd*, 8> Ops;
+  for (op_iterator I = op_begin(), E = op_end(); I != E; ++I) {
+    const SCoPCnd *NewVal = (*I)->evalAt(BB, SC);
+    Changed |= (NewVal != *I);
+    Ops.push_back(NewVal);
+  }
+
+  if (Changed)
+    return SC.getNAryCnd<CndType>(Ops);
+
+  return this;
+}
 
 Pass *createSCoPConditionPass();
 

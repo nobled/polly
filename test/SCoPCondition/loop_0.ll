@@ -22,9 +22,7 @@ declare i32 @rnd(i32)
 
 ; CHECK: Condition of BB: entry is
 ; CHECK:   True
-; ???  In fact that %exitcond is the function of %0,
-; ???  because if %0 is false, %exitcond will be always true
 ; CHECK: Condition of BB: bb is
-; CHECK:   (%0,||,(%0,&&,!%exitcond))
+; CHECK:   {%0,!%exitcond}<%bb>
 ; CHECK: Condition of BB: return is
-; CHECK:   (!%0,||,(%exitcond,&&,(%0,||,(%0,&&,!%exitcond))))
+; CHECK:   (!%0,||,(%0,&&,%exitcond))
