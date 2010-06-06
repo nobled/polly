@@ -201,7 +201,6 @@ const SCoPCnd *SCoPCondition::getOrCnd(SmallVectorImpl<const SCoPCnd *> &Ops) {
     ++idx;
   }
 
-
   // Flatten the expression tree of Or Condition?
   for (unsigned i = 0, e = Ops.size(); i != e; ++i)
     // A || !A = True
@@ -321,33 +320,71 @@ const SCoPCnd *SCoPCondition::getInDomCnd(DomTreeNode *Node) {
   if (const SCoPCnd *Cnd = lookUpInDomCond(BB))
     return Cnd;
 
+  SmallVector<const SCoPCnd*, 4> UnionCnds;
+  // Condition for backedges
+  SmallVector<const SCoPCnd*, 4> BECnds;
+  for (pred_iterator I = pred_begin(BB), E = pred_end(BB); I != E; ++I) {
+    BasicBlock *PredBB = *I;
+    DomTreeNode *PredNode = DT->getNode(PredBB);
+    if (DT->dominates(Node, PredNode))
+      // The Condition of paths that containing a backedge depends on
+      // the conditions of paths not containing a backedge.
+      BECnds.push_back(getBEPathCnd(Node, PredNode));
+    else
+      UnionCnds.push_back(getInDomPathCnd(Node, PredNode));
+  }
+  const SCoPCnd *InDomCond = getOrCnd(UnionCnds);
+  //Compute backedge condition
+  if (!BECnds.empty()) {
+    const SCoPCnd *BECnd = getOrCnd(BECnds);
+    DEBUG(dbgs() << "Backedge condition: ");
+    DEBUG(BECnd->print(dbgs()));
+    DEBUG(dbgs() << "\n");
+    // Add the condition that also considering backedges
+    BECnd = getAndCnd(InDomCond, BECnd);
+    // FIXME: This should be an "And" or "Or"?
+    InDomCond = getOrCnd(InDomCond, BECnd);
+  }
+
+  // Remember the result
+  BBtoInDomCond.insert(std::make_pair(BB, InDomCond));
+  return InDomCond;
+}
+
+
+const SCoPCnd *SCoPCondition::getBEPathCnd(DomTreeNode *BB, DomTreeNode *PredBB) {
+  assert(DT->dominates(BB, PredBB) && "Expect passing a backedge in!");
+  const SCoPCnd *FECnd = getInDomCnd(PredBB, BB);
+  const SCoPCnd *BECnd = getEdgeCnd(PredBB->getBlock(), BB->getBlock());
+  DEBUG(dbgs() << "Pred to BB: ");
+  DEBUG(BECnd->print(dbgs()));
+  DEBUG(dbgs() << "\n");
+  return getAndCnd(FECnd, BECnd);
+}
+
+const SCoPCnd *SCoPCondition::getInDomPathCnd(DomTreeNode *Node,
+                                              DomTreeNode *PredBB) {
   DomTreeNode *IDom = Node->getIDom();
 
   // Compute Union(CondOfEdge(BB, pred(BB)) & InDomCond(pred(BB), IDom(BB)))
   assert(IDom && "Expect IDom not be null!");
-  SmallVector<const SCoPCnd*, 4> UnionCnds;
-  for (pred_iterator I = pred_begin(BB), E = pred_end(BB); I != E; ++I) {
-    BasicBlock *PredBB = *I;
-    // TODO: Backedge
-    const SCoPCnd *EdgeCnd = getEdgeCnd(PredBB, BB),
-                  *PredInDomCond = getInDomCnd(DT->getNode(PredBB), IDom);
+  const SCoPCnd *EdgeCnd = getEdgeCnd(PredBB->getBlock(), Node->getBlock()),
+                *PredInDomCond = getInDomCnd(PredBB, IDom);
 
-    const SCoPCnd *DomCond = getAndCnd(EdgeCnd, PredInDomCond);
-    UnionCnds.push_back(DomCond);
-  }
-  const SCoPCnd *InDomCond = getOrCnd(UnionCnds);
-  // Remember the result
-  BBtoInDomCond.insert(std::make_pair(BB, InDomCond));
-  return InDomCond;
+  const SCoPCnd *InDomEdgeCond = getAndCnd(EdgeCnd, PredInDomCond);
+  return InDomEdgeCond;
 }
 
 const SCoPCnd *SCoPCondition::getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB) {
   BranchInst *Br = dyn_cast<BranchInst>(SrcBB->getTerminator());
   // We only support BranchInst at this moment, so just return something if
   // the terminator is not a br.
+  // Note that this will give us an WRONG analysis result.
   if (!Br)
     return getAlwaysFalse();
 
+  assert((DstBB == Br->getSuccessor(0) || DstBB == Br->getSuccessor(1))
+         && "DstBB is not the successor of SrcBB!");
   return getBrCnd(Br, DstBB == Br->getSuccessor(0));
 }
 

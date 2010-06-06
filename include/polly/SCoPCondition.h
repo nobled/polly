@@ -170,15 +170,34 @@ typedef SCoPNAryCnd<scopAndCnd> SCoPAndCnd;
 /// The condition of a given BB Cond(BB) could be evaluate by:
 ///   InDomCond(BB, entry) & Cond(entry)
 /// and we have Cond(entry) = Always True
+///
 /// where
 ///   IDom(BB) is the immediately dominator of BB
 ///   InDomCond(BB, DomBB) is the the condition that from DomBB to BB.
 ///   and DomBB must dominate BB.
+///
 /// we could evaluate InDomCond(BB, DomBB) with the following rules:
 ///   InDomCond(BB, IDom(BB)) & InDomCond(IDom(BB), DomBB) and
 ///   InDomCond(BB, BB) = Always True
+///
 /// InDomCond(BB, IDom(BB)) could be evaluate by:
-///   Union(CondOfEdge(BB, pred(BB)) & InDomCond(pred(BB), IDom(BB)))
+/// for each predBB in predecessor set of BB
+///     Union(InDomPathCond(BB, predBB, IDomBB))
+///
+/// InDomPathCond(BB, predBB, IDomBB) means the condition construct by a path
+/// of CFG that start from BB, to IDom(BB), and passing predBB, e.g.
+///
+/// BB0:
+///     if(a > 0) goto BB1, else goto BB2
+/// BB1:
+///     if(b > 0) goto BB2, else goto BB3
+/// in this example, we know IDom(BB2) = BB0, so we have
+///   InDomPathCond(BB2, BB1, BB0) = (a > 0, true) & (b > 0, true) and
+///   InDomPathCond(BB2, BB0, BB0) = (a > 0, false)
+///
+/// and InDomPathCond(BB, predBB, IDomBB) could be evaluate by:
+///     CondOfEdge(BB, predBB) & InDomCond(predBB, IDom(BB))
+///
 /// CondOfEdge(BB, pred(BB) means the condition from pred(BB) to BB, e.g.
 /// BB0:
 ///     if(a > 0) goto BB1, else goto BB2
@@ -270,9 +289,19 @@ class SCoPCondition : public FunctionPass {
     // If the InDomCond already computed
     return at == BBtoInDomCond.end() ? 0 : at->second;
   }
+
+  // Compute InDomcnd(BB, DomBB)
   const SCoPCnd *getInDomCnd(DomTreeNode *BB, DomTreeNode *DomBB);
+
+  // Compute InDomcnd(BB, IDom(BB))
   const SCoPCnd *getInDomCnd(DomTreeNode *BB);
 
+  // Compute CondOfEdge(BB, pred(BB)) & InDomCond(pred(BB), IDom(BB))
+  const SCoPCnd *getInDomPathCnd(DomTreeNode *BB, DomTreeNode *PredBB);
+  // Handle the backedge
+  const SCoPCnd *getBEPathCnd(DomTreeNode *BB, DomTreeNode *PredBB);
+
+  // Compute CondofEdge(BB, pred(BB))
   const SCoPCnd *getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB);
 
   const SCoPCnd *getCndForBB(BasicBlock *BB) {
