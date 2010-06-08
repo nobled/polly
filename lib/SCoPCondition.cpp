@@ -454,6 +454,7 @@ const SCoPCnd *SCoPCondition::getInDomPathCnd(DomTreeNode *Node,
 }
 
 const SCoPCnd *SCoPCondition::getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB) {
+  assert(SrcBB != DstBB && "Please use getBEPathCnd BEPathCnd for loop!");
   BranchInst *Br = dyn_cast<BranchInst>(SrcBB->getTerminator());
   // We only support BranchInst at this moment, so just return something if
   // the terminator is not a br.
