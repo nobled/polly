@@ -576,6 +576,13 @@ class ClastCodeGeneration : public RegionPass {
       return false;
     }
 
+    // Parameters not yet supported.
+    if (std::distance(S->param_begin(), S->param_end()) > 1 ) {
+      errs() << "Code generation for SCoP " << S->getRegion().getNameStr()
+        << " failed. Parameters not yet supported.";
+      return false;
+    }
+
     createSeSeEdges(R);
 
     if (C)
