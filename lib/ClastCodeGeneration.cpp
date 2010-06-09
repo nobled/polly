@@ -404,20 +404,38 @@ class CPCodeGenerationActions : public CPActions {
         Value *RHS = ConstantInt::get(ctx->Builder->getContext(), RHS_AP);
 
         Value *Result;
+        IRBuilder<> *Builder = ctx->Builder;
 
         switch (e->type) {
         case clast_bin_mod:
-          Result = ctx->Builder->CreateURem(LHS, RHS);
-          llvm_unreachable("mod binary expression not supported");
+          Result = ctx->Builder->CreateSRem(LHS, RHS);
           break;
         case clast_bin_fdiv:
-          llvm_unreachable("fdiv binary expression not supported");
-          break;
+          {
+            // floord(n,d) ((n < 0) ? (n - d + 1) : n) / d
+            Value *One = ConstantInt::get(Builder->getInt64Ty(), 1);
+            Value *Zero = ConstantInt::get(Builder->getInt64Ty(), 1);
+            Value *Sum1 = Builder->CreateSub(LHS, RHS);
+            Value *Sum2 = Builder->CreateAdd(Sum1, One);
+            Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
+            Value *Dividend = Builder->CreateSelect(isNegative, Sum2, LHS);
+            Result = Builder->CreateSDiv(Dividend, RHS);
+            break;
+          }
         case clast_bin_cdiv:
-          llvm_unreachable("cdiv binary expression not supported");
+          {
+            // ceild(n,d) ((n < 0) ? n : (n + d - 1)) / d
+            Value *One =  ConstantInt::get(Builder->getInt64Ty(), 1);
+            Value *Zero =  ConstantInt::get(Builder->getInt64Ty(), 1);
+            Value *Sum1 = Builder->CreateAdd(LHS, RHS);
+            Value *Sum2 = Builder->CreateSub(Sum1, One);
+            Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
+            Value *Dividend = Builder->CreateSelect(isNegative, LHS, Sum2);
+            Result = Builder->CreateSDiv(Dividend, RHS);
           break;
+          }
         case clast_bin_div:
-          llvm_unreachable("div binary expression not supported");
+          Result = Builder->CreateSDiv(LHS, RHS);
           break;
         default:
           llvm_unreachable("Unknown binary expression type");
