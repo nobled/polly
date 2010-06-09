@@ -501,17 +501,73 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB,
         || isa<Instruction>(Br->getCondition())))
     return false;
 
-  Loop *L = LI->getLoopFor(&BB);
+  if(Loop *L = LI->getLoopFor(&BB))
+    if (L->getExitingBlock() == &BB)
+      return true;
 
-  // Conditions are not yet supported, except at loop exits.
-  // TODO: Allow conditions in structured CFGs.
-  if (!L || L->getExitingBlock() != &BB) {
+  // Get the condition
+  const SCoPCnd *Cnd = SCnd->getCndForBB(&BB, CurRegion.getEntry());
+  if (!isValidCondition(Cnd, RefRegion, CurRegion)) {
+    DEBUG(dbgs() << "Get Condition: " << *Cnd << "\n");
+    // Check if the condition is affine
     DEBUG(dbgs() << "Bad BB in cfg: " << BB.getName() << "\n");
     STATSCOP(CFG);
     return false;
   }
 
   return true;
+}
+
+bool SCoPDetection::isValidCondition(const SCoPCnd *C,
+                                     Region &RefRegion, Region &CurRegion) const {
+  if (const SCoPBrCnd *BrCnd = dyn_cast<SCoPBrCnd>(C))
+    return isValidCondition(BrCnd, RefRegion, CurRegion);
+
+  if(const SCoPAndCnd *AndCnd = dyn_cast<SCoPAndCnd>(C)) {
+    bool isValid = true;
+    // Check each operand
+    for (SCoPAndCnd::op_iterator I = AndCnd->op_begin(), E = AndCnd->op_end();
+        I != E; ++I)
+      isValid &= isValidCondition(*I, RefRegion, CurRegion);
+
+    return isValid;
+  }
+  return false;
+}
+
+bool SCoPDetection::isValidCondition(const SCoPBrCnd *C,
+                                     Region &RefRegion, Region &CurRegion) const {
+  if (const SCEV* S = buildSCEV(C)) {
+    isValidAffineFunction(S, RefRegion, CurRegion, false);
+    return false;
+  }
+  return false;
+}
+
+const SCEV *SCoPDetection::buildSCEV(const SCoPBrCnd *C) const {
+  ICmpInst *Cmp = dyn_cast<ICmpInst>(C->getCnd());
+  // Only can handle cmp at this moment
+  if (!Cmp)
+    return 0;
+
+  ICmpInst::Predicate Pred;
+
+  if (C->getSide())
+    Pred = Cmp->getPredicate();
+  else
+    Pred = Cmp->getInversePredicate();
+
+  const SCEV *LHS = SE->getSCEV(Cmp->getOperand(0)),
+             *RHS = SE->getSCEV(Cmp->getOperand(1));
+
+  switch (Pred) {
+  default:
+    // Cound not handle.
+    return 0;
+  case ICmpInst::ICMP_EQ:
+    // A == B <=> A - B = 0;
+    return SE->getMinusSCEV(LHS, RHS);
+  }
 }
 
 bool SCoPDetection::isValidCallInst(CallInst &CI) {
@@ -866,6 +922,8 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   LI = &getAnalysis<LoopInfo>();
   RI = &getAnalysis<RegionInfo>();
   SDR = &getAnalysis<ScalarDataRef>();
+  SCnd = &getAnalysis<SCoPCondition>();
+
   Region *TopRegion = RI->getTopLevelRegion();
 
   ParamSetType Params;
@@ -878,6 +936,7 @@ void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<RegionInfo>();
   AU.addRequiredTransitive<ScalarEvolution>();
   AU.addRequiredTransitive<ScalarDataRef>();
+  AU.addRequiredTransitive<SCoPCondition>();
   AU.setPreservesAll();
 }
 

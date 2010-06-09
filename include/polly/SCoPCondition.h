@@ -111,7 +111,7 @@ protected:
 
 public:
   // What the branching condition
-  const Value *getCnd() const { return Cond.getPointer(); }
+  Value *getCnd() const { return Cond.getPointer(); }
   // Branch to which side?
   bool getSide() const { return Cond.getInt(); }
 
@@ -311,12 +311,6 @@ class SCoPCondition : public FunctionPass {
   // Compute CondofEdge(BB, pred(BB))
   const SCoPCnd *getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB);
 
-  // TODO: evaluate the loop condition
-  const SCoPCnd *getCndForBB(BasicBlock *BB) {
-    DomTreeNode *Node = DT->getNode(BB);
-    return getInDomCnd(Node, DT->getRootNode());
-  }
-
   void clear() {
     BBtoInDomCond.clear();
     UniqueSCoPCnds.clear();
@@ -352,6 +346,14 @@ public:
       O, Ops.size());
     UniqueSCoPCnds.InsertNode(C, IP);
     return C;
+  }
+
+  // TODO: evaluate the loop condition
+  const SCoPCnd *getCndForBB(BasicBlock *BB, BasicBlock *DomBB) {
+    DomTreeNode *Node = DT->getNode(BB),
+                *DomNode = DT->getNode(DomBB);
+    assert(DT->dominates(DomBB, BB));
+    return getInDomCnd(Node, DomNode);
   }
 
   /// @name FunctionPass interface

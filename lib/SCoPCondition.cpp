@@ -454,7 +454,6 @@ const SCoPCnd *SCoPCondition::getInDomPathCnd(DomTreeNode *Node,
 }
 
 const SCoPCnd *SCoPCondition::getEdgeCnd(BasicBlock *SrcBB, BasicBlock *DstBB) {
-  assert(SrcBB != DstBB && "Please use getBEPathCnd BEPathCnd for loop!");
   BranchInst *Br = dyn_cast<BranchInst>(SrcBB->getTerminator());
   // We only support BranchInst at this moment, so just return something if
   // the terminator is not a br.
@@ -485,7 +484,7 @@ void SCoPCondition::print(raw_ostream &OS, const Module *) const {
   for (Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
     BasicBlock *BB = I;
     OS << "Condition of BB: " << BB->getName() << " is\n";
-    SC.getCndForBB(BB)->print(OS.indent(2));
+    SC.getCndForBB(BB, &F->getEntryBlock())->print(OS.indent(2));
     OS << "\n";
   }
 }
