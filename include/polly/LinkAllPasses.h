@@ -20,7 +20,6 @@
 #include "polly/ScalarDataRef.h"
 #include "polly/SCoPExchange.h"
 #include "polly/SCoPInfo.h"
-#include "polly/SCoPCondition.h"
 #include "polly/Support/AffineSCEVIterator.h"
 #include "polly/CLooGExporter.h"
 /// TODO: Place the headers that containing pass you want to force link here.
@@ -37,7 +36,6 @@ namespace {
       if (std::getenv("bar") != (char*) -1)
         return;
 
-      (void) polly::createSCoPConditionPass();
       (void) polly::createSCoPInfoPass();
       (void) polly::createScopPrinterPass();
       (void) polly::createAffSCEVItTesterPass();

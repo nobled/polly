@@ -17,7 +17,6 @@
 
 #include "polly/PollyType.h"
 #include "polly/ScalarDataRef.h"
-#include "polly/SCoPCondition.h"
 #include "polly/Support/AffineSCEVIterator.h"
 
 #include "llvm/Analysis/RegionInfo.h"
@@ -265,9 +264,6 @@ class SCoPDetection : public FunctionPass {
   // Capture scalar data reference.
   ScalarDataRef *SDR;
 
-  // Handle the conditions in CFG
-  SCoPCondition *SCnd;
-
   // Remember the bounds of loops, to help us build iterate domain of BBs.
   BoundMapType LoopBounds;
 
@@ -359,15 +355,6 @@ class SCoPDetection : public FunctionPass {
 
   bool isValidAffineFunction(const SCEV *S, Region &RefRegion, Region &CurRegion,
                              bool isMemAcc) const;
-
-  bool isValidCondition(const SCoPCnd *C,
-                        Region &RefRegion, Region &CurRegion) const;
-  bool isValidCondition(const SCoPBrCnd *C,
-                        Region &RefRegion, Region &CurRegion) const;
-
-  // Build SCEV from a SCoPCnd, so we could check it or build the condition
-  const SCEV *buildSCEV(const SCoPBrCnd *C) const;
-
 
   /////////////////////////////////////////////////////////////////////////////
   // If the Region not a valid part of a SCoP,
