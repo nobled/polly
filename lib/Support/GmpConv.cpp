@@ -35,9 +35,15 @@ APInt polly::APInt_from_MPZ (const mpz_t mpz) {
 
   p = (uint64_t*) mpz_export(p, &sz, 1, sizeof(uint64_t), 0, 0, mpz);
 
-  if (p)
-    return APInt((unsigned)mpz_sizeinbase(mpz, 2), (unsigned)sz , p);
-  else {
+  if (p) {
+    APInt A((unsigned)mpz_sizeinbase(mpz, 2), (unsigned)sz , p);
+    A.zext(A.getBitWidth() + 1);
+
+    if (mpz_sgn(mpz) == -1)
+      return -A;
+    else
+      return A;
+  } else {
     uint64_t val = 0;
     return APInt(1, 1, &val);
   }

@@ -229,7 +229,12 @@ class ClastExpCodeGen {
 
   Value *codegen(clast_term *e) {
     APInt a = APInt_from_MPZ(e->val);
-    a.zext(64);
+
+    if (a.getBitWidth() < 64)
+      a.sext(64);
+    else if (a.getBitWidth() > 64)
+      llvm_unreachable("Number not supported");
+
     Value *ConstOne = ConstantInt::get(Builder->getContext(), a);
 
     if (e->var) {
@@ -244,7 +249,12 @@ class ClastExpCodeGen {
     Value *LHS = codegen(e->LHS);
 
     APInt RHS_AP = APInt_from_MPZ(e->RHS);
-    RHS_AP.zext(64);
+
+    if (RHS_AP.getBitWidth() < 64)
+      RHS_AP.sext(64);
+    else if (RHS_AP.getBitWidth() > 64)
+      llvm_unreachable("Number not supported");
+
     Value *RHS = ConstantInt::get(Builder->getContext(), RHS_AP);
 
     switch (e->type) {
