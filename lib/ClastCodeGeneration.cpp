@@ -214,41 +214,43 @@ void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
 }
 
 class ClastExpCodeGen {
-  static Value *print(clast_name *e, codegenctx *ctx) {
-    CharMapT::iterator I = ctx->CharMap.find(e->name);
+  IRBuilder<> *Builder;
+  CharMapT *IVS;
 
-    if (I != ctx->CharMap.end())
+  Value *print(clast_name *e) {
+    CharMapT::iterator I = IVS->find(e->name);
+
+    if (I != IVS->end())
       return I->second;
     else
       llvm_unreachable("Value not found");
   }
 
-  static Value *print(clast_term *e, codegenctx *ctx) {
+  Value *print(clast_term *e) {
     APInt a = APInt_from_MPZ(e->val);
     a.zext(64);
-    Value *ConstOne = ConstantInt::get(ctx->Builder->getContext(), a);
+    Value *ConstOne = ConstantInt::get(Builder->getContext(), a);
 
     if (e->var) {
-      Value *var = print(e->var, ctx);
-      ConstOne = ctx->Builder->CreateMul(ConstOne, var);
+      Value *var = print(e->var);
+      ConstOne = Builder->CreateMul(ConstOne, var);
     }
 
     return ConstOne;
   }
 
-  static Value *print(clast_binary *e, codegenctx *ctx) {
-    Value *LHS = print(e->LHS, ctx);
+  Value *print(clast_binary *e) {
+    Value *LHS = print(e->LHS);
 
     APInt RHS_AP = APInt_from_MPZ(e->RHS);
     RHS_AP.zext(64);
-    Value *RHS = ConstantInt::get(ctx->Builder->getContext(), RHS_AP);
+    Value *RHS = ConstantInt::get(Builder->getContext(), RHS_AP);
 
     Value *Result;
-    IRBuilder<> *Builder = ctx->Builder;
 
     switch (e->type) {
     case clast_bin_mod:
-      Result = ctx->Builder->CreateSRem(LHS, RHS);
+      Result = Builder->CreateSRem(LHS, RHS);
       break;
     case clast_bin_fdiv:
       {
@@ -284,51 +286,54 @@ class ClastExpCodeGen {
     return Result;
   }
 
-  static Value *redmin(Value *old, Value *exprValue, IRBuilder<> *Builder) {
+  Value *redmin(Value *old, Value *exprValue, IRBuilder<> *Builder) {
     Value *cmp = Builder->CreateICmpSLT(old, exprValue);
     return Builder->CreateSelect(cmp, old, exprValue);
   }
 
-  static Value *redmax(Value *old, Value *exprValue, IRBuilder<> *Builder) {
+  Value *redmax(Value *old, Value *exprValue, IRBuilder<> *Builder) {
     Value *cmp = Builder->CreateICmpSGT(old, exprValue);
     return Builder->CreateSelect(cmp, old, exprValue);
   }
 
-  static Value *redsum(Value *old, Value *exprValue, IRBuilder<> *Builder) {
+  Value *redsum(Value *old, Value *exprValue, IRBuilder<> *Builder) {
     return Builder->CreateAdd(old, exprValue);
   }
 
-  static Value *print(clast_reduction *r, codegenctx *ctx) {
+  Value *print(clast_reduction *r) {
     assert((   r->type == clast_red_min
                || r->type == clast_red_max
                || r->type == clast_red_sum)
            && "Reduction type not supported");
-    Value *old = print(r->elts[0], ctx);
+    Value *old = print(r->elts[0]);
 
     for (int i=1; i < r->n; ++i) {
-      Value *exprValue = print(r->elts[i], ctx);
+      Value *exprValue = print(r->elts[i]);
       if (r->type == clast_red_min)
-        old = redmin(old, exprValue, ctx->Builder);
+        old = redmin(old, exprValue, Builder);
       else if (r->type == clast_red_max)
-        old = redmax(old, exprValue, ctx->Builder);
+        old = redmax(old, exprValue, Builder);
       else if (r->type == clast_red_sum)
-        old = redsum(old, exprValue, ctx->Builder);
+        old = redsum(old, exprValue, Builder);
     }
 
     return old;
   }
 
 public:
-  static Value *print(clast_expr *e, codegenctx *ctx) {
+
+  ClastExpCodeGen(IRBuilder<> *B, CharMapT *IVMap) : Builder(B), IVS(IVMap) {}
+
+  Value *print(clast_expr *e) {
     switch(e->type) {
       case clast_expr_name:
-	return print((struct clast_name *)e, ctx);
+	return print((struct clast_name *)e);
       case clast_expr_term:
-	return print((struct clast_term *)e, ctx);
+	return print((struct clast_term *)e);
       case clast_expr_bin:
-	return print((struct clast_binary *)e, ctx);
+	return print((struct clast_binary *)e);
       case clast_expr_red:
-	return print((struct clast_reduction *)e, ctx);
+	return print((struct clast_reduction *)e);
       default:
         llvm_unreachable("Unknown clast expression!");
     }
@@ -519,7 +524,8 @@ class CPCodeGenerationActions : public CPActions {
   virtual void out(clast_expr *e, cp_ctx *ctx) {
     ctx->dir = DFS_OUT;
     codegenctx *pctx = static_cast<codegenctx*>(ctx);
-    pctx->exprValue = ClastExpCodeGen::print(e, static_cast<codegenctx*>(ctx));
+    ClastExpCodeGen ExpGen(pctx->Builder, &pctx->CharMap);
+    pctx->exprValue = ExpGen.print(e);
   }
 };
 }
