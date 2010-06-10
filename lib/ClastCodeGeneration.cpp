@@ -217,7 +217,7 @@ class ClastExpCodeGen {
   IRBuilder<> *Builder;
   CharMapT *IVS;
 
-  Value *print(clast_name *e) {
+  Value *codegen(clast_name *e) {
     CharMapT::iterator I = IVS->find(e->name);
 
     if (I != IVS->end())
@@ -226,21 +226,21 @@ class ClastExpCodeGen {
       llvm_unreachable("Value not found");
   }
 
-  Value *print(clast_term *e) {
+  Value *codegen(clast_term *e) {
     APInt a = APInt_from_MPZ(e->val);
     a.zext(64);
     Value *ConstOne = ConstantInt::get(Builder->getContext(), a);
 
     if (e->var) {
-      Value *var = print(e->var);
+      Value *var = codegen(e->var);
       ConstOne = Builder->CreateMul(ConstOne, var);
     }
 
     return ConstOne;
   }
 
-  Value *print(clast_binary *e) {
-    Value *LHS = print(e->LHS);
+  Value *codegen(clast_binary *e) {
+    Value *LHS = codegen(e->LHS);
 
     APInt RHS_AP = APInt_from_MPZ(e->RHS);
     RHS_AP.zext(64);
@@ -300,15 +300,15 @@ class ClastExpCodeGen {
     return Builder->CreateAdd(old, exprValue);
   }
 
-  Value *print(clast_reduction *r) {
+  Value *codegen(clast_reduction *r) {
     assert((   r->type == clast_red_min
                || r->type == clast_red_max
                || r->type == clast_red_sum)
            && "Reduction type not supported");
-    Value *old = print(r->elts[0]);
+    Value *old = codegen(r->elts[0]);
 
     for (int i=1; i < r->n; ++i) {
-      Value *exprValue = print(r->elts[i]);
+      Value *exprValue = codegen(r->elts[i]);
       if (r->type == clast_red_min)
         old = redmin(old, exprValue, Builder);
       else if (r->type == clast_red_max)
@@ -324,16 +324,16 @@ public:
 
   ClastExpCodeGen(IRBuilder<> *B, CharMapT *IVMap) : Builder(B), IVS(IVMap) {}
 
-  Value *print(clast_expr *e) {
+  Value *codegen(clast_expr *e) {
     switch(e->type) {
       case clast_expr_name:
-	return print((struct clast_name *)e);
+	return codegen((struct clast_name *)e);
       case clast_expr_term:
-	return print((struct clast_term *)e);
+	return codegen((struct clast_term *)e);
       case clast_expr_bin:
-	return print((struct clast_binary *)e);
+	return codegen((struct clast_binary *)e);
       case clast_expr_red:
-	return print((struct clast_reduction *)e);
+	return codegen((struct clast_reduction *)e);
       default:
         llvm_unreachable("Unknown clast expression!");
     }
@@ -525,7 +525,7 @@ class CPCodeGenerationActions : public CPActions {
     ctx->dir = DFS_OUT;
     codegenctx *pctx = static_cast<codegenctx*>(ctx);
     ClastExpCodeGen ExpGen(pctx->Builder, &pctx->CharMap);
-    pctx->exprValue = ExpGen.print(e);
+    pctx->exprValue = ExpGen.codegen(e);
   }
 };
 }
