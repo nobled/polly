@@ -213,6 +213,128 @@ void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
   }
 }
 
+class ClastExpCodeGen {
+  static Value *print(clast_name *e, codegenctx *ctx) {
+    CharMapT::iterator I = ctx->CharMap.find(e->name);
+
+    if (I != ctx->CharMap.end())
+      return I->second;
+    else
+      llvm_unreachable("Value not found");
+  }
+
+  static Value *print(clast_term *e, codegenctx *ctx) {
+    APInt a = APInt_from_MPZ(e->val);
+    a.zext(64);
+    Value *ConstOne = ConstantInt::get(ctx->Builder->getContext(), a);
+
+    if (e->var) {
+      Value *var = print(e->var, ctx);
+      ConstOne = ctx->Builder->CreateMul(ConstOne, var);
+    }
+
+    return ConstOne;
+  }
+
+  static Value *print(clast_binary *e, codegenctx *ctx) {
+    Value *LHS = print(e->LHS, ctx);
+
+    APInt RHS_AP = APInt_from_MPZ(e->RHS);
+    RHS_AP.zext(64);
+    Value *RHS = ConstantInt::get(ctx->Builder->getContext(), RHS_AP);
+
+    Value *Result;
+    IRBuilder<> *Builder = ctx->Builder;
+
+    switch (e->type) {
+    case clast_bin_mod:
+      Result = ctx->Builder->CreateSRem(LHS, RHS);
+      break;
+    case clast_bin_fdiv:
+      {
+        // floord(n,d) ((n < 0) ? (n - d + 1) : n) / d
+        Value *One = ConstantInt::get(Builder->getInt64Ty(), 1);
+        Value *Zero = ConstantInt::get(Builder->getInt64Ty(), 1);
+        Value *Sum1 = Builder->CreateSub(LHS, RHS);
+        Value *Sum2 = Builder->CreateAdd(Sum1, One);
+        Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
+        Value *Dividend = Builder->CreateSelect(isNegative, Sum2, LHS);
+        Result = Builder->CreateSDiv(Dividend, RHS);
+        break;
+      }
+    case clast_bin_cdiv:
+      {
+        // ceild(n,d) ((n < 0) ? n : (n + d - 1)) / d
+        Value *One =  ConstantInt::get(Builder->getInt64Ty(), 1);
+        Value *Zero =  ConstantInt::get(Builder->getInt64Ty(), 1);
+        Value *Sum1 = Builder->CreateAdd(LHS, RHS);
+        Value *Sum2 = Builder->CreateSub(Sum1, One);
+        Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
+        Value *Dividend = Builder->CreateSelect(isNegative, LHS, Sum2);
+        Result = Builder->CreateSDiv(Dividend, RHS);
+        break;
+      }
+    case clast_bin_div:
+      Result = Builder->CreateSDiv(LHS, RHS);
+      break;
+    default:
+      llvm_unreachable("Unknown binary expression type");
+    };
+
+    return Result;
+  }
+
+  static Value *redmin(Value *old, Value *exprValue, IRBuilder<> *Builder) {
+    Value *cmp = Builder->CreateICmpSLT(old, exprValue);
+    return Builder->CreateSelect(cmp, old, exprValue);
+  }
+
+  static Value *redmax(Value *old, Value *exprValue, IRBuilder<> *Builder) {
+    Value *cmp = Builder->CreateICmpSGT(old, exprValue);
+    return Builder->CreateSelect(cmp, old, exprValue);
+  }
+
+  static Value *redsum(Value *old, Value *exprValue, IRBuilder<> *Builder) {
+    return Builder->CreateAdd(old, exprValue);
+  }
+
+  static Value *print(clast_reduction *r, codegenctx *ctx) {
+    assert((   r->type == clast_red_min
+               || r->type == clast_red_max
+               || r->type == clast_red_sum)
+           && "Reduction type not supported");
+    Value *old = print(r->elts[0], ctx);
+
+    for (int i=1; i < r->n; ++i) {
+      Value *exprValue = print(r->elts[i], ctx);
+      if (r->type == clast_red_min)
+        old = redmin(old, exprValue, ctx->Builder);
+      else if (r->type == clast_red_max)
+        old = redmax(old, exprValue, ctx->Builder);
+      else if (r->type == clast_red_sum)
+        old = redsum(old, exprValue, ctx->Builder);
+    }
+
+    return old;
+  }
+
+public:
+  static Value *print(clast_expr *e, codegenctx *ctx) {
+    switch(e->type) {
+      case clast_expr_name:
+	return print((struct clast_name *)e, ctx);
+      case clast_expr_term:
+	return print((struct clast_term *)e, ctx);
+      case clast_expr_bin:
+	return print((struct clast_binary *)e, ctx);
+      case clast_expr_red:
+	return print((struct clast_reduction *)e, ctx);
+      default:
+        llvm_unreachable("Unknown clast expression!");
+    }
+  }
+};
+
 class CPCodeGenerationActions : public CPActions {
   protected:
   void print(struct clast_assignment *a, codegenctx *ctx) {
@@ -377,138 +499,6 @@ class CPCodeGenerationActions : public CPActions {
       print((struct clast_guard *)stmt, ctx);
   }
 
-  void print(clast_name *e, codegenctx *ctx) {
-    if(ctx->dir == DFS_IN) {
-      CharMapT::iterator I = ctx->CharMap.find(e->name);
-
-      if (I != ctx->CharMap.end())
-        ctx->exprValue = I->second;
-      else
-        llvm_unreachable("Value not found");
-    }
-  }
-
-  void print(clast_term *e, codegenctx *ctx) {
-    APInt a = APInt_from_MPZ(e->val);
-    if (ctx->dir == DFS_IN) {
-      a.zext(64);
-      Value *ConstOne = ConstantInt::get(ctx->Builder->getContext(), a);
-      ctx->exprValue = ConstOne;
-    }
-  }
-
-  void print(clast_binary *e, codegenctx *ctx) {
-    switch(ctx->dir) {
-    case DFS_IN:
-      {
-        eval(e->LHS, ctx);
-        Value *LHS = ctx->exprValue;
-
-        APInt RHS_AP = APInt_from_MPZ(e->RHS);
-        RHS_AP.zext(64);
-        Value *RHS = ConstantInt::get(ctx->Builder->getContext(), RHS_AP);
-
-        Value *Result;
-        IRBuilder<> *Builder = ctx->Builder;
-
-        switch (e->type) {
-        case clast_bin_mod:
-          Result = ctx->Builder->CreateSRem(LHS, RHS);
-          break;
-        case clast_bin_fdiv:
-          {
-            // floord(n,d) ((n < 0) ? (n - d + 1) : n) / d
-            Value *One = ConstantInt::get(Builder->getInt64Ty(), 1);
-            Value *Zero = ConstantInt::get(Builder->getInt64Ty(), 1);
-            Value *Sum1 = Builder->CreateSub(LHS, RHS);
-            Value *Sum2 = Builder->CreateAdd(Sum1, One);
-            Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
-            Value *Dividend = Builder->CreateSelect(isNegative, Sum2, LHS);
-            Result = Builder->CreateSDiv(Dividend, RHS);
-            break;
-          }
-        case clast_bin_cdiv:
-          {
-            // ceild(n,d) ((n < 0) ? n : (n + d - 1)) / d
-            Value *One =  ConstantInt::get(Builder->getInt64Ty(), 1);
-            Value *Zero =  ConstantInt::get(Builder->getInt64Ty(), 1);
-            Value *Sum1 = Builder->CreateAdd(LHS, RHS);
-            Value *Sum2 = Builder->CreateSub(Sum1, One);
-            Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
-            Value *Dividend = Builder->CreateSelect(isNegative, LHS, Sum2);
-            Result = Builder->CreateSDiv(Dividend, RHS);
-          break;
-          }
-        case clast_bin_div:
-          Result = Builder->CreateSDiv(LHS, RHS);
-          break;
-        default:
-          llvm_unreachable("Unknown binary expression type");
-        };
-
-        ctx->exprValue = Result;
-        break;
-      }
-      case DFS_OUT:
-	break;
-    }
-  }
-
-  Value *redmin(Value *old, Value *exprValue, IRBuilder<> *Builder) {
-    Value *cmp = Builder->CreateICmpSLT(old, exprValue);
-    return Builder->CreateSelect(cmp, old, exprValue);
-  }
-
-  Value *redmax(Value *old, Value *exprValue, IRBuilder<> *Builder) {
-    Value *cmp = Builder->CreateICmpSGT(old, exprValue);
-    return Builder->CreateSelect(cmp, old, exprValue);
-  }
-
-  Value *redsum(Value *old, Value *exprValue, IRBuilder<> *Builder) {
-    return Builder->CreateAdd(old, exprValue);
-  }
-
-  void print(clast_reduction *r, codegenctx *ctx) {
-    if (ctx->dir == DFS_IN) {
-      assert((   r->type == clast_red_min
-              || r->type == clast_red_max
-              || r->type == clast_red_sum)
-             && "Reduction type not supported");
-      eval(r->elts[0], ctx);
-
-      Value *old = ctx->exprValue;
-
-      for (int i=1; i < r->n; ++i) {
-        eval(r->elts[i], ctx);
-        if (r->type == clast_red_min)
-          old = redmin(old, ctx->exprValue, ctx->Builder);
-        else if (r->type == clast_red_max)
-          old = redmax(old, ctx->exprValue, ctx->Builder);
-        else if (r->type == clast_red_sum)
-          old = redsum(old, ctx->exprValue, ctx->Builder);
-      }
-
-      ctx->exprValue = old;
-    }
-  }
-
-  void print(clast_expr *e, codegenctx *ctx) {
-    switch(e->type) {
-      case clast_expr_name:
-	print((struct clast_name *)e, ctx);
-	break;
-      case clast_expr_term:
-	print((struct clast_term *)e, ctx);
-	break;
-      case clast_expr_bin:
-	print((struct clast_binary *)e, ctx);
-	break;
-      case clast_expr_red:
-	print((struct clast_reduction *)e, ctx);
-	break;
-    }
-  }
-
   public:
   CPCodeGenerationActions(raw_ostream& strm) {
   }
@@ -524,13 +514,12 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   virtual void in(clast_expr *e, cp_ctx *ctx) {
-    ctx->dir = DFS_IN;
-    print(e, static_cast<codegenctx*>(ctx));
   }
 
   virtual void out(clast_expr *e, cp_ctx *ctx) {
     ctx->dir = DFS_OUT;
-    print(e, static_cast<codegenctx*>(ctx));
+    codegenctx *pctx = static_cast<codegenctx*>(ctx);
+    pctx->exprValue = ClastExpCodeGen::print(e, static_cast<codegenctx*>(ctx));
   }
 };
 }
