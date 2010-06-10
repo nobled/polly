@@ -213,17 +213,18 @@ void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
   }
 }
 
+/// Class to generate LLVM-IR that calculates the value of a clast_expr.
 class ClastExpCodeGen {
   IRBuilder<> *Builder;
-  CharMapT *IVS;
+  const CharMapT *IVS;
 
   Value *codegen(clast_name *e) {
-    CharMapT::iterator I = IVS->find(e->name);
+    CharMapT::const_iterator I = IVS->find(e->name);
 
     if (I != IVS->end())
       return I->second;
     else
-      llvm_unreachable("Value not found");
+      llvm_unreachable("Clast name not found");
   }
 
   Value *codegen(clast_term *e) {
@@ -233,7 +234,7 @@ class ClastExpCodeGen {
 
     if (e->var) {
       Value *var = codegen(e->var);
-      ConstOne = Builder->CreateMul(ConstOne, var);
+      return Builder->CreateMul(ConstOne, var);
     }
 
     return ConstOne;
@@ -246,12 +247,9 @@ class ClastExpCodeGen {
     RHS_AP.zext(64);
     Value *RHS = ConstantInt::get(Builder->getContext(), RHS_AP);
 
-    Value *Result;
-
     switch (e->type) {
     case clast_bin_mod:
-      Result = Builder->CreateSRem(LHS, RHS);
-      break;
+      return Builder->CreateSRem(LHS, RHS);
     case clast_bin_fdiv:
       {
         // floord(n,d) ((n < 0) ? (n - d + 1) : n) / d
@@ -261,8 +259,7 @@ class ClastExpCodeGen {
         Value *Sum2 = Builder->CreateAdd(Sum1, One);
         Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
         Value *Dividend = Builder->CreateSelect(isNegative, Sum2, LHS);
-        Result = Builder->CreateSDiv(Dividend, RHS);
-        break;
+        return Builder->CreateSDiv(Dividend, RHS);
       }
     case clast_bin_cdiv:
       {
@@ -273,48 +270,44 @@ class ClastExpCodeGen {
         Value *Sum2 = Builder->CreateSub(Sum1, One);
         Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
         Value *Dividend = Builder->CreateSelect(isNegative, LHS, Sum2);
-        Result = Builder->CreateSDiv(Dividend, RHS);
-        break;
+        return Builder->CreateSDiv(Dividend, RHS);
       }
     case clast_bin_div:
-      Result = Builder->CreateSDiv(LHS, RHS);
-      break;
+      return Builder->CreateSDiv(LHS, RHS);
     default:
-      llvm_unreachable("Unknown binary expression type");
+      llvm_unreachable("Unknown clast binary expression type");
     };
-
-    return Result;
-  }
-
-  Value *redmin(Value *old, Value *exprValue, IRBuilder<> *Builder) {
-    Value *cmp = Builder->CreateICmpSLT(old, exprValue);
-    return Builder->CreateSelect(cmp, old, exprValue);
-  }
-
-  Value *redmax(Value *old, Value *exprValue, IRBuilder<> *Builder) {
-    Value *cmp = Builder->CreateICmpSGT(old, exprValue);
-    return Builder->CreateSelect(cmp, old, exprValue);
-  }
-
-  Value *redsum(Value *old, Value *exprValue, IRBuilder<> *Builder) {
-    return Builder->CreateAdd(old, exprValue);
   }
 
   Value *codegen(clast_reduction *r) {
     assert((   r->type == clast_red_min
-               || r->type == clast_red_max
-               || r->type == clast_red_sum)
-           && "Reduction type not supported");
+            || r->type == clast_red_max
+            || r->type == clast_red_sum)
+           && "Clast reduction type not supported");
     Value *old = codegen(r->elts[0]);
 
     for (int i=1; i < r->n; ++i) {
       Value *exprValue = codegen(r->elts[i]);
-      if (r->type == clast_red_min)
-        old = redmin(old, exprValue, Builder);
-      else if (r->type == clast_red_max)
-        old = redmax(old, exprValue, Builder);
-      else if (r->type == clast_red_sum)
-        old = redsum(old, exprValue, Builder);
+
+      switch (r->type) {
+      case clast_red_min:
+        {
+          Value *cmp = Builder->CreateICmpSLT(old, exprValue);
+          old = Builder->CreateSelect(cmp, old, exprValue);
+          break;
+        }
+      case clast_red_max:
+        {
+          Value *cmp = Builder->CreateICmpSGT(old, exprValue);
+          old = Builder->CreateSelect(cmp, old, exprValue);
+          break;
+        }
+      case clast_red_sum:
+        old = Builder->CreateAdd(old, exprValue);
+        break;
+      default:
+        llvm_unreachable("Clast unknown reduction type");
+      }
     }
 
     return old;
@@ -322,8 +315,19 @@ class ClastExpCodeGen {
 
 public:
 
+  // A generator for clast expressions.
+  //
+  // @param B The IRBuilder that defines where the code to calculate the
+  //          clast expressions should be inserted.
+  // @param IVMAP A Map that translates strings describing the induction
+  //              variables to the Values* that represent these variables
+  //              on the LLVM side.
   ClastExpCodeGen(IRBuilder<> *B, CharMapT *IVMap) : Builder(B), IVS(IVMap) {}
 
+  // Generates code to calculate a given clast expression.
+  //
+  // @param e The expression to calculate.
+  // @return The Value that holds the result.
   Value *codegen(clast_expr *e) {
     switch(e->type) {
       case clast_expr_name:
@@ -383,12 +387,6 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   void print(struct clast_block *b, codegenctx *ctx) {
-    switch(ctx->dir) {
-      case DFS_IN:
-	break;
-      case DFS_OUT:
-	break;
-    }
   }
 
   void print(struct clast_for *f, codegenctx *ctx) {
