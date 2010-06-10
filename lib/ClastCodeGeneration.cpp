@@ -22,6 +22,8 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Analysis/RegionIterator.h"
+#include "llvm/Analysis/ScalarEvolution.h"
+#include "llvm/Analysis/ScalarEvolutionExpander.h"
 
 
 #define CLOOG_INT_GMP 1
@@ -47,6 +49,7 @@ struct codegenctx : cp_ctx {
   SCoP *S;
 
   DominatorTree *DT;
+  ScalarEvolution *SE;
 
   // The Builder specifies the current location to code generate at.
   IRBuilder<> *Builder;
@@ -89,8 +92,9 @@ struct codegenctx : cp_ctx {
   // expressions.
   SCoPStmt *stmt;
 
-  codegenctx(SCoP *scop, DominatorTree *DomTree, IRBuilder<> *builder):
-    S(scop), DT(DomTree), Builder(builder) {}
+  codegenctx(SCoP *scop, DominatorTree *DomTree, ScalarEvolution *ScEv,
+             IRBuilder<> *builder):
+    S(scop), DT(DomTree), SE(ScEv), Builder(builder) {}
 };
 
 // Create a new loop.
@@ -151,7 +155,7 @@ void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
 //                map.
 //
 void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
-             DominatorTree *DT, const Region *R) {
+             DominatorTree *DT, const Region *R, ScalarEvolution *SE) {
   Function *F = Builder->GetInsertBlock()->getParent();
   LLVMContext &Context = F->getContext();
 
@@ -163,49 +167,49 @@ void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
 
   std::vector<const Instruction*> ToCopy;
 
+  ValueMapT BBMap;
+
   for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
        II != IE; ++II)
-    if (!(II->isTerminator() || dyn_cast<PHINode>(II)))
-      ToCopy.push_back(&(*II));
-
-  while (ToCopy.size() != 0) {
-    const Instruction *Inst = ToCopy.back();
-    bool NeedFurtherInsts = false;
-
-    // Replace old operands with the new ones.
-    for (Instruction::const_op_iterator UI = Inst->op_begin(),
-         UE = Inst->op_end(); UI != UE; ++UI)
-      if (VMap.find(*UI) == VMap.end() && Instruction::classof(*UI)) {
-        Instruction *I = static_cast<Instruction*>((*UI).get());
-
-        if (R->contains((I)->getParent())) {
-          ToCopy.push_back(I);
-          NeedFurtherInsts = true;
-        }
-      }
-
-    if (NeedFurtherInsts)
-      continue;
+    if (!II->isTerminator()) {
+    const Instruction *Inst = &*II;
+    bool Add = true;
 
     Instruction *NewInst = Inst->clone();
-    VMap[Inst] = NewInst;
 
     // Replace old operands with the new ones.
     for (Instruction::op_iterator UI = NewInst->op_begin(),
          UE = NewInst->op_end(); UI != UE; ++UI)
-      if (VMap.find(*UI) != VMap.end()) {
-        Value *NewOp = VMap[*UI];
+      if (Instruction *OpInst = dyn_cast<Instruction>((*UI).get())) {
+        // IVS and Parameters.
+        if (VMap.find(OpInst) != VMap.end()) {
+          Value *NewOp = VMap[*UI];
 
-        // Insert a cast if the types differ.
-        if ((*UI)->getType()->getScalarSizeInBits()
-            < VMap[*UI]->getType()->getScalarSizeInBits())
-          NewOp = Builder->CreateTruncOrBitCast(NewOp, (*UI)->getType());
+          // Insert a cast if the types differ.
+          if ((*UI)->getType()->getScalarSizeInBits()
+              < VMap[*UI]->getType()->getScalarSizeInBits())
+            NewOp = Builder->CreateTruncOrBitCast(NewOp, (*UI)->getType());
 
-        NewInst->replaceUsesOfWith(*UI, NewOp);
+          NewInst->replaceUsesOfWith(*UI, NewOp);
+
+        // Instructions calculated in the current BB.
+        } else if (BBMap.find(OpInst) != BBMap.end()) {
+          Value *NewOp = BBMap[*UI];
+          NewInst->replaceUsesOfWith(*UI, NewOp);
+
+        // Ignore instructions that are referencing ops in the old BB. These
+        // instructions are unused. They where replace by new ones during
+        // createIndependentBlocks().
+        } else if (R->contains(OpInst->getParent()))
+          Add = false;
       }
 
-    Builder->Insert(NewInst);
-    ToCopy.pop_back();
+    if (Add) {
+      Builder->Insert(NewInst);
+      BBMap[Inst] = NewInst;
+    } else
+      delete NewInst;
+
   }
 }
 
@@ -245,7 +249,8 @@ class CPCodeGenerationActions : public CPActions {
         ctx->assignmentCount = 0;
 	break;
       case DFS_OUT:
-        copyBB(ctx->Builder, BB, ctx->ValueMap, ctx->DT, &ctx->S->getRegion());
+        copyBB(ctx->Builder, BB, ctx->ValueMap, ctx->DT, &ctx->S->getRegion(),
+               ctx->SE);
 	break;
     }
   }
@@ -535,6 +540,7 @@ class ClastCodeGeneration : public RegionPass {
   Region *region;
   SCoP *S;
   DominatorTree *DT;
+  ScalarEvolution *SE;
   CLooG *C;
 
   public:
@@ -566,10 +572,57 @@ class ClastCodeGeneration : public RegionPass {
     }
   }
 
+  // Create new code for every instruction operator that can be expressed by a
+  // SCEV.  Like this there are just two types of instructions left:
+  //
+  // 1. Instructions that only reference loop ivs or parameters outside the
+  // region.
+  //
+  // 2. Instructions that are not used for any memory modification. (These
+  //    will be ignored later on.)
+  //
+  // Blocks containing only these kind of instructions are called independent
+  // blocks as they can be scheduled arbitrarily.
+  void createIndependentBlocks(BasicBlock *BB) {
+    std::vector<Instruction*> work;
+    SCEVExpander Rewriter(*SE);
+
+    for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
+         II != IE; ++II)
+      if (!II->isTerminator()) {
+        Instruction *Inst = &*II;
+
+        if (!SE->isSCEVable(Inst->getType()))
+          work.push_back(Inst);
+      }
+
+    while (work.size() != 0) {
+      Instruction *Inst = work.back();
+      work.pop_back();
+
+      for (Instruction::op_iterator UI = Inst->op_begin(),
+           UE = Inst->op_end(); UI != UE; ++UI) {
+        if (!SE->isSCEVable(UI->get()->getType()))
+          continue;
+
+        const SCEV *Scev = SE->getSCEV(*UI);
+        Value *V = Rewriter.expandCodeFor(Scev, UI->get()->getType(),
+                                          &*BB->begin());
+        UI->set(V);
+      }
+    }
+  }
+
+  void createIndependentBlocks(SCoP *S) {
+    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI)
+      createIndependentBlocks((*SI)->getBasicBlock());
+  }
+
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
     S = getAnalysis<SCoPInfo>().getSCoP();
     DT = &getAnalysis<DominatorTree>();
+    SE = &getAnalysis<ScalarEvolution>();
 
     if (!S) {
       C = 0;
@@ -584,6 +637,7 @@ class ClastCodeGeneration : public RegionPass {
     }
 
     createSeSeEdges(R);
+    createIndependentBlocks(S);
 
     if (C)
       delete(C);
@@ -601,7 +655,7 @@ class ClastCodeGeneration : public RegionPass {
     IRBuilder<> Builder(PollyBB);
     DT->addNewBlock(PollyBB, R->getEntry());
 
-    codegenctx ctx (S, DT, &Builder);
+    codegenctx ctx (S, DT, SE, &Builder);
     clast_stmt *clast = C->getClast();
 
     addParameters(((clast_root*)clast)->names, ctx.CharMap);
@@ -634,6 +688,7 @@ class ClastCodeGeneration : public RegionPass {
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<SCoPInfo>();
     AU.addRequired<DominatorTree>();
+    AU.addRequired<ScalarEvolution>();
     AU.addPreserved<DominatorTree>();
     AU.addPreserved<SCoPInfo>();
     AU.addPreserved<RegionInfo>();
