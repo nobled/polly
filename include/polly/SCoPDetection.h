@@ -33,6 +33,10 @@ namespace polly {
 typedef std::set<const SCEV*> ParamSetType;
 typedef std::pair<const SCEV*, const SCEV*> AffCmptType;
 
+typedef std::pair<ICmpInst*, bool> BrCond;
+// The condition of a Basicblock, combine brcond with "And" operator.
+typedef SmallVector<BrCond, 4> BBCond;
+
 class TempSCoP;
 class SCoPDetection;
 class SCEVAffFunc;
@@ -264,6 +268,12 @@ class SCoPDetection : public FunctionPass {
   // Capture scalar data reference.
   ScalarDataRef *SDR;
 
+  // FIXME: This is only a temporary hack, we need a standalone condition
+  // analysis and construction pass.
+  // For simple condition extraction support
+  DominatorTree *DT;
+  PostDominatorTree *PDT;
+
   // Remember the bounds of loops, to help us build iterate domain of BBs.
   BoundMapType LoopBounds;
 
@@ -355,6 +365,16 @@ class SCoPDetection : public FunctionPass {
 
   bool isValidAffineFunction(const SCEV *S, Region &RefRegion, Region &CurRegion,
                              bool isMemAcc) const;
+
+
+
+  /// @brief Build condition constrains to BBs in a valid SCoP.
+  ///
+  /// @param BB           The BasicBlock to build condition constrains
+  /// @param RegionEntry  The entry block of the Smallest Region that containing
+  ///                     BB
+  /// @param Cond         The built condition
+  void buildCondition(BasicBlock *BB, BasicBlock *RegionEntry, BBCond &Cond);
 
   /////////////////////////////////////////////////////////////////////////////
   // If the Region not a valid part of a SCoP,

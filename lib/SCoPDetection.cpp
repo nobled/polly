@@ -51,7 +51,6 @@ PrintTempSCoPInDetail("polly-print-temp-scop-in-detail",
                                            "Number of bad regions for SCoP: "\
                                            DESC)
 
-
 #define STATSCOP(NAME);              \
   ++Bad##NAME##ForSCoP;
 
@@ -688,10 +687,57 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
   return tempSCoP;
 }
 
+void SCoPDetection::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
+                                   BBCond &Cond) {
+  DomTreeNode *BBNode = DT->getNode(BB), *EntryNode = DT->getNode(RegionEntry);
+  // FIXME: Would this happen?
+  assert(BBNode && EntryNode && "Get null node while building condition!");
+  DEBUG(dbgs() << "Build condition from " << RegionEntry->getName() << " to "
+    << BB->getName() << ":  ");
+
+  // Find all Br condition on the path
+  while (BBNode != EntryNode) {
+    BasicBlock *CurBB = BBNode->getBlock();
+    // Move up
+    BBNode = BBNode->getIDom();
+    assert(BBNode && "BBNode should not reach the root node!");
+
+    // Do add any condition if BB post dominate IDomBB, because
+    // if we could reach IDomBB, we will always able to reach BB,
+    // that means there is no any condition constrains from IDomBB to BB
+    if (PDT->dominates(CurBB, BBNode->getBlock()))
+      continue;
+
+    BranchInst *Br = dyn_cast<BranchInst>(BBNode->getBlock()->getTerminator());
+    assert(Br && "Valid SCoP should only contain br or ret at this moment");
+
+    // If br is unconditional, BB will post dominates Its IDom Block, or the
+    // BBNode should not be the immediately dominator of CurBB
+    assert(Br->isConditional() && "Br should be conditional!");
+
+    // Is branching to the true side will reach CurBB?
+    bool inverted = DT->dominates(Br->getSuccessor(0), CurBB);
+    DEBUG(
+      if (inverted) dbgs() << '!';
+      WriteAsOperand(dbgs(), Br->getCondition(), false);
+      dbgs() << " && ";
+    );
+    // Build the condition in SCEV form
+  }
+  DEBUG(dbgs() << '\n');
+}
+
 TempSCoP *SCoPDetection::buildTempSCoP(Region &R) {
   TempSCoP *SCoP = new TempSCoP(R, LoopBounds, AccFuncMap);
+  AccFuncSetType AccFuncs;
+  BBCond Cond;
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
       I != E; ++I) {
+    Cond.clear();
+    // Build the condition
+    buildCondition(I->getEntry(), R.getEntry(), Cond);
+    // Remember it if there is any condition extracted
+
     if (I->isSubRegion()) {
       TempSCoP *SubSCoP = getTempSCoP(*I->getNodeAs<Region>());
 
@@ -703,7 +749,7 @@ TempSCoP *SCoPDetection::buildTempSCoP(Region &R) {
     } else {
       // Extract access function of BasicBlocks.
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-      AccFuncSetType AccFuncs;
+      AccFuncs.clear();
       buildAccessFunctions(*SCoP, BB, AccFuncs);
       if (!AccFuncs.empty()) {
         AccFuncSetType &Accs = AccFuncMap[&BB];
@@ -862,6 +908,8 @@ TempSCoP *SCoPDetection::getTempSCoPFor(const Region* R) const {
 }
 
 bool SCoPDetection::runOnFunction(llvm::Function &F) {
+  DT = &getAnalysis<DominatorTree>();
+  PDT = &getAnalysis<PostDominatorTree>();
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   RI = &getAnalysis<RegionInfo>();
@@ -874,6 +922,8 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
 }
 
 void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequiredTransitive<DominatorTree>();
+  AU.addRequiredTransitive<PostDominatorTree>();
   AU.addRequiredTransitive<LoopInfo>();
   AU.addRequiredTransitive<RegionInfo>();
   AU.addRequiredTransitive<ScalarEvolution>();
