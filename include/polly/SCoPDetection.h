@@ -76,6 +76,7 @@ class SCEVAffFunc {
   LnrTransSet LnrTrans;
 
 public:
+  // FIXME: This class doing too much jobs?
   enum SCEVAffFuncType {
     None = 0,
     ReadMem, // Or we could call it "Use"
@@ -119,7 +120,7 @@ public:
   /// @param isLower  Is this the lower bound?
   ///
   /// @return         The isl_constrain represent by this affine function.
-  polly_constraint *toLoopBoundConstrain(polly_ctx *ctx, polly_dim *dim,
+  polly_constraint *toConditionConstrain(polly_ctx *ctx, polly_dim *dim,
     const SmallVectorImpl<const SCEV*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
 
@@ -153,7 +154,9 @@ public:
 typedef SmallVector<SCEVAffFunc, 4> BBCond;
 
 /// Mapping loops to its bounds.
-typedef std::map<const Loop*, BBCond> BoundMapType;
+typedef std::map<const Loop*, BBCond> LoopBoundMapType;
+/// Mapping BBs to its condition constrains
+typedef std::map<const BasicBlock*, BBCond> BBCondMapType;
 
 typedef std::vector<SCEVAffFunc> AccFuncSetType;
 typedef std::map<const BasicBlock*, AccFuncSetType> AccFuncMapType;
@@ -178,17 +181,18 @@ class TempSCoP {
   unsigned MaxLoopDepth;
 
   // Remember the bounds of loops, to help us build iterate domain of BBs.
-  const BoundMapType &LoopBounds;
+  const LoopBoundMapType &LoopBounds;
+  const BBCondMapType &BBConds;
 
   // Access function of bbs.
   const AccFuncMapType &AccFuncMap;
 
   friend class SCoPDetection;
 
-  explicit TempSCoP(Region &r, BoundMapType &loopBounds,
-    AccFuncMapType &accFuncMap)
+  explicit TempSCoP(Region &r, LoopBoundMapType &loopBounds,
+    BBCondMapType &BBCnds, AccFuncMapType &accFuncMap)
     : R(r), MaxLoopDepth(0),
-    LoopBounds(loopBounds), AccFuncMap(accFuncMap) {}
+    LoopBounds(loopBounds), BBConds(BBCnds), AccFuncMap(accFuncMap) {}
 public:
 
   /// @name Information about this Temporary SCoP.
@@ -215,9 +219,14 @@ public:
   ///
   // @return The bounds of the loop L in { Lower bound, Upper bound } form.
   const BBCond &getLoopBound(const Loop *L) const {
-    BoundMapType::const_iterator at = LoopBounds.find(L);
+    LoopBoundMapType::const_iterator at = LoopBounds.find(L);
     assert(at != LoopBounds.end() && "Only valid loop is allow!");
     return at->second;
+  }
+
+  const BBCond *getBBCond(const BasicBlock *BB) const {
+    BBCondMapType::const_iterator at = BBConds.find(BB);
+    return at != BBConds.end() ? &(at->second) : 0;
   }
 
   const AccFuncSetType *getAccessFunctions(const BasicBlock* BB) const {
@@ -241,7 +250,6 @@ public:
   /// @param LI The LoopInfo that help printing the access functions.
   void printDetail(raw_ostream &OS, ScalarEvolution *SE,
                    LoopInfo *LI, const Region *Reg, unsigned ind) const;
-
 };
 
 typedef std::map<const Region*, TempSCoP*> TempSCoPMapType;
@@ -280,7 +288,10 @@ class SCoPDetection : public FunctionPass {
   PostDominatorTree *PDT;
 
   // Remember the bounds of loops, to help us build iterate domain of BBs.
-  BoundMapType LoopBounds;
+  LoopBoundMapType LoopBounds;
+
+  // And also Remember the constrains for BBs
+  BBCondMapType BBConds;
 
   // Access function of bbs.
   AccFuncMapType AccFuncMap;
@@ -379,8 +390,11 @@ class SCoPDetection : public FunctionPass {
   /// @param RegionEntry  The entry block of the Smallest Region that containing
   ///                     BB
   /// @param Cond         The built condition
-  void buildCondition(BasicBlock *BB, BasicBlock *RegionEntry, BBCond &Cond);
+  void buildCondition(BasicBlock *BB, BasicBlock *RegionEntry, BBCond &Cond,
+                      TempSCoP &SCoP);
 
+  void buildAffineCondition(Value &V, bool inverted,  SCEVAffFunc &FuncToBuild,
+                            TempSCoP &SCoP) const;
   /////////////////////////////////////////////////////////////////////////////
   // If the Region not a valid part of a SCoP,
   // return null if Region R is a valid part of a SCoP,

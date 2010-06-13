@@ -107,10 +107,10 @@ polly_basic_set *buildIterateDomain(SCoP &SCoP, TempSCoP &TempSCoP,
 
     const BBCond &bounds = TempSCoP.getLoopBound(L);
     // Build the constrain of bounds
-    polly_constraint *lb = bounds[0].toLoopBoundConstrain(SCoP.getCtx(),
+    polly_constraint *lb = bounds[0].toConditionConstrain(SCoP.getCtx(),
       dim, IndVars, SCoP.getParams());
     bset = isl_basic_set_add_constraint(bset, lb);
-    polly_constraint *ub = bounds[1].toLoopBoundConstrain(SCoP.getCtx(),
+    polly_constraint *ub = bounds[1].toConditionConstrain(SCoP.getCtx(),
       dim, IndVars, SCoP.getParams());
 
     bset = isl_basic_set_add_constraint(bset, ub);

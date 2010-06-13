@@ -224,7 +224,7 @@ static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
   return SCEVAffFunc::MemAccTy(Pointer, AccType);
 }
 
-polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
+polly_constraint *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
                                    polly_dim *dim,
                                    const SmallVectorImpl<const SCEV*> &IndVars,
                                    const SmallVectorImpl<const SCEV*> &Params)
@@ -312,7 +312,16 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
     OS << " == 0";
   else if (getType() == SCEVAffFunc::Ne)
     OS << " != 0";
+}
 
+/// Helper function to print the condition
+static void printBBCond(raw_ostream &OS, const BBCond &Cond, ScalarEvolution *SE) {
+  assert(!Cond.empty() && "Unexpect empty condition!");
+  Cond[0].print(OS, SE);
+  for (unsigned i = 1, e = Cond.size(); i != e; ++i) {
+    OS << " && ";
+    Cond[i].print(OS, SE);
+  }
 }
 
 //===----------------------------------------------------------------------===//
@@ -337,7 +346,7 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
                            LoopInfo *LI, const Region *CurR,
                            unsigned ind) const {
   // Print the loopbounds if current region is a loop
-  BoundMapType::const_iterator at = LoopBounds.find(castToLoop(*CurR, *LI));
+  LoopBoundMapType::const_iterator at = LoopBounds.find(castToLoop(*CurR, *LI));
   if (at != LoopBounds.end()) {
     // Print the loop bounds if these is an loops
     OS.indent(ind) << "Bounds of Loop: " << at->first->getHeader()->getName()
@@ -349,6 +358,7 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
     // Increase the indent
     ind += 2;
   }
+
   // Iterate the region nodes of this SCoP to print
   // the access function and loop bounds
   for (Region::const_element_iterator I = CurR->element_begin(),
@@ -356,16 +366,27 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
     unsigned subInd = ind;
     if (I->isSubRegion()) {
       Region *subR = I->getNodeAs<Region>();
+      // Print the condition
+      if (const BBCond *Cond = getBBCond(subR->getEntry())) {
+        OS << "Constrain of Region " << subR->getNameStr() << ":\t";
+        printBBCond(OS, *Cond, SE);
+        OS << '\n';
+      }
       printDetail(OS, SE, LI, subR, subInd);
     } else {
       unsigned bb_ind = ind + 2;
-      AccFuncMapType::const_iterator at =
-        AccFuncMap.find(I->getNodeAs<BasicBlock>());
-      // Try to print the access functions
-      if (at != AccFuncMap.end()) {
-        OS.indent(ind) << "BB: " << at->first->getName() << "{\n";
-        for (AccFuncSetType::const_iterator FI = at->second.begin(),
-            FE = at->second.end(); FI != FE; ++FI) {
+      BasicBlock *BB = I->getNodeAs<BasicBlock>();
+      if (BB != CurR->getEntry())
+        if (const BBCond *Cond = getBBCond(BB)) {
+          OS << "Constrain of BB " << BB->getName() << ":\t";
+          printBBCond(OS, *Cond, SE);
+          OS << '\n';
+        }
+
+      if (const AccFuncSetType *AccFunc = getAccessFunctions(BB)) {
+        OS.indent(ind) << "BB: " << BB->getName() << "{\n";
+        for (AccFuncSetType::const_iterator FI = AccFunc->begin(),
+            FE = AccFunc->end(); FI != FE; ++FI) {
           FI->print(OS.indent(bb_ind),SE);
           OS << "\n";
         }
@@ -704,8 +725,72 @@ TempSCoP *SCoPDetection::getTempSCoP(Region& R) {
   return tempSCoP;
 }
 
+void SCoPDetection::buildAffineCondition(Value &V, bool inverted,
+                                         SCEVAffFunc &FuncToBuild,
+                                         TempSCoP &SCoP) const {
+  if (ConstantInt *C = dyn_cast<ConstantInt>(&V)) {
+    const SCEV *One = SE->getIntegerSCEV(1, C->getType());
+    // If this is always true condition, we will create 1 >= 0,
+    // otherwise we will create 1 == 0
+    if (C->isOne() == inverted)
+      FuncToBuild.FuncType = SCEVAffFunc::Eq;
+    else
+      FuncToBuild.FuncType = SCEVAffFunc::GE;
+    // Build the condition
+    buildAffineFunction(One, FuncToBuild, SCoP);
+  } else {
+    ICmpInst *ICmp = dyn_cast<ICmpInst>(&V);
+    // FIXME: we should check this in isValidSCoP
+    assert(ICmp && "Only ICmpInst of constant as condition supported!");
+    const SCEV *LHS = SE->getSCEV(ICmp->getOperand(0)),
+               *RHS = SE->getSCEV(ICmp->getOperand(1));
+
+    ICmpInst::Predicate Pred = ICmp->getPredicate();
+    // Invert the predicate if need
+    if (inverted)
+      Pred = ICmpInst::getInversePredicate(Pred);
+
+    // FIXME: In fact, this is only loop exit condition, try to use
+    // getBackedgeTakenCount.
+    switch (Pred) {
+    case ICmpInst::ICMP_EQ:
+      FuncToBuild.FuncType = SCEVAffFunc::Eq;
+      break;
+    case ICmpInst::ICMP_NE:
+      FuncToBuild.FuncType = SCEVAffFunc::Ne;
+      break;
+    case ICmpInst::ICMP_SLT:
+    case ICmpInst::ICMP_ULT:
+      // A < B => B > A
+      std::swap(LHS, RHS);
+      // goto case ICmpInst::ICMP_UGT:
+    case ICmpInst::ICMP_SGT:
+    case ICmpInst::ICMP_UGT:
+      // A > B ==> A >= B + 1
+      // FIXME: NSW or NUW?
+      RHS = SE->getAddExpr(RHS, SE->getIntegerSCEV(1, RHS->getType()));
+      FuncToBuild.FuncType = SCEVAffFunc::GE;
+      break;
+    case ICmpInst::ICMP_SLE:
+    case ICmpInst::ICMP_ULE:
+      // A <= B ==> B => A
+      std::swap(LHS, RHS);
+      // goto case ICmpInst::ICMP_UGE:
+    case ICmpInst::ICMP_SGE:
+    case ICmpInst::ICMP_UGE:
+      FuncToBuild.FuncType = SCEVAffFunc::GE;
+      break;
+    default:
+      llvm_unreachable("Unknown Predicate!");
+    }
+    // Build the condition with FuncType
+    // Transform A >= B to A - B >= 0
+    buildAffineFunction(SE->getMinusSCEV(LHS, RHS), FuncToBuild, SCoP);
+  }
+
+}
 void SCoPDetection::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
-                                   BBCond &Cond) {
+                                   BBCond &Cond, TempSCoP &SCoP) {
   DomTreeNode *BBNode = DT->getNode(BB), *EntryNode = DT->getNode(RegionEntry);
   // FIXME: Would this happen?
   assert(BBNode && EntryNode && "Get null node while building condition!");
@@ -733,28 +818,45 @@ void SCoPDetection::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
     assert(Br->isConditional() && "Br should be conditional!");
 
     // Is branching to the true side will reach CurBB?
-    bool inverted = DT->dominates(Br->getSuccessor(0), CurBB);
+    bool inverted = DT->dominates(Br->getSuccessor(1), CurBB);
+    // Build the condition in SCEV form
+    Cond.push_back(SCEVAffFunc());
+    buildAffineCondition(*(Br->getCondition()), inverted, Cond.back(), SCoP);
     DEBUG(
-      if (inverted) dbgs() << '!';
-      WriteAsOperand(dbgs(), Br->getCondition(), false);
+      Cond.back().print(dbgs(), SE);
       dbgs() << " && ";
     );
-    // Build the condition in SCEV form
   }
   DEBUG(dbgs() << '\n');
 }
 
 TempSCoP *SCoPDetection::buildTempSCoP(Region &R) {
-  TempSCoP *SCoP = new TempSCoP(R, LoopBounds, AccFuncMap);
+  TempSCoP *SCoP = new TempSCoP(R, LoopBounds, BBConds, AccFuncMap);
   AccFuncSetType AccFuncs;
   BBCond Cond;
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
       I != E; ++I) {
     Cond.clear();
     // Build the condition
-    buildCondition(I->getEntry(), R.getEntry(), Cond);
+    buildCondition(I->getEntry(), R.getEntry(), Cond, *SCoP);
     // Remember it if there is any condition extracted
-
+    if (!Cond.empty()) {
+      // A same BB will be visit multiple time if we iterate on the
+      // element_iterator down the region tree and get the BB by "getEntry",
+      // if this BB is the entry block of some region.
+      // one time(s, because multiple region can share one entry block)
+      // is when BB is some regions entry block, and we get the region node
+      // from the region(The region that have BB as entry block)'s parent
+      // region, this time, we will build the condition from the parent's entry
+      // to the BB.
+      // another time is when we get the region node from the the smallest region
+      // that containing this BB, but now I->getEntry() and R.getEntry() are the
+      // same bb, so no condition expect to extract.
+      assert(!BBConds.count(I->getEntry())
+        && "Why we got more than one conditions for a BB?");
+      BBConds.insert(
+        std::make_pair<const BasicBlock*, BBCond>(I->getEntry(), Cond));
+    }
     if (I->isSubRegion()) {
       TempSCoP *SubSCoP = getTempSCoP(*I->getNodeAs<Region>());
 
@@ -949,6 +1051,7 @@ void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 void SCoPDetection::clear() {
+  BBConds.clear();
   LoopBounds.clear();
   AccFuncMap.clear();
 
