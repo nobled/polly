@@ -209,14 +209,14 @@ static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
 
   // Try to handle the load/store.
   Value *Pointer = 0;
-  SCEVAffFunc::AccessType AccType = SCEVAffFunc::None;
+  SCEVAffFunc::SCEVAffFuncType AccType = SCEVAffFunc::None;
 
   if (LoadInst *load = dyn_cast<LoadInst>(&Inst)) {
     Pointer = load->getPointerOperand();
-    AccType = SCEVAffFunc::Read;
+    AccType = SCEVAffFunc::ReadMem;
   } else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
     Pointer = store->getPointerOperand();
-    AccType = SCEVAffFunc::Write;
+    AccType = SCEVAffFunc::WriteMem;
   } else
     llvm_unreachable("Already check in the assert");
 
@@ -227,8 +227,8 @@ static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
 polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
                                    polly_dim *dim,
                                    const SmallVectorImpl<const SCEV*> &IndVars,
-                                   const SmallVectorImpl<const SCEV*> &Params,
-                                   bool isLower) const {
+                                   const SmallVectorImpl<const SCEV*> &Params)
+                                   const {
    unsigned num_in = IndVars.size(),
      num_param = Params.size();
 
@@ -236,27 +236,19 @@ polly_constraint *SCEVAffFunc::toLoopBoundConstrain(polly_ctx *ctx,
    isl_int v;
    isl_int_init(v);
 
-   // Dont touch the current iterator.
-   for (unsigned i = 0, e = num_in - 1; i != e; ++i) {
-     setCoefficient(getCoeff(IndVars[i]), v, isLower);
+   for (unsigned i = 0, e = num_in; i != e; ++i) {
+     setCoefficient(getCoeff(IndVars[i]), v, false);
      isl_constraint_set_coefficient(c, isl_dim_set, i, v);
    }
 
-   assert(!getCoeff(IndVars[num_in - 1])
-          && "Current iterator should not have any coff.");
-   // Set the coefficient of current iterator, convert i <= expr to
-   // expr - i >= 0
-   isl_int_set_si(v, isLower?1:(-1));
-   isl_constraint_set_coefficient(c, isl_dim_set, num_in - 1, v);
-
    // Setup the coefficient of parameters
    for (unsigned i = 0, e = num_param; i != e; ++i) {
-     setCoefficient(getCoeff(Params[i]), v, isLower);
+     setCoefficient(getCoeff(Params[i]), v, false);
      isl_constraint_set_coefficient(c, isl_dim_param, i, v);
    }
 
    // Set the const.
-   setCoefficient(TransComp, v, isLower);
+   setCoefficient(TransComp, v, false);
    isl_constraint_set_constant(c, v);
    isl_int_clear(v);
 
@@ -300,7 +292,7 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
   // Print BaseAddr
   if (isDataRef()) {
     OS << (isRead() ? "Reads" : "Writes") << " ";
-    WriteAsOperand(OS, BaseAddr.getPointer(), false);
+    WriteAsOperand(OS, getBaseAddr(), false);
     OS << "[";
   }
 
@@ -313,6 +305,13 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
 
   if (isDataRef())
     OS << "]";
+
+  if (getType() == SCEVAffFunc::GE)
+    OS << " >= 0";
+  else if (getType() == SCEVAffFunc::Eq)
+    OS << " == 0";
+  else if (getType() == SCEVAffFunc::Ne)
+    OS << " != 0";
 
 }
 
@@ -343,9 +342,9 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
     // Print the loop bounds if these is an loops
     OS.indent(ind) << "Bounds of Loop: " << at->first->getHeader()->getName()
       << ":\t{ ";
-    at->second.first.print(OS,SE);
+    (at->second)[0].print(OS,SE);
     OS << ", ";
-    at->second.second.print(OS,SE);
+    (at->second)[1].print(OS,SE);
     OS << "}\n";
     // Increase the indent
     ind += 2;
@@ -406,7 +405,7 @@ void SCoPDetection::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
     else if (Var->getType()->isPointerTy()) { // Extract the base address
       const SCEVUnknown *BaseAddr = dyn_cast<SCEVUnknown>(Var);
       assert(BaseAddr && "Why we got a broken scev?");
-      FuncToBuild.BaseAddr.setPointer(BaseAddr->getValue());
+      FuncToBuild.BaseAddr = BaseAddr->getValue();
     } else { // Extract others affine component
       FuncToBuild.LnrTrans.insert(*I);
       // Do not add the indvar to the parameter list
@@ -534,10 +533,10 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
                                         Region &RefRegion, Region &CurRegion) const {
   SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(Inst);
 
-  if (!isValidAffineFunction(SE->getSCEV(MemAcc.getPointer()),
+  if (!isValidAffineFunction(SE->getSCEV(MemAcc.first),
                              RefRegion, CurRegion, true)) {
     DEBUG(dbgs() << "Bad memory addr "
-                 << *SE->getSCEV(MemAcc.getPointer()) << "\n");
+                 << *SE->getSCEV(MemAcc.first) << "\n");
     STATSCOP(AffFunc);
     return false;
   }
@@ -553,10 +552,10 @@ void SCoPDetection::buildScalarDataRef(Instruction &Inst,
   // Capture scalar read access.
   for (SmallVector<Value*, 4>::iterator VI = Defs.begin(),
     VE = Defs.end(); VI != VE; ++VI)
-      ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::Read, *VI));
+      ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::ReadMem, *VI));
   // And write access.
   if (SDR->isDefExported(Inst))
-    ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::Write, &Inst));
+    ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::WriteMem, &Inst));
 }
 
 void SCoPDetection::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
@@ -569,10 +568,9 @@ void SCoPDetection::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
     if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
       SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(Inst);
       // Make the access function.
-      Functions.push_back(SCEVAffFunc(MemAcc.getInt()));
+      Functions.push_back(SCEVAffFunc(MemAcc.second));
       // And build the access function
-      buildAffineFunction(SE->getSCEV(MemAcc.getPointer()),
-                          Functions.back(), SCoP);
+      buildAffineFunction(SE->getSCEV(MemAcc.first), Functions.back(), SCoP);
     }
   }
 }
@@ -659,15 +657,34 @@ bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion, Region &CurRegion) c
 
 void SCoPDetection::buildLoopBounds(TempSCoP &SCoP) {
   if (Loop *L = castToLoop(SCoP.getMaxRegion(), *LI)) {
+    Value *IV = L->getCanonicalInductionVariable();
+    assert(IV && "Valid SCoP will always have an IV!");
+    const SCEV *SIV = SE->getSCEV(IV);
     // Get the loop bounds
-    const SCEV *UB = SE->getBackedgeTakenCount(L);
     // FIXME: The lower bound is always 0.
-    const SCEV *LB = SE->getIntegerSCEV(0, UB->getType());
+    const SCEV *LB = SE->getIntegerSCEV(0, SIV->getType());
+    // IV >= LB ==> IV - LB >= 0
+    LB = SE->getMinusSCEV(SIV, LB);
 
-    AffBoundType &affbounds = LoopBounds[L];
+    const SCEV *UB = SE->getBackedgeTakenCount(L);
+    // Match the type, the type of BackedgeTakenCount mismatch when we have
+    // something like this in loop exit:
+    //    br i1 false, label %for.body, label %for.end
+    // In fact, we could do some optimization before SCoPDetecion, so we do not
+    // need to worry about this.
+    // Be careful of the sign of the upper bounds, if we meet iv <= -1
+    // this means the iterate domain is empty since iv >= 0
+    // but if we do a zero extend, this will make a non-empty domain
+    UB = SE->getTruncateOrSignExtend(UB, SIV->getType());
+    // IV <= UB ==> UB - IV >= 0
+    UB = SE->getMinusSCEV(UB, SIV);
+
+    BBCond &affbounds = LoopBounds[L];
+    affbounds.push_back(SCEVAffFunc(SCEVAffFunc::GE));
     // Build the affine function of loop bounds
-    buildAffineFunction(LB, affbounds.first, SCoP);
-    buildAffineFunction(UB, affbounds.second, SCoP);
+    buildAffineFunction(LB, affbounds[0], SCoP);
+    affbounds.push_back(SCEVAffFunc(SCEVAffFunc::GE));
+    buildAffineFunction(UB, affbounds[1], SCoP);
 
     // Increase the loop depth because we found a loop.
     ++SCoP.MaxLoopDepth;
@@ -885,7 +902,7 @@ void SCoPDetection::killAllTempValFor(BasicBlock &BB) {
       DEBUG(dbgs() << "Reduce ptr of " << Inst << "\n");
       // The address express as affine function can be rewrite by SCEV.
       // FIXME: Do not kill the not affine one in irregular scop?
-      if (Instruction *GEP = dyn_cast<Instruction>(MemAcc.getPointer()))
+      if (Instruction *GEP = dyn_cast<Instruction>(MemAcc.first))
         SDR->killTempRefFor(*GEP);
     }
   }

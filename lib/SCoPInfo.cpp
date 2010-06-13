@@ -105,17 +105,13 @@ polly_basic_set *buildIterateDomain(SCoP &SCoP, TempSCoP &TempSCoP,
     Value *IndVar = L->getCanonicalInductionVariable();
     IndVars.push_back(SE.getSCEV(IndVar));
 
-    const AffBoundType *bounds = TempSCoP.getLoopBound(L);
-    assert(bounds && "Can not get loop bound when building statement!");
-
-    // Build the constrain of lower bound
-    polly_constraint *lb = bounds->first.toLoopBoundConstrain(SCoP.getCtx(),
-      dim, IndVars, SCoP.getParams(), true);
-
+    const BBCond &bounds = TempSCoP.getLoopBound(L);
+    // Build the constrain of bounds
+    polly_constraint *lb = bounds[0].toLoopBoundConstrain(SCoP.getCtx(),
+      dim, IndVars, SCoP.getParams());
     bset = isl_basic_set_add_constraint(bset, lb);
-
-    polly_constraint *ub = bounds->second.toLoopBoundConstrain(SCoP.getCtx(),
-      dim, IndVars, SCoP.getParams(), false);
+    polly_constraint *ub = bounds[1].toLoopBoundConstrain(SCoP.getCtx(),
+      dim, IndVars, SCoP.getParams());
 
     bset = isl_basic_set_add_constraint(bset, ub);
   }

@@ -33,10 +33,6 @@ namespace polly {
 typedef std::set<const SCEV*> ParamSetType;
 typedef std::pair<const SCEV*, const SCEV*> AffCmptType;
 
-typedef std::pair<ICmpInst*, bool> BrCond;
-// The condition of a Basicblock, combine brcond with "And" operator.
-typedef SmallVector<BrCond, 4> BBCond;
-
 class TempSCoP;
 class SCoPDetection;
 class SCEVAffFunc;
@@ -80,18 +76,22 @@ class SCEVAffFunc {
   LnrTransSet LnrTrans;
 
 public:
-  enum AccessType {
+  enum SCEVAffFuncType {
     None = 0,
-    Read = 1, // Or we could call it "Use"
-    Write = 2 // Or define
+    ReadMem, // Or we could call it "Use"
+    WriteMem, // Or define
+    Eq,       // == 0
+    Ne,       // != 0
+    GE        // >= 0
   };
   // Pair of {address, read/write}
-  typedef PointerIntPair<Value*, 2, AccessType> MemAccTy;
+  typedef std::pair<Value*, SCEVAffFuncType> MemAccTy;
 private:
   // The base address of the address SCEV, if the Value is a pointer, this is
   // an array access, otherwise, this is a value access.
   // And the Write/Read modifier
-  MemAccTy BaseAddr;
+  Value *BaseAddr;
+  SCEVAffFuncType FuncType;
 
   // getCoeff - Get the Coefficient of a given variable.
   const SCEV *getCoeff(const SCEV *Var) const {
@@ -101,12 +101,14 @@ private:
 
 public:
   /// @brief Create a new SCEV affine function.
-  explicit SCEVAffFunc() : TransComp(0), BaseAddr(0, SCEVAffFunc::None) {}
+  explicit SCEVAffFunc() : TransComp(0), BaseAddr(0),
+    FuncType(SCEVAffFunc::None) {}
 
-  /// @brief Create a new SCEV affine function with memory access type.
+  /// @brief Create a new SCEV affine function with memory access type or
+  ///        condition type
 
-  explicit SCEVAffFunc(AccessType Type, Value* baseAddr = 0)
-    : TransComp(0), BaseAddr(baseAddr, Type) {}
+  explicit SCEVAffFunc(SCEVAffFuncType Type, Value* baseAddr = 0)
+    : TransComp(0), BaseAddr(baseAddr), FuncType(Type) {}
 
   /// @brief Build a loop bound constrain from an affine function.
   ///
@@ -119,8 +121,7 @@ public:
   /// @return         The isl_constrain represent by this affine function.
   polly_constraint *toLoopBoundConstrain(polly_ctx *ctx, polly_dim *dim,
     const SmallVectorImpl<const SCEV*> &IndVars,
-    const SmallVectorImpl<const SCEV*> &Params,
-    bool isLower) const;
+    const SmallVectorImpl<const SCEV*> &Params) const;
 
   polly_constraint *toAccessFunction(polly_ctx *ctx, polly_dim* dim,
     const SmallVectorImpl<Loop*> &NestLoops,
@@ -128,11 +129,16 @@ public:
     ScalarEvolution &SE) const;
 
 
-  bool isDataRef() const { return BaseAddr.getInt() != SCEVAffFunc::None; }
+  bool isDataRef() const {
+    return FuncType == SCEVAffFunc::ReadMem
+           || FuncType == SCEVAffFunc::WriteMem;
+  }
 
-  bool isRead() const { return BaseAddr.getInt() == SCEVAffFunc::Read; }
+  enum SCEVAffFuncType getType() const { return FuncType; }
 
-  const Value *getBaseAddr() const { return BaseAddr.getPointer(); }
+  bool isRead() const { return FuncType == SCEVAffFunc::ReadMem; }
+
+  const Value *getBaseAddr() const { return BaseAddr; }
 
   /// @brief Print the affine function.
   ///
@@ -143,12 +149,11 @@ public:
 
 //===---------------------------------------------------------------------===//
 /// Types
-
-/// { Lower bound, Upper bound } of a loop
-typedef std::pair<SCEVAffFunc, SCEVAffFunc> AffBoundType;
+// The condition of a Basicblock, combine brcond with "And" operator.
+typedef SmallVector<SCEVAffFunc, 4> BBCond;
 
 /// Mapping loops to its bounds.
-typedef std::map<const Loop*, AffBoundType> BoundMapType;
+typedef std::map<const Loop*, BBCond> BoundMapType;
 
 typedef std::vector<SCEVAffFunc> AccFuncSetType;
 typedef std::map<const BasicBlock*, AccFuncSetType> AccFuncMapType;
@@ -209,10 +214,10 @@ public:
   /// @param L The loop to get the bounds.
   ///
   // @return The bounds of the loop L in { Lower bound, Upper bound } form.
-  const AffBoundType *getLoopBound(const Loop *L) const {
+  const BBCond &getLoopBound(const Loop *L) const {
     BoundMapType::const_iterator at = LoopBounds.find(L);
     assert(at != LoopBounds.end() && "Only valid loop is allow!");
-    return &(at->second);
+    return at->second;
   }
 
   const AccFuncSetType *getAccessFunctions(const BasicBlock* BB) const {
@@ -386,7 +391,7 @@ class SCoPDetection : public FunctionPass {
 
   // Extract the access functions from a BasicBlock to ScalarAccs
   void buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
-                              AccFuncSetType &AccessFunctions);
+                            AccFuncSetType &AccessFunctions);
 
   void buildLoopBounds(TempSCoP &SCoP);
 
