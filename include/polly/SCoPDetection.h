@@ -120,8 +120,8 @@ public:
   /// @param isLower  Is this the lower bound?
   ///
   /// @return         The isl_constrain represent by this affine function.
-  polly_constraint *toConditionConstrain(polly_ctx *ctx, polly_dim *dim,
-    const SmallVectorImpl<const SCEV*> &IndVars,
+  polly_set *toConditionConstrain(polly_ctx *ctx, polly_dim *dim,
+    const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
 
   polly_constraint *toAccessFunction(polly_ctx *ctx, polly_dim* dim,

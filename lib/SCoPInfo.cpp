@@ -89,35 +89,50 @@ polly_map *buildScattering(__isl_keep polly_ctx *ctx, unsigned ParamDim,
 }
 
 static __isl_give
-polly_basic_set *buildIterateDomain(SCoP &SCoP, TempSCoP &TempSCoP,
-                                    ScalarEvolution &SE,
-                                    SmallVectorImpl<Loop*> &NestLoops) {
+polly_set *buildIterateDomain(SCoP &SCoP, TempSCoP &tempSCoP,
+                              const Region &CurRegion, const BasicBlock &CurBB,
+                              ScalarEvolution &SE,
+                              SmallVectorImpl<const SCEVAddRecExpr*> &IndVars) {
   // Create the basic set;
   polly_dim *dim = isl_dim_set_alloc(SCoP.getCtx(), SCoP.getNumParams(),
-    NestLoops.size());
+                                    IndVars.size());
   polly_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
+  polly_set *dom = isl_set_from_basic_set(bset);
 
-
-  SmallVector<const SCEV*, 8> IndVars;
-
-  for (int i = 0, e = NestLoops.size(); i != e; ++i) {
-    Loop *L = NestLoops[i];
-    Value *IndVar = L->getCanonicalInductionVariable();
-    IndVars.push_back(SE.getSCEV(IndVar));
-
-    const BBCond &bounds = TempSCoP.getLoopBound(L);
+  for (int i = 0, e = IndVars.size(); i != e; ++i) {
+    const BBCond &bounds = tempSCoP.getLoopBound(IndVars[i]->getLoop());
     // Build the constrain of bounds
-    polly_constraint *lb = bounds[0].toConditionConstrain(SCoP.getCtx(),
+    polly_set *lb = bounds[0].toConditionConstrain(SCoP.getCtx(),
       dim, IndVars, SCoP.getParams());
-    bset = isl_basic_set_add_constraint(bset, lb);
-    polly_constraint *ub = bounds[1].toConditionConstrain(SCoP.getCtx(),
+    dom = isl_set_intersect(dom, lb);
+    polly_set *ub = bounds[1].toConditionConstrain(SCoP.getCtx(),
       dim, IndVars, SCoP.getParams());
 
-    bset = isl_basic_set_add_constraint(bset, ub);
+    dom = isl_set_intersect(dom, ub);
   }
 
+  // Build the BB condition constrains, by travel up the region tree.
+  // NOTE: These are only a temporary hack.
+  const Region *TopR = tempSCoP.getMaxRegion().getParent(),
+               *CurR = &CurRegion;
+  const BasicBlock *CurEntry = &CurBB;
+  do {
+    assert(CurR && "We exceed the top region?");
+    // Skip when multiple regions share the same entry
+    if (CurEntry != CurR->getEntry())
+      if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
+        for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end(); I != E; ++I) {
+          polly_set *c = (*I).toConditionConstrain(SCoP.getCtx(), dim,
+            IndVars, SCoP.getParams());
+          dom = isl_set_intersect(dom, c);
+        }
+    //
+    CurEntry = CurR->getEntry();
+    CurR = CurR->getParent();
+  } while (TopR != CurR);
+
   isl_dim_free(dim);
-  return bset;
+  return dom;
 }
 
 //===----------------------------------------------------------------------===//
@@ -143,24 +158,26 @@ void DataRef::dump() const {
   print(errs());
 }
 //===----------------------------------------------------------------------===//
-SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP, BasicBlock &bb,
+SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
+                   const Region &CurRegion, BasicBlock &bb,
                    SmallVectorImpl<Loop*> &NestLoops,
                    SmallVectorImpl<unsigned> &Scatter,
                    ScalarEvolution &SE)
   : Parent(parent), BB(&bb), IVS(NestLoops.size()) {
+  SmallVector<const SCEVAddRecExpr*, 8> SIVS(NestLoops.size());
   // Setup the induction variables
   for (unsigned i = 0, e = NestLoops.size(); i < e; ++i) {
     PHINode *PN = NestLoops[i]->getCanonicalInductionVariable();
     assert(PN && "SCoPDetect never allow loop without CanIV in SCoP!");
     IVS[i] = PN;
+    SIVS[i] = cast<SCEVAddRecExpr>(SE.getSCEV(PN));
   }
 
   polly_ctx *ctx = parent.getCtx();
 
   // Build the iterate domain
-  polly_basic_set *bset = buildIterateDomain(parent, tempSCoP, SE, NestLoops);
-
-  Domain = isl_set_from_basic_set(bset);
+  Domain = buildIterateDomain(parent, tempSCoP, CurRegion, *BB,
+                                             SE, SIVS);
 
   DEBUG(std::cerr << "\n\nIterate domain of BB: " << bb.getNameStr() << " is:\n");
   DEBUG(isl_set_print(Domain, stderr, 20, ISL_FORMAT_ISL));
@@ -390,8 +407,8 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
         continue;
 
       // Build the statement
-      SCoPStmt *stmt = new SCoPStmt(*this, tempSCoP, *BB, NestLoops, Scatter,
-                                    SE);
+      SCoPStmt *stmt = new SCoPStmt(*this, tempSCoP, CurRegion, *BB,
+                                    NestLoops, Scatter, SE);
 
       // Add the new statement to statements list.
       Stmts.push_back(stmt);

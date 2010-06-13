@@ -46,4 +46,5 @@ return:                                           ; preds = %if.else, %if.then
 }
 
 declare void @llvm.memory.barrier(i1, i1, i1, i1, i1) nounwind
-; CHECK: S0
+; CHECK-NOT: S0
+; CHECK:     Invalid SCoP

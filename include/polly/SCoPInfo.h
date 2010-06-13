@@ -146,7 +146,8 @@ class SCoPStmt {
   DataRefVec MemAccs;
 
   /// Create the SCoPStmt from a BasicBlock.
-  SCoPStmt(SCoP &parent, TempSCoP &tempSCoP, BasicBlock &bb,
+  SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
+          const Region &CurRegion, BasicBlock &bb,
           SmallVectorImpl<Loop*> &NestLoops,
           SmallVectorImpl<unsigned> &Scatter,
           ScalarEvolution &SE);

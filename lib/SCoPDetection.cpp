@@ -224,15 +224,19 @@ static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
   return SCEVAffFunc::MemAccTy(Pointer, AccType);
 }
 
-polly_constraint *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
-                                   polly_dim *dim,
-                                   const SmallVectorImpl<const SCEV*> &IndVars,
-                                   const SmallVectorImpl<const SCEV*> &Params)
-                                   const {
+polly_set *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
+                         polly_dim *dim,
+                         const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
+                         const SmallVectorImpl<const SCEV*> &Params) const {
    unsigned num_in = IndVars.size(),
      num_param = Params.size();
 
-   polly_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
+   polly_constraint *c = 0;
+   if (getType() == SCEVAffFunc::GE)
+     c = isl_inequality_alloc(isl_dim_copy(dim));
+   else // We alloc equality for "!= 0" and "== 0"
+     c = isl_equality_alloc(isl_dim_copy(dim));
+
    isl_int v;
    isl_int_init(v);
 
@@ -252,7 +256,19 @@ polly_constraint *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
    isl_constraint_set_constant(c, v);
    isl_int_clear(v);
 
-   return c;
+   polly_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
+   bset = isl_basic_set_add_constraint(bset, c);
+   polly_set *ret = isl_set_from_basic_set(bset);
+   if (getType() == SCEVAffFunc::Ne) {
+     // Subtract the set from universe set to construct the inequality
+     polly_basic_set *uni = isl_basic_set_universe(isl_dim_copy(dim));
+     polly_set *uni_set = isl_set_from_basic_set(uni);
+     ret = isl_set_subtract(uni_set, ret);
+     DEBUG(dbgs() << "Ne:\n");
+     DEBUG(isl_set_print(ret, stderr, 8, ISL_FORMAT_ISL));
+   }
+
+   return ret;
 }
 
 polly_constraint *SCEVAffFunc::toAccessFunction(polly_ctx *ctx, polly_dim* dim,
