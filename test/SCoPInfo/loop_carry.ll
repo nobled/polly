@@ -46,7 +46,7 @@ bb2:                                              ; preds = %bb, %entry
   ret i64 0
 }
 ; CHECK: SCoP: bb => bb2.loopexit       Parameters: (%n, ), Max Loop Depth: 1
-; CHECK: Bounds of Loop: bb:    { 0, 1 * %n + -2}
+; CHECK: Bounds of Loop: bb:    { 1 * {0,+,1}<%bb> + 0 >= 0, -1 * {0,+,1}<%bb> + 1 * %n + -2 >= 0}
 ; CHECK:   BB: bb{
 ; CHECK:     Reads %.pre[]
 ; CHECK:     Reads %2[]

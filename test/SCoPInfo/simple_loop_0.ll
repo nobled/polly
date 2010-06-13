@@ -32,10 +32,10 @@ return:                                           ; preds = %bb
 }
 
 ; CHECK: SCoP: entry => <Function Return>        Parameters: ()
-; WITHAF: SCoP: entry => <Function Return>        Parameters: (), Max Loop Depth: 1
-; WITHAF: Bounds of Loop: bb:     { 0, 127}
-; WITHAF: BB: bb{
-; WITHAF: Reads %a[8 * {0,+,1}<%bb> + 0]
-; WITHAF: Reads %a[8 * {0,+,1}<%bb> + 16]
-; WITHAF: Writes %a[8 * {0,+,1}<%bb> + 0]
-; WITHAF: }
+; WITHAF: SCoP: entry => <Function Return>      Parameters: (), Max Loop Depth: 1
+; WITHAF: Bounds of Loop: bb:   { 1 * {0,+,1}<%bb> + 0 >= 0, -1 * {0,+,1}<%bb> + 127 >= 0}
+; WITHAF:   BB: bb{
+; WITHAF:     Reads %a[8 * {0,+,1}<%bb> + 0]
+; WITHAF:     Reads %a[8 * {0,+,1}<%bb> + 16]
+; WITHAF:     Writes %a[8 * {0,+,1}<%bb> + 0]
+; WITHAF:   }

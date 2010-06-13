@@ -66,12 +66,12 @@ return:                                           ; preds = %bb3.us
 ; CHECK:   Writes %1[]
 ; CHECK:   Reads @beta[0]
 ; CHECK: }
-; CHECK: Bounds of Loop: bb.nph.us:     { 0, 3999}
+; CHECK: Bounds of Loop: bb.nph.us:     { 1 * {0,+,1}<%bb.nph.us> + 0 >= 0, -1 * {0,+,1}<%bb.nph.us> + 3999 >= 0}
 ; CHECK:   BB: bb.nph.us{
-; CHECK:   Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:   Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
+; CHECK:     Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
 ; CHECK:   }
-; CHECK:   Bounds of Loop: bb1.us:      { 0, 3999}
+; CHECK:   Bounds of Loop: bb1.us:      { 1 * {0,+,1}<%bb1.us> + 0 >= 0, -1 * {0,+,1}<%bb1.us> + 3999 >= 0}
 ; CHECK:     BB: bb1.us{
 ; CHECK:       Reads %12[]
 ; CHECK:       Reads %9[]

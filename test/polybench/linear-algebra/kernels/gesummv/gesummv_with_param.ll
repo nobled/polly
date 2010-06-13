@@ -64,12 +64,12 @@ return:                                           ; preds = %bb3.us, %entry
 }
 
 ; CHECK: SCoP: bb.nph.us => return.loopexit     Parameters: (%n, ), Max Loop Depth: 2
-; CHECK: Bounds of Loop: bb.nph.us:     { 0, 1 * %n + -1}
+; CHECK: Bounds of Loop: bb.nph.us:     { 1 * {0,+,1}<%bb.nph.us> + 0 >= 0, -1 * {0,+,1}<%bb.nph.us> + 1 * %n + -1 >= 0}
 ; CHECK:   BB: bb.nph.us{
 ; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
 ; CHECK:     Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
 ; CHECK:   }
-; CHECK:   Bounds of Loop: bb1.us:      { 0, 1 * %n + -1}
+; CHECK:   Bounds of Loop: bb1.us:      { 1 * {0,+,1}<%bb1.us> + 0 >= 0, -1 * {0,+,1}<%bb1.us> + 1 * %n + -1 >= 0}
 ; CHECK:     BB: bb1.us{
 ; CHECK:       Reads %13[]
 ; CHECK:       Reads %10[]

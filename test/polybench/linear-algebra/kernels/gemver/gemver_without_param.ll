@@ -129,14 +129,14 @@ return:                                           ; preds = %bb18
 }
 
 ; CHECK: SCoP: bb.nph31.bb.nph31.split_crit_edge => <Function Return>   Parameters: (), Max Loop Depth: 2
-; CHECK: Bounds of Loop: bb.nph26:      { 0, 3999}
+; CHECK: Bounds of Loop: bb.nph26:      { 1 * {0,+,1}<%bb.nph26> + 0 >= 0, -1 * {0,+,1}<%bb.nph26> + 3999 >= 0}
 ; CHECK:   BB: bb.nph26{
 ; CHECK:     Writes %0[]
 ; CHECK:     Reads @u1[8 * {0,+,1}<%bb.nph26> + 0]
 ; CHECK:     Writes %1[]
 ; CHECK:     Reads @u2[8 * {0,+,1}<%bb.nph26> + 0]
 ; CHECK:   }
-; CHECK:   Bounds of Loop: bb1: { 0, 3999}
+; CHECK:   Bounds of Loop: bb1: { 1 * {0,+,1}<%bb1> + 0 >= 0, -1 * {0,+,1}<%bb1> + 3999 >= 0}
 ; CHECK:     BB: bb1{
 ; CHECK:       Reads @A[32000 * {0,+,1}<%bb.nph26> + 8 * {0,+,1}<%bb1> + 0]
 ; CHECK:       Reads @v1[8 * {0,+,1}<%bb1> + 0]
@@ -149,12 +149,12 @@ return:                                           ; preds = %bb18
 ; CHECK:   Writes %18[]
 ; CHECK:   Reads @beta[0]
 ; CHECK: }
-; CHECK: Bounds of Loop: bb.nph16:      { 0, 3999}
+; CHECK: Bounds of Loop: bb.nph16:      { 1 * {0,+,1}<%bb.nph16> + 0 >= 0, -1 * {0,+,1}<%bb.nph16> + 3999 >= 0}
 ; CHECK:   BB: bb.nph16{
 ; CHECK:     Writes %.promoted17[]
 ; CHECK:     Reads @x[8 * {0,+,1}<%bb.nph16> + 0]
 ; CHECK:   }
-; CHECK:   Bounds of Loop: bb7: { 0, 3999}
+; CHECK:   Bounds of Loop: bb7: { 1 * {0,+,1}<%bb7> + 0 >= 0, -1 * {0,+,1}<%bb7> + 3999 >= 0}
 ; CHECK:     BB: bb7{
 ; CHECK:       Reads %.promoted17[]
 ; CHECK:       Reads %15[]
@@ -167,7 +167,7 @@ return:                                           ; preds = %bb18
 ; CHECK:     Reads %15[]
 ; CHECK:     Writes @x[8 * {0,+,1}<%bb.nph16> + 0]
 ; CHECK:   }
-; CHECK: Bounds of Loop: bb12:  { 0, 3999}
+; CHECK: Bounds of Loop: bb12:  { 1 * {0,+,1}<%bb12> + 0 >= 0, -1 * {0,+,1}<%bb12> + 3999 >= 0}
 ; CHECK:   BB: bb12{
 ; CHECK:     Reads @x[8 * {0,+,1}<%bb12> + 0]
 ; CHECK:     Reads @z[8 * {0,+,1}<%bb12> + 0]
@@ -177,12 +177,12 @@ return:                                           ; preds = %bb18
 ; CHECK:   Writes %30[]
 ; CHECK:   Reads @alpha[0]
 ; CHECK: }
-; CHECK: Bounds of Loop: bb.nph:        { 0, 3999}
+; CHECK: Bounds of Loop: bb.nph:        { 1 * {0,+,1}<%bb.nph> + 0 >= 0, -1 * {0,+,1}<%bb.nph> + 3999 >= 0}
 ; CHECK:   BB: bb.nph{
 ; CHECK:     Writes %.promoted[]
 ; CHECK:     Reads @w[8 * {0,+,1}<%bb.nph> + 0]
 ; CHECK:   }
-; CHECK:   Bounds of Loop: bb16:        { 0, 3999}
+; CHECK:   Bounds of Loop: bb16:        { 1 * {0,+,1}<%bb16> + 0 >= 0, -1 * {0,+,1}<%bb16> + 3999 >= 0}
 ; CHECK:     BB: bb16{
 ; CHECK:       Reads %.promoted[]
 ; CHECK:       Reads %27[]

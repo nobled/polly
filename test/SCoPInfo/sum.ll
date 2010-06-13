@@ -40,8 +40,11 @@ bb2:                                              ; preds = %bb, %entry
   ret i64 %k.0.lcssa
 }
 
+; CHECK: Printing analysis 'Canonicalize Induction Variables':
+; CHECK: Pass::print not implemented for pass: 'Canonicalize Induction Variables'!
+; CHECK: Printing analysis 'Polly - Detect SCoPs' for function 'f':
 ; CHECK: SCoP: bb => bb2.loopexit       Parameters: (%n, ), Max Loop Depth: 1
-; CHECK: Bounds of Loop: bb:    { 0, 1 * %n + -2}
+; CHECK: Bounds of Loop: bb:    { 1 * {0,+,1}<%bb> + 0 >= 0, -1 * {0,+,1}<%bb> + 1 * %n + -2 >= 0}
 ; CHECK:   BB: bb{
 ; CHECK:     Reads %2[]
 ; CHECK:     Reads %a[8 * {0,+,1}<%bb> + 8]
