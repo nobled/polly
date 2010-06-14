@@ -85,21 +85,21 @@ entry:
 declare void @init_array(...)
 
 declare void @print_array(...)
-; CHECK:  for (s1=0;s1<=2048;s1++) {
-; CHECK:    for (s3=0;s3<=2048;s3++) {
-; CHECK:      for (s5=0;s5<=2048;s5++) {
+; CHECK:  for (s1=0;s1<=2047;s1++) {
+; CHECK:    for (s3=0;s3<=2047;s3++) {
+; CHECK:      for (s5=0;s5<=2047;s5++) {
 ; CHECK:        S{{[0-7]}}(s1,s3,s5);
 ; CHECK:      }
 ; CHECK:    }
 ; CHECK:  }
 
 
-; IMPORT: for (s1=0;s1<=2048;s1+=64) {
-; IMPORT:   for (s2=max(0,s1);s2<=min(2048,s1+63);s2++) {
-; IMPORT:     for (s5=0;s5<=2048;s5+=64) {
-; IMPORT:       for (s6=max(0,s5);s6<=min(2048,s5+63);s6++) {
-; IMPORT:         for (s9=0;s9<=2048;s9+=64) {
-; IMPORT:           for (s10=max(0,s9);s10<=min(2048,s9+63);s10++)
+; IMPORT: for (s1=0;s1<=2047;s1+=64) {
+; IMPORT:   for (s2=max(0,s1);s2<=min(2047,s1+63);s2++) {
+; IMPORT:     for (s5=0;s5<=2047;s5+=64) {
+; IMPORT:       for (s6=max(0,s5);s6<=min(2047,s5+63);s6++) {
+; IMPORT:         for (s9=0;s9<=2047;s9+=64) {
+; IMPORT:           for (s10=max(0,s9);s10<=min(2047,s9+63);s10++)
 ; IMPORT:             {
 ; IMPORT:               S0(s2,s6,s10);
 ; IMPORT:             }
