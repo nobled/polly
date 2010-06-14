@@ -218,44 +218,36 @@ class ClastExpCodeGen {
   IRBuilder<> *Builder;
   const CharMapT *IVS;
 
-  Value *codegen(clast_name *e) {
+  Value *codegen(clast_name *e, const Type *Ty) {
     CharMapT::const_iterator I = IVS->find(e->name);
 
     if (I != IVS->end())
-      return I->second;
+      return Builder->CreateSExtOrBitCast(I->second, Ty);
     else
       llvm_unreachable("Clast name not found");
   }
 
-  Value *codegen(clast_term *e) {
+  Value *codegen(clast_term *e, const Type *Ty) {
     APInt a = APInt_from_MPZ(e->val);
 
-    if (a.getBitWidth() < 64)
-      a.sext(64);
-    else if (a.getBitWidth() > 64)
-      llvm_unreachable("Number not supported");
-
     Value *ConstOne = ConstantInt::get(Builder->getContext(), a);
+    ConstOne = Builder->CreateSExtOrBitCast(ConstOne, Ty);
 
     if (e->var) {
-      Value *var = codegen(e->var);
+      Value *var = codegen(e->var, Ty);
       return Builder->CreateMul(ConstOne, var);
     }
 
     return ConstOne;
   }
 
-  Value *codegen(clast_binary *e) {
-    Value *LHS = codegen(e->LHS);
+  Value *codegen(clast_binary *e, const Type *Ty) {
+    Value *LHS = codegen(e->LHS, Ty);
 
     APInt RHS_AP = APInt_from_MPZ(e->RHS);
 
-    if (RHS_AP.getBitWidth() < 64)
-      RHS_AP.sext(64);
-    else if (RHS_AP.getBitWidth() > 64)
-      llvm_unreachable("Number not supported");
-
     Value *RHS = ConstantInt::get(Builder->getContext(), RHS_AP);
+    RHS = Builder->CreateSExtOrBitCast(RHS, Ty);
 
     switch (e->type) {
     case clast_bin_mod:
@@ -263,8 +255,10 @@ class ClastExpCodeGen {
     case clast_bin_fdiv:
       {
         // floord(n,d) ((n < 0) ? (n - d + 1) : n) / d
-        Value *One = ConstantInt::get(Builder->getInt64Ty(), 1);
-        Value *Zero = ConstantInt::get(Builder->getInt64Ty(), 1);
+        Value *One = ConstantInt::get(Builder->getInt1Ty(), 1);
+        Value *Zero = ConstantInt::get(Builder->getInt1Ty(), 0);
+        One = Builder->CreateZExtOrBitCast(One, Ty);
+        Zero = Builder->CreateZExtOrBitCast(Zero, Ty);
         Value *Sum1 = Builder->CreateSub(LHS, RHS);
         Value *Sum2 = Builder->CreateAdd(Sum1, One);
         Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
@@ -274,8 +268,10 @@ class ClastExpCodeGen {
     case clast_bin_cdiv:
       {
         // ceild(n,d) ((n < 0) ? n : (n + d - 1)) / d
-        Value *One =  ConstantInt::get(Builder->getInt64Ty(), 1);
-        Value *Zero =  ConstantInt::get(Builder->getInt64Ty(), 1);
+        Value *One = ConstantInt::get(Builder->getInt1Ty(), 1);
+        Value *Zero = ConstantInt::get(Builder->getInt1Ty(), 0);
+        One = Builder->CreateZExtOrBitCast(One, Ty);
+        Zero = Builder->CreateZExtOrBitCast(Zero, Ty);
         Value *Sum1 = Builder->CreateAdd(LHS, RHS);
         Value *Sum2 = Builder->CreateSub(Sum1, One);
         Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
@@ -289,15 +285,15 @@ class ClastExpCodeGen {
     };
   }
 
-  Value *codegen(clast_reduction *r) {
+  Value *codegen(clast_reduction *r, const Type *Ty) {
     assert((   r->type == clast_red_min
             || r->type == clast_red_max
             || r->type == clast_red_sum)
            && "Clast reduction type not supported");
-    Value *old = codegen(r->elts[0]);
+    Value *old = codegen(r->elts[0], Ty);
 
     for (int i=1; i < r->n; ++i) {
-      Value *exprValue = codegen(r->elts[i]);
+      Value *exprValue = codegen(r->elts[i], Ty);
 
       switch (r->type) {
       case clast_red_min:
@@ -338,16 +334,16 @@ public:
   //
   // @param e The expression to calculate.
   // @return The Value that holds the result.
-  Value *codegen(clast_expr *e) {
+  Value *codegen(clast_expr *e, const Type *Ty) {
     switch(e->type) {
       case clast_expr_name:
-	return codegen((struct clast_name *)e);
+	return codegen((struct clast_name *)e, Ty);
       case clast_expr_term:
-	return codegen((struct clast_term *)e);
+	return codegen((struct clast_term *)e, Ty);
       case clast_expr_bin:
-	return codegen((struct clast_binary *)e);
+	return codegen((struct clast_binary *)e, Ty);
       case clast_expr_red:
-	return codegen((struct clast_reduction *)e);
+	return codegen((struct clast_reduction *)e, Ty);
       default:
         llvm_unreachable("Unknown clast expression!");
     }
@@ -533,7 +529,7 @@ class CPCodeGenerationActions : public CPActions {
     ctx->dir = DFS_OUT;
     codegenctx *pctx = static_cast<codegenctx*>(ctx);
     ClastExpCodeGen ExpGen(pctx->Builder, &pctx->CharMap);
-    pctx->exprValue = ExpGen.codegen(e);
+    pctx->exprValue = ExpGen.codegen(e, pctx->Builder->getInt64Ty());
   }
 };
 }
