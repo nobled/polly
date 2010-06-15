@@ -69,7 +69,7 @@ CLooG::~CLooG() {
 /// Print a .cloog input file, that is equivalent to this program.
 // TODO: use raw_ostream as parameter.
 void CLooG::dump(FILE *F) {
-  cloog_program_dump_cloog(F, Program);
+  cloog_program_dump_cloog(F, Program, ScatteringList);
   fflush(F);
 }
 
