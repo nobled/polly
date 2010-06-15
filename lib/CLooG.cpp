@@ -236,8 +236,6 @@ void CLooG::buildCloogProgram() {
   // XXX: Not necessary? Check with the CLooG guys.
   Program->blocklist = buildCloogBlockList(Program->loop);
 
-  // TODO: * Replace constants.
-  //       * Support parameters.
   Program->names = buildCloogNames(0, S->getScatterDim(), S->getMaxLoopDepth(),
 				   S->getNumParams());
 
@@ -278,7 +276,7 @@ bool CLooGExporter::runOnRegion(Region *R, RGPassManager &RGM) {
     ExitName = "FunctionExit";
 
   std::string RegionName = R->getEntry()->getNameStr() + "---" + ExitName;
-  std::string Filename = FunctionName + "___" + RegionName + ".scop";
+  std::string Filename = FunctionName + "___" + RegionName + ".cloog";
 
   errs() << "Writing SCoP '" << R->getNameStr() << "' in function '"
     << FunctionName << "' to '" << Filename << "'...\n";
@@ -287,7 +285,6 @@ bool CLooGExporter::runOnRegion(Region *R, RGPassManager &RGM) {
 
   CLooG C(S);
   C.dump(F);
-  C.pprint();
   fclose(F);
 
   return false;
