@@ -335,7 +335,8 @@ class SCoPDetection : public FunctionPass {
   static bool isValidCallInst(CallInst &CI);
 
   // Check is a memory access is valid.
-  bool isValidMemoryAccess(Instruction &Inst, Region &RefRegion, Region &CurRegion) const;
+  bool isValidMemoryAccess(Instruction &Inst, Region &RefRegion,
+                           Region &CurRegion) const;
 
   // Check if all parameters in Params valid in Region R.
   void mergeParams(Region &R, ParamSetType &Params,
@@ -348,18 +349,17 @@ class SCoPDetection : public FunctionPass {
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
-  bool isValidBasicBlock(BasicBlock &BB, Region &RefRegion, Region &CurRegion) const;
+  bool isValidBasicBlock(BasicBlock &BB, Region &RefRegion,
+                         Region &CurRegion) const;
 
   /// @brief Check if the control flow in a basic block is valid.
   ///
   /// @param BB The BB to check the control flow.
   /// @param RefRegion The region in respect to which we check the control
   ///                        flow.
-  /// @param CurRegion The smallest region that containing BB.
-  ///
   /// @return True if the BB contains only valid control flow.
   ///
-  bool isValidCFG(BasicBlock &BB, Region &RefRegion, Region &CurRegion) const;
+  bool isValidCFG(BasicBlock &BB, Region &RefRegion) const;
 
   /// @brief Is a loop valid with respect to a given region.
   ///

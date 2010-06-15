@@ -1,4 +1,4 @@
-//===------ SCoPDetection.cpp  - Detect SCoPs in LLVM Function ---*- C++ -*-===//
+//===----- SCoPDetection.cpp  - Detect SCoPs in LLVM Function ---*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -118,7 +118,7 @@ Loop *polly::getScopeLoop(const Region &R, LoopInfo &LI) {
 static bool isParameter(const SCEV *Var, Region &RefRegion, Region &CurRegion,
                         LoopInfo &LI, ScalarEvolution &SE) {
   assert(Var && "Var can not be null!");
-  // Find the biggest loop that contain by RefR
+  // Find the biggest loop that is contained by RefR.
   Loop *topL = 0;
   for(Region *CurR = &CurRegion, *TopR = RefRegion.getParent();
     CurR != TopR; CurR = CurR->getParent()) {
@@ -126,7 +126,7 @@ static bool isParameter(const SCEV *Var, Region &RefRegion, Region &CurRegion,
       if (Loop *L = castToLoop(*CurR, LI))
         topL = L;
   }
-  // The parameter is always loop invariant
+  // The parameter is always loop invariant.
   if (topL && !Var->isLoopInvariant(topL))
       return false;
 
@@ -152,7 +152,7 @@ static bool isParameter(const SCEV *Var, Region &RefRegion, Region &CurRegion,
     // TODO: add others conditions.
     return true;
   }
-  // FIXME: Should us accept cast?
+  // FIXME: Should we accept casts?
   else if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var))
     return isParameter(Cast->getOperand(), RefRegion, CurRegion,LI, SE);
   // Not a SCEVUnknown.
@@ -168,7 +168,7 @@ static bool isIndVar(const SCEV *Var,
   // Not an Induction variable
   if (!AddRec) return false;
 
-  // If the addrec is the indvar of anly loop that containing current region
+  // If the addrec is the indvar of any loop that containing current region
   for(Region *CurR = &CurRegion, *TopR = RefRegion.getParent();
       CurR != TopR; CurR = CurR->getParent()) {
     assert(CurR && "RefRegion not Contain CurRegion?");
@@ -331,7 +331,8 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
 }
 
 /// Helper function to print the condition
-static void printBBCond(raw_ostream &OS, const BBCond &Cond, ScalarEvolution *SE) {
+static void printBBCond(raw_ostream &OS, const BBCond &Cond,
+                        ScalarEvolution *SE) {
   assert(!Cond.empty() && "Unexpect empty condition!");
   Cond[0].print(OS, SE);
   for (unsigned i = 1, e = Cond.size(); i != e; ++i) {
@@ -518,8 +519,7 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
   return !isMemAcc || PtrExist;
 }
 
-bool SCoPDetection::isValidCFG(BasicBlock &BB,
-                               Region &RefRegion, Region &CurRegion) const {
+bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   TerminatorInst *TI = BB.getTerminator();
 
   // Return instructions are only valid if the region is the top level region.
@@ -567,7 +567,8 @@ bool SCoPDetection::isValidCallInst(CallInst &CI) {
 }
 
 bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
-                                        Region &RefRegion, Region &CurRegion) const {
+                                        Region &RefRegion,
+                                        Region &CurRegion) const {
   SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(Inst);
 
   if (!isValidAffineFunction(SE->getSCEV(MemAcc.first),
@@ -613,7 +614,8 @@ void SCoPDetection::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
 }
 
 bool SCoPDetection::isValidInstruction(Instruction &Inst,
-                                       Region &RefRegion, Region &CurRegion) const {
+                                       Region &RefRegion,
+                                       Region &CurRegion) const {
   // We only check the call instruction but not invoke instruction.
   if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
     if (isValidCallInst(*CI))
@@ -644,7 +646,8 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
 }
 
 bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
-                                      Region &RefRegion, Region &CurRegion) const {
+                                      Region &RefRegion,
+                                      Region &CurRegion) const {
 
   // Check all instructions, except the terminator instruction.
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I)
@@ -654,7 +657,8 @@ bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
   return true;
 }
 
-bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion, Region &CurRegion) const {
+bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion, Region &CurRegion)
+  const {
   // We can only handle loops whose induction variables in are in canonical
   // form.
   PHINode *IndVar = L->getCanonicalInductionVariable();
@@ -865,9 +869,9 @@ TempSCoP *SCoPDetection::buildTempSCoP(Region &R) {
       // from the region(The region that have BB as entry block)'s parent
       // region, this time, we will build the condition from the parent's entry
       // to the BB.
-      // another time is when we get the region node from the the smallest region
-      // that containing this BB, but now I->getEntry() and R.getEntry() are the
-      // same bb, so no condition expect to extract.
+      // another time is when we get the region node from the the smallest
+      // region that containing this BB, but now I->getEntry() and R.getEntry()
+      // are the same bb, so no condition expect to extract.
       assert(!BBConds.count(I->getEntry())
         && "Why we got more than one conditions for a BB?");
       BBConds.insert(
@@ -970,7 +974,7 @@ bool SCoPDetection::isValidRegion(Region &RefRegion,
     } else {
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
 
-      if (isValidCFG(BB, RefRegion, CurRegion)
+      if (isValidCFG(BB, RefRegion)
           && isValidBasicBlock(BB, RefRegion, CurRegion))
         continue;
 
