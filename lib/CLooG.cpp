@@ -28,12 +28,17 @@ namespace polly {
 
 CLooG::CLooG(SCoP *Scop) : S(Scop) {
   StatementNumber = 0;
+  alreadyGenerated = false;
   State = cloog_state_malloc();
   buildCloogOptions();
   buildCloogProgram();
+  buildScatteringList();
 }
 
 void CLooG::generate() {
+  assert(!alreadyGenerated && "CLooG::generate called twice.");
+  alreadyGenerated = true;
+
   ScatterProgram();
 
   // XXX: Necessary as otherwise cloog would free the blocks twice.
@@ -44,13 +49,11 @@ void CLooG::generate() {
 }
 
 void CLooG::ScatterProgram() {
-  CloogScatteringList *scattering = buildScatteringList();
-
   //Extract scalar dimensions to simplify the code generation problem.
-  cloog_program_extract_scalars (Program, scattering, Options);
+  cloog_program_extract_scalars (Program, ScatteringList, Options);
 
   // Apply scattering.
-  cloog_program_scatter (Program, scattering, Options);
+  cloog_program_scatter (Program, ScatteringList, Options);
 
   // Iterators corresponding to scalar dimensions have to be extracted.
   cloog_names_scalarize (Program->names, Program->nb_scattdims,
@@ -129,8 +132,8 @@ CloogLoop *CLooG::buildCloogLoopList() {
 /// Allocate a CloogScatteringList data structure and fill it with the
 /// scattering polyhedron of all statements in the SCoP. Ordered as they
 /// appear in the SCoP statement iterator.
-CloogScatteringList *CLooG::buildScatteringList() {
-  CloogScatteringList *ScatteringList = 0;
+void CLooG::buildScatteringList() {
+  ScatteringList = 0;
 
   for (SCoP::iterator SI = S->begin(), SE =
        S->end(); SI != SE; ++SI) {
@@ -145,8 +148,6 @@ CloogScatteringList *CLooG::buildScatteringList() {
     NewScatteringList->next = ScatteringList;
     ScatteringList = NewScatteringList;
   }
-
-  return ScatteringList;
 }
 
 /// Allocate a CloogNames data structure and fill it with default names.
