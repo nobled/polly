@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implement the scalar data reference analysis, whice will capture
+// This file implement the scalar data reference analysis, which will capture
 // scalar reads/writes(use/def) in SCoP statement(BB or Region).
 //
 //===----------------------------------------------------------------------===//
