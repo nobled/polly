@@ -590,15 +590,15 @@ class ClastCodeGeneration : public RegionPass {
     SCEVExpander Rewriter(*SE);
 
     for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
-         II != IE; ++II)
-      if (!II->isTerminator()) {
+         II != IE; ++II) {
         Instruction *Inst = &*II;
 
-        if (!SE->isSCEVable(Inst->getType()))
+        if (!SE->isSCEVable(Inst->getType()) || isa<StoreInst>(Inst)
+            || isa<LoadInst>(Inst))
           work.push_back(Inst);
       }
 
-    while (work.size() != 0) {
+    while (!work.empty()) {
       Instruction *Inst = work.back();
       work.pop_back();
 
