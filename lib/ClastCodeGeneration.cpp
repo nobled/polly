@@ -207,6 +207,9 @@ void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
     if (Add) {
       Builder->Insert(NewInst);
       BBMap[Inst] = NewInst;
+
+      if (!NewInst->getType()->isVoidTy())
+        NewInst->setName("p_" + Inst->getName());
     } else
       delete NewInst;
 
