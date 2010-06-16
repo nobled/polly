@@ -608,8 +608,8 @@ class ClastCodeGeneration : public RegionPass {
           continue;
 
         const SCEV *Scev = SE->getSCEV(*UI);
-        Value *V = Rewriter.expandCodeFor(Scev, UI->get()->getType(),
-                                          &*BB->begin());
+
+        Value *V = Rewriter.expandCodeFor(Scev, UI->get()->getType(), Inst);
         UI->set(V);
       }
     }
