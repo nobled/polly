@@ -562,14 +562,21 @@ class ClastCodeGeneration : public RegionPass {
     createSingleExitEdge(R, this);
   }
 
-  void addParameters(CloogNames *names, CharMapT &VariableMap) {
+  void addParameters(CloogNames *names, CharMapT &VariableMap,
+                     IRBuilder<> *Builder) {
     int i = 0;
+    SCEVExpander Rewriter(*SE);
 
     for (SCoP::param_iterator PI = S->param_begin(), PE = S->param_end();
          PI != PE; ++PI) {
-      llvm_unreachable("SCoPs with parameters cannot be code generated");
       assert(i < names->nb_parameters && "Not enough parameter names");
-      // VariableMap[names->parameters[i]] = *PI;
+
+      const SCEV *Param = *PI;
+      const Type *Ty = Param->getType();
+      Instruction *InsertInst = &(*Builder->GetInsertBlock()->begin());
+
+      VariableMap[names->parameters[i]] = Rewriter.expandCodeFor(Param, Ty,
+                                                                 InsertInst);
       ++i;
     }
   }
@@ -660,7 +667,7 @@ class ClastCodeGeneration : public RegionPass {
     codegenctx ctx (S, DT, SE, &Builder);
     clast_stmt *clast = C->getClast();
 
-    addParameters(((clast_root*)clast)->names, ctx.CharMap);
+    addParameters(((clast_root*)clast)->names, ctx.CharMap, &Builder);
 
     cp.parse(clast, &ctx);
     Builder.CreateBr(R->getExit());
