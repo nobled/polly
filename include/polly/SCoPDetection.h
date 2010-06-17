@@ -335,8 +335,7 @@ class SCoPDetection : public FunctionPass {
   static bool isValidCallInst(CallInst &CI);
 
   // Check is a memory access is valid.
-  bool isValidMemoryAccess(Instruction &Inst, Region &RefRegion,
-                           Region &CurRegion) const;
+  bool isValidMemoryAccess(Instruction &Inst, Region &RefRegion) const;
 
   // Check if all parameters in Params valid in Region R.
   void mergeParams(Region &R, ParamSetType &Params,
@@ -344,13 +343,11 @@ class SCoPDetection : public FunctionPass {
 
   // Check if the Instruction is a valid part of SCoP, return true and extract
   // the corresponding information, return false otherwise.
-  bool isValidInstruction(Instruction &I,
-                          Region &RefRegion, Region &CurRegion) const;
+  bool isValidInstruction(Instruction &I, Region &RefRegion) const;
 
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
-  bool isValidBasicBlock(BasicBlock &BB, Region &RefRegion,
-                         Region &CurRegion) const;
+  bool isValidBasicBlock(BasicBlock &BB, Region &RefRegion) const;
 
   /// @brief Check if the control flow in a basic block is valid.
   ///
@@ -367,7 +364,7 @@ class SCoPDetection : public FunctionPass {
   /// @param RefRegion The region we analyse the loop in.
   ///
   /// @return True if the loop is valid in the region.
-  bool isValidLoop(Loop *L, Region &RefRegion, Region &CurRegion) const;
+  bool isValidLoop(Loop *L, Region &RefRegion) const;
 
   /// @brief Build an affine function from a SCEV expression.
   ///
@@ -379,7 +376,7 @@ class SCoPDetection : public FunctionPass {
   void buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
                            TempSCoP &SCoP) const;
 
-  bool isValidAffineFunction(const SCEV *S, Region &RefRegion, Region &CurRegion,
+  bool isValidAffineFunction(const SCEV *S, Region &RefRegion, BasicBlock *CurBB,
                              bool isMemAcc) const;
 
 
