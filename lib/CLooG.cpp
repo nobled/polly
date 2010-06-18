@@ -69,7 +69,7 @@ CLooG::~CLooG() {
 /// Print a .cloog input file, that is equivalent to this program.
 // TODO: use raw_ostream as parameter.
 void CLooG::dump(FILE *F) {
-  cloog_program_dump_cloog(F, Program);
+  cloog_program_dump_cloog(F, Program, ScatteringList);
   fflush(F);
 }
 
@@ -233,10 +233,8 @@ void CLooG::buildCloogProgram() {
   Program = cloog_program_malloc();
   Program->context = cloog_domain_from_isl_set(isl_set_copy(S->getContext()));
   Program->loop = buildCloogLoopList();
-
   // XXX: Not necessary? Check with the CLooG guys.
-  Program->blocklist = buildCloogBlockList(Program->loop);
-
+  Program->blocklist = 0;
   Program->names = buildCloogNames(0, S->getScatterDim(), S->getMaxLoopDepth(),
 				   S->getNumParams());
 

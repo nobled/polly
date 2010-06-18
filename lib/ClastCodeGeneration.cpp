@@ -207,6 +207,9 @@ void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
     if (Add) {
       Builder->Insert(NewInst);
       BBMap[Inst] = NewInst;
+
+      if (!NewInst->getType()->isVoidTy())
+        NewInst->setName("p_" + Inst->getName());
     } else
       delete NewInst;
 
@@ -559,14 +562,21 @@ class ClastCodeGeneration : public RegionPass {
     createSingleExitEdge(R, this);
   }
 
-  void addParameters(CloogNames *names, CharMapT &VariableMap) {
+  void addParameters(CloogNames *names, CharMapT &VariableMap,
+                     IRBuilder<> *Builder) {
     int i = 0;
+    SCEVExpander Rewriter(*SE);
 
     for (SCoP::param_iterator PI = S->param_begin(), PE = S->param_end();
          PI != PE; ++PI) {
-      llvm_unreachable("SCoPs with parameters cannot be code generated");
       assert(i < names->nb_parameters && "Not enough parameter names");
-      // VariableMap[names->parameters[i]] = *PI;
+
+      const SCEV *Param = *PI;
+      const Type *Ty = Param->getType();
+      Instruction *InsertInst = &(*Builder->GetInsertBlock()->begin());
+
+      VariableMap[names->parameters[i]] = Rewriter.expandCodeFor(Param, Ty,
+                                                                 InsertInst);
       ++i;
     }
   }
@@ -587,15 +597,15 @@ class ClastCodeGeneration : public RegionPass {
     SCEVExpander Rewriter(*SE);
 
     for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
-         II != IE; ++II)
-      if (!II->isTerminator()) {
+         II != IE; ++II) {
         Instruction *Inst = &*II;
 
-        if (!SE->isSCEVable(Inst->getType()))
+        if (!SE->isSCEVable(Inst->getType()) || isa<StoreInst>(Inst)
+            || isa<LoadInst>(Inst))
           work.push_back(Inst);
       }
 
-    while (work.size() != 0) {
+    while (!work.empty()) {
       Instruction *Inst = work.back();
       work.pop_back();
 
@@ -605,8 +615,8 @@ class ClastCodeGeneration : public RegionPass {
           continue;
 
         const SCEV *Scev = SE->getSCEV(*UI);
-        Value *V = Rewriter.expandCodeFor(Scev, UI->get()->getType(),
-                                          &*BB->begin());
+
+        Value *V = Rewriter.expandCodeFor(Scev, UI->get()->getType(), Inst);
         UI->set(V);
       }
     }
@@ -657,7 +667,7 @@ class ClastCodeGeneration : public RegionPass {
     codegenctx ctx (S, DT, SE, &Builder);
     clast_stmt *clast = C->getClast();
 
-    addParameters(((clast_root*)clast)->names, ctx.CharMap);
+    addParameters(((clast_root*)clast)->names, ctx.CharMap, &Builder);
 
     cp.parse(clast, &ctx);
     Builder.CreateBr(R->getExit());
