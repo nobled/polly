@@ -935,17 +935,14 @@ void SCoPDetection::runOnRegion(Region &R) {
     runOnRegion(**I);
 
   // Check current region.
-  if (!isSCoP(R))
+  // Do not check toplevel region, it is not support at this moment.
+  if ((R.getParent() == 0) || !isValidRegion(R, R))
     return;
 
   RegionToSCoPs.insert(std::make_pair(&R, (TempSCoP*)0));
 
   // Kill all temporary values that can be rewrite by SCEVExpander.
   killAllTempValFor(R);
-}
-
-bool SCoPDetection::isSCoP(Region &R) const {
-  return isValidRegion(R, R);
 }
 
 bool SCoPDetection::isValidRegion(Region &RefRegion,

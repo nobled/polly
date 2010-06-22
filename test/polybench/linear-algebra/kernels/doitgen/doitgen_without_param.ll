@@ -70,4 +70,4 @@ return:                                           ; preds = %bb12
   ret void
 }
 
-; CHECK: SCoP: bb.nph50.bb.nph50.split_crit_edge => <Function Return>    Parameters: (), Max Loop Depth: 4
+; CHECK: SCoP: bb11.preheader => return Parameters: (), Max Loop Depth: 4

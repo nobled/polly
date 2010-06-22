@@ -176,4 +176,4 @@ return:                                           ; preds = %bb30
   ret void
 }
 
-; CHECK: SCoP: bb.nph79 => <Function Return>     Parameters: (), Max Loop Depth: 3
+; CHECK: SCoP: bb5.preheader => return  Parameters: (), Max Loop Depth: 3

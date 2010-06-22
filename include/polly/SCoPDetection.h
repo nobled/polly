@@ -315,11 +315,6 @@ class SCoPDetection : public FunctionPass {
   //
   // NOTE: All this function will increase the statistic counters.
 
-  /// @brief Check is a Region is a SCoP.
-  ///
-  /// @param The region to check.
-  bool isSCoP(Region &R) const;
-
   /// @brief Check if a Region is a valid element of a SCoP.
   ///
   ///
@@ -438,8 +433,17 @@ public:
   ///
   /// @return Return true if R is the maximum Region in a SCoP, false otherwise.
   bool isMaxRegionInSCoP(const Region &R) const {
-    assert(RegionToSCoPs.count(&R) && "R must be a valid SCoP!");
-    return (R.getParent() == 0) || !RegionToSCoPs.count(R.getParent());
+    return isSCoP(R)
+      && ((R.getParent() == 0) || !isSCoP(*R.getParent()));
+  }
+
+  /// @brief Is the region is a valid SCoP?
+  ///
+  /// @param R The Region to test if it is a valid SCoP.
+  ///
+  /// @return Return true if R is a valid SCoP, false otherwise.
+  bool isSCoP(const Region &R) const {
+    return RegionToSCoPs.count(&R);
   }
 
   /// @name FunctionPass interface

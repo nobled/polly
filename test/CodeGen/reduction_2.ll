@@ -69,4 +69,3 @@ declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i32, i1) nounwind
 ; CHECK: for (s1=0;s1<=1018;s1++) {
 ; CHECK:     S0(s1);
 ; CHECK: }
-

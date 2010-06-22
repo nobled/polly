@@ -21,4 +21,3 @@ int main () {
   if (RED[0] != 382399368)
     return 1;
 }
-

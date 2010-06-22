@@ -442,26 +442,17 @@ void SCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
 bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   SCoPDetection &SCoPDetect = getAnalysis<SCoPDetection>();
 
-  TempSCoP *tempSCoP = SCoPDetect.getTempSCoPFor(R);
-
-  if (!tempSCoP) return false;
+  if (!SCoPDetect.isSCoP(*R)) return false;
 
   // A valid region for SCoP found.
   ++ValidRegion;
 
   // Only analyse the maximal SCoPs.
-  if (!SCoPDetect.isMaxRegionInSCoP(*R)) {
-    Region *Parent = R->getParent();
-    assert(Parent && "Non max region will always have parent!");
-    // If the current region is the child of toplevel region,
-    // then this region is the maximal region we could handle,
-    // because we cannot yet handle complete functions.
-    if(Parent->getParent())
-      return false;
-  }
-  // Do not build the scopinfo for toplevel region
-  else if (!R->getParent())
-      return false;
+  if (!SCoPDetect.isMaxRegionInSCoP(*R))
+    return false;
+
+  // Get the tempSCoP.
+  TempSCoP *tempSCoP = SCoPDetect.getTempSCoPFor(R);
 
   // A SCoP found
   ++SCoPFound;
