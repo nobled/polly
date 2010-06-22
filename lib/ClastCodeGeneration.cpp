@@ -671,7 +671,7 @@ class ClastCodeGeneration : public RegionPass {
     // Parameters not yet supported.
     if (std::distance(S->param_begin(), S->param_end()) > 1 ) {
       errs() << "Code generation for SCoP " << S->getRegion().getNameStr()
-        << " failed. Parameters not yet supported.";
+        << " failed. Parameters not yet supported.\n";
       return false;
     }
 
