@@ -627,6 +627,36 @@ class ClastCodeGeneration : public RegionPass {
       createIndependentBlocks((*SI)->getBasicBlock());
   }
 
+  bool isIndependentBlock(const Region *R, BasicBlock *BB) {
+    for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
+         II != IE; ++II) {
+      Instruction *Inst = &*II;
+
+      if (Inst->use_begin() != Inst->use_end())
+        continue;
+
+      for (Instruction::op_iterator UI = Inst->op_begin(),
+           UE = Inst->op_end(); UI != UE; ++UI) {
+        Instruction *Op = dyn_cast<Instruction>(&(*UI));
+
+        if (Op && R->contains(Op) && !(Op->getParent() == BB)) {
+          Inst->getParent()->dump();
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  bool hasIndependentBlocks(SCoP *S) {
+    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI)
+      if (!isIndependentBlock(&S->getRegion(), (*SI)->getBasicBlock()))
+        return false;
+
+    return true;
+  }
+
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
     S = getAnalysis<SCoPInfo>().getSCoP();
@@ -647,6 +677,13 @@ class ClastCodeGeneration : public RegionPass {
 
     createSeSeEdges(R);
     createIndependentBlocks(S);
+
+    if (!hasIndependentBlocks(S)) {
+      errs() << "Code generation for SCoP " << S->getRegion().getNameStr()
+        << " failed. Could not generate independent blocks.\n";
+      return false;
+      // llvm_unreachable("");
+    }
 
     if (C)
       delete(C);
