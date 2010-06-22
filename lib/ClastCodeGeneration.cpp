@@ -710,7 +710,8 @@ class ClastCodeGeneration : public RegionPass {
     addParameters(((clast_root*)clast)->names, ctx.CharMap, &Builder);
 
     cp.parse(clast, &ctx);
-    Builder.CreateBr(R->getExit());
+    BasicBlock *AfterSCoP = *pred_begin(R->getExit());
+    Builder.CreateBr(AfterSCoP);
 
     // Update old PHI nodes to pass LLVM verification.
     for (BasicBlock::iterator SI = succ_begin(R->getEntry())->begin(),
@@ -721,7 +722,7 @@ class ClastCodeGeneration : public RegionPass {
       }
 
     if (DT->dominates(R->getEntry(), R->getExit()))
-      DT->changeImmediateDominator(R->getExit(), Builder.GetInsertBlock());
+      DT->changeImmediateDominator(AfterSCoP, Builder.GetInsertBlock());
 
     // Enable the new polly code.
     R->getEntry()->getTerminator()->setSuccessor(0, PollyBB);
