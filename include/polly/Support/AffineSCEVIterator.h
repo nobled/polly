@@ -69,7 +69,7 @@ private:
   value_type val;
 
   const SCEVConstant* getSCEVOne(const SCEV* S) const {
-    return cast<SCEVConstant>(SE->getIntegerSCEV(1, S->getType()));
+    return cast<SCEVConstant>(SE->getConstant(S->getType(), 1));
   }
 
   //===-------------------------------------------------------------------===//
@@ -186,8 +186,8 @@ private:
           // Construct the Canonicalize Induction Variable, because the Start and
           // Step part of the AddRec already been decompose.
           ret.first =
-            SE->getAddRecExpr(SE->getIntegerSCEV(0, Start->getType()),
-                              SE->getIntegerSCEV(1, ret.second->getType()),
+            SE->getAddRecExpr(SE->getConstant(Start->getType(), 0),
+                              SE->getConstant(ret.second->getType(), 1),
                               ARec->getLoop());
 
           // Push CouldNotCompute to take the place.
@@ -241,7 +241,7 @@ public:
     const Type *Ty = S->getType();
 
     // Init the constant component.
-    visitStack.push_back(SE->getIntegerSCEV(0, Ty));
+    visitStack.push_back(SE->getConstant(Ty, 0));
 
     // Get the first affine component.
     visitStack.push_back(S);
