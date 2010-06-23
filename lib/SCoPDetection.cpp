@@ -677,7 +677,7 @@ bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
 
   // The AffineSCEVIterator will always return the induction variable
   // which start from 0, and step by 1.
-  const SCEV *LB = SE->getIntegerSCEV(0, LoopCount->getType()),
+  const SCEV *LB = SE->getConstant(LoopCount->getType(), 0),
         *UB = LoopCount;
 
   // Check the lower bound.
@@ -697,7 +697,7 @@ void SCoPDetection::buildLoopBounds(TempSCoP &SCoP) {
     const SCEV *SIV = SE->getSCEV(IV);
     // Get the loop bounds
     // FIXME: The lower bound is always 0.
-    const SCEV *LB = SE->getIntegerSCEV(0, SIV->getType());
+    const SCEV *LB = SE->getConstant(SIV->getType(),0);
     // IV >= LB ==> IV - LB >= 0
     LB = SE->getMinusSCEV(SIV, LB);
 
@@ -743,7 +743,7 @@ void SCoPDetection::buildAffineCondition(Value &V, bool inverted,
                                          SCEVAffFunc &FuncToBuild,
                                          TempSCoP &SCoP) const {
   if (ConstantInt *C = dyn_cast<ConstantInt>(&V)) {
-    const SCEV *One = SE->getIntegerSCEV(1, C->getType());
+    const SCEV *One = SE->getConstant(C->getType(), 1);
     // If this is always true condition, we will create 1 >= 0,
     // otherwise we will create 1 == 0
     if (C->isOne() == inverted)
@@ -782,7 +782,7 @@ void SCoPDetection::buildAffineCondition(Value &V, bool inverted,
     case ICmpInst::ICMP_UGT:
       // A > B ==> A >= B + 1
       // FIXME: NSW or NUW?
-      RHS = SE->getAddExpr(RHS, SE->getIntegerSCEV(1, RHS->getType()));
+      RHS = SE->getAddExpr(RHS, SE->getConstant(RHS->getType(), 1));
       FuncToBuild.FuncType = SCEVAffFunc::GE;
       break;
     case ICmpInst::ICMP_SLE:
