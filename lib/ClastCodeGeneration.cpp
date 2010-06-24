@@ -24,6 +24,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/IRBuilder.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
@@ -547,6 +548,7 @@ class ClastCodeGeneration : public RegionPass {
   DominatorTree *DT;
   ScalarEvolution *SE;
   CLooG *C;
+  LoopInfo *LI;
 
   public:
   static char ID;
@@ -630,27 +632,46 @@ class ClastCodeGeneration : public RegionPass {
       createIndependentBlocks((*SI)->getBasicBlock());
   }
 
+  bool isIV(Instruction *I) {
+    Loop *L = LI->getLoopFor(I->getParent());
+
+    return L && I == L->getCanonicalInductionVariable();
+  }
+
   bool isIndependentBlock(const Region *R, BasicBlock *BB) {
     for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
          II != IE; ++II) {
       Instruction *Inst = &*II;
 
+      if (isIV(Inst))
+        continue;
+
       // A value inside the SCoP is referenced outside.
       for (Instruction::use_iterator UI = Inst->use_begin(),
            UE = Inst->use_end(); UI != UE; ++UI) {
         Value *V = *UI;
-        Instruction *Inst = dyn_cast<Instruction>(V);
+        Instruction *Use = dyn_cast<Instruction>(V);
 
-        if (Inst && !R->contains(Inst))
+        if (Use && !R->contains(Use)) {
+          DEBUG(dbgs() << "Instruction not independent:\n");
+          DEBUG(dbgs() << "Instruction used outside the SCoP!\n");
+          DEBUG(Inst->print(dbgs()));
+          DEBUG(dbgs() << "\n");
           return false;
+        }
       }
 
       for (Instruction::op_iterator UI = Inst->op_begin(),
            UE = Inst->op_end(); UI != UE; ++UI) {
         Instruction *Op = dyn_cast<Instruction>(&(*UI));
 
-        if (Op && R->contains(Op) && !(Op->getParent() == BB)) {
-          Inst->getParent()->dump();
+        if (Op && R->contains(Op) && !(Op->getParent() == BB)
+            && !isIV(Op)) {
+          DEBUG(dbgs() << "Instruction not independent:\n");
+          DEBUG(dbgs() << "Uses invalid operator\n");
+          DEBUG(Inst->print(dbgs()));
+          DEBUG(dbgs() << "\n");
+          DEBUG(dbgs() << "Invalid operator is: " << Op->getNameStr() << "\n");
           return false;
         }
       }
@@ -672,6 +693,7 @@ class ClastCodeGeneration : public RegionPass {
     S = getAnalysis<SCoPInfo>().getSCoP();
     DT = &getAnalysis<DominatorTree>();
     SE = &getAnalysis<ScalarEvolution>();
+    LI = &getAnalysis<LoopInfo>();
 
     if (!S) {
       C = 0;
@@ -685,7 +707,6 @@ class ClastCodeGeneration : public RegionPass {
       return false;
     }
 
-    createSeSeEdges(R);
     createIndependentBlocks(S);
 
     if (!hasIndependentBlocks(S)) {
@@ -694,6 +715,8 @@ class ClastCodeGeneration : public RegionPass {
       return false;
       // llvm_unreachable("");
     }
+
+    createSeSeEdges(R);
 
     if (C)
       delete(C);
@@ -746,6 +769,7 @@ class ClastCodeGeneration : public RegionPass {
     AU.addRequired<SCoPInfo>();
     AU.addRequired<DominatorTree>();
     AU.addRequired<ScalarEvolution>();
+    AU.addRequired<LoopInfo>();
     AU.addPreserved<DominatorTree>();
     AU.addPreserved<SCoPInfo>();
     AU.addPreserved<RegionInfo>();
