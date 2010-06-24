@@ -608,9 +608,9 @@ class ClastCodeGeneration : public RegionPass {
           work.push_back(Inst);
       }
 
-    while (!work.empty()) {
-      Instruction *Inst = work.back();
-      work.pop_back();
+    for (std::vector<Instruction*>::iterator II = work.begin(), IE = work.end();
+         II != IE; ++II) {
+      Instruction *Inst = *II;
 
       for (Instruction::op_iterator UI = Inst->op_begin(),
            UE = Inst->op_end(); UI != UE; ++UI) {
