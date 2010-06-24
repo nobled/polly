@@ -635,8 +635,15 @@ class ClastCodeGeneration : public RegionPass {
          II != IE; ++II) {
       Instruction *Inst = &*II;
 
-      if (Inst->use_begin() != Inst->use_end())
-        continue;
+      // A value inside the SCoP is referenced outside.
+      for (Instruction::use_iterator UI = Inst->use_begin(),
+           UE = Inst->use_end(); UI != UE; ++UI) {
+        Value *V = *UI;
+        Instruction *Inst = dyn_cast<Instruction>(V);
+
+        if (Inst && !R->contains(Inst))
+          return false;
+      }
 
       for (Instruction::op_iterator UI = Inst->op_begin(),
            UE = Inst->op_end(); UI != UE; ++UI) {
