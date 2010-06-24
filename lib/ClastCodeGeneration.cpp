@@ -10,6 +10,9 @@
 // Create LLVM IR code using the ClastParser.
 //
 //===----------------------------------------------------------------------===//
+//
+
+#define DEBUG_TYPE "polly-codegen"
 
 #include "polly/ClastParser.h"
 #include "polly/Support/GmpConv.h"
