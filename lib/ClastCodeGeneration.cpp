@@ -600,6 +600,7 @@ class ClastCodeGeneration : public RegionPass {
   void createIndependentBlocks(BasicBlock *BB) {
     std::vector<Instruction*> work;
     SCEVExpander Rewriter(*SE);
+    Rewriter.disableInstructionHoisting();
 
     for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
          II != IE; ++II) {
