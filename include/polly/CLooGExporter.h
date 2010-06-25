@@ -15,7 +15,7 @@
 #define POLLY_CLOOG_EXPORTER_H
 
 namespace llvm {
-  struct RegionPass;
+  class RegionPass;
 }
 
 namespace polly {
