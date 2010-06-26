@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/SCoPDetection.h"
+#include "polly/TempSCoPInfo.h"
 #include "polly/SCoPInfo.h"
 #include "polly/Support/GmpConv.h"
 
@@ -435,35 +435,24 @@ void SCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<LoopInfo>();
   AU.addRequired<RegionInfo>();
   AU.addRequired<ScalarEvolution>();
-  AU.addRequired<SCoPDetection>();
+  AU.addRequired<TempSCoPInfo>();
   AU.setPreservesAll();
 }
 
 bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
-  SCoPDetection &SCoPDetect = getAnalysis<SCoPDetection>();
+  // Only build the SCoP when the temporary SCoP information is avaliable.
+  if (TempSCoP *tempSCoP = getAnalysis<TempSCoPInfo>().getTempSCoP()) {
+    // A SCoP found
+    ++SCoPFound;
 
-  if (!SCoPDetect.isSCoP(*R)) return false;
+    // The SCoP have loop inside
+    if (tempSCoP->getMaxLoopDepth() > 0) ++RichSCoPFound;
 
-  // A valid region for SCoP found.
-  ++ValidRegion;
-
-  // Only analyse the maximal SCoPs.
-  if (!SCoPDetect.isMaxRegionInSCoP(*R))
-    return false;
-
-  // Get the tempSCoP.
-  TempSCoP *tempSCoP = SCoPDetect.getTempSCoPFor(R);
-
-  // A SCoP found
-  ++SCoPFound;
-
-  // The SCoP have loop inside
-  if (tempSCoP->getMaxLoopDepth() > 0) ++RichSCoPFound;
-
-  // Create the scop.
-  scop = new SCoP(*tempSCoP,
-                  getAnalysis<LoopInfo>(),
-                  getAnalysis<ScalarEvolution>());
+    // Create the scop.
+    scop = new SCoP(*tempSCoP,
+                    getAnalysis<LoopInfo>(),
+                    getAnalysis<ScalarEvolution>());
+  }
 
   return false;
 }
