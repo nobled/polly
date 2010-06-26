@@ -15,6 +15,7 @@
 #include "polly/ScalarDataRef.h"
 
 #include "llvm/Use.h"
+#include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Assembly/Writer.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/ADT/DepthFirstIterator.h"
@@ -37,12 +38,6 @@ void ScalarDataRef::clear() {
 
 ScalarDataRef::~ScalarDataRef() {
   clear();
-}
-
-void ScalarDataRef::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<LoopInfo>();
-  AU.addRequired<DominatorTree>();
-  AU.setPreservesAll();
 }
 
 bool ScalarDataRef::isCyclicUse(const Instruction* def,
@@ -175,10 +170,86 @@ void ScalarDataRef::killTempRefFor(const Instruction &Inst) {
   }
 }
 
+void ScalarDataRef::killAllTempValFor(const Region &R) {
+  // Do not kill tempval in not valid region
+  assert(SD->isSCoP(R) && "killAllTempValFor only work on valid region");
+
+  for (Region::const_element_iterator I = R.element_begin(),
+    E = R.element_end();I != E; ++I)
+    if (!I->isSubRegion())
+      killAllTempValFor(*I->getNodeAs<BasicBlock>());
+
+  if (Loop *L = castToLoop(R, *LI))
+    killAllTempValFor(*L);
+}
+
+void ScalarDataRef::killAllTempValFor(Loop &L) {
+  PHINode *IndVar = L.getCanonicalInductionVariable();
+  Instruction *IndVarInc = L.getCanonicalInductionVariableIncrement();
+
+  assert(IndVar && IndVarInc && "Why these are null in a valid region?");
+
+  // Take away the Induction Variable and its increment
+  killTempRefFor(*IndVar);
+  killTempRefFor(*IndVarInc);
+}
+
+void ScalarDataRef::killAllTempValFor(BasicBlock &BB) {
+  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I){
+    Instruction *Inst = &*I;
+    Value *Ptr = 0;
+    // Try to extract the pointer operand
+    if (LoadInst *Load = dyn_cast<LoadInst>(Inst))
+      Ptr = Load->getPointerOperand();
+    else if (StoreInst *Store = dyn_cast<StoreInst>(Inst))
+      Ptr = Store->getPointerOperand();
+    // If any pointer operand appear
+    if (Ptr != 0) {
+      DEBUG(dbgs() << "Reduce ptr of " << Inst << "\n");
+      // The address express as affine function can be rewrite by SCEV.
+      // FIXME: Do not kill the not affine one in irregular scop?
+      if (Instruction *GEP = dyn_cast<Instruction>(Ptr))
+        killTempRefFor(*GEP);
+    }
+  }
+
+  // TODO: support switch
+  if(BranchInst *Br = dyn_cast<BranchInst>(BB.getTerminator()))
+    if (Br->getNumSuccessors() > 1)
+      if(Instruction *Cond = dyn_cast<Instruction>(Br->getCondition()))
+        // The affine condition also could be rewrite.
+        killTempRefFor(*Cond);
+}
+
+void ScalarDataRef::runOnRegion(Region &R) {
+  // Run on child region first
+  for (Region::iterator I = R.begin(), E = R.end(); I != E; ++I)
+    runOnRegion(**I);
+
+  // Kill all temporary values that can be rewrite by SCEVExpander.
+  // Only do this when R is a valid part of scop
+  if (SD->isSCoP(R))
+    killAllTempValFor(R);
+}
+
+void ScalarDataRef::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<RegionInfo>();
+  AU.addRequired<LoopInfo>();
+  AU.addRequired<DominatorTree>();
+  AU.addRequired<SCoPDetection>();
+  AU.setPreservesAll();
+}
+
 bool ScalarDataRef::runOnFunction(Function &F) {
   LI = &getAnalysis<LoopInfo>();
   DT = &getAnalysis<DominatorTree>();
+  SD = &getAnalysis<SCoPDetection>();
 
+  // Run on the region tree to preform scalar data reference analyze
+  RegionInfo &RI = getAnalysis<RegionInfo>();
+  runOnRegion(*RI.getTopLevelRegion());
+  // TODO: Translate scalar dependencies to arrays that
+  // just contain one element.
   return false;
 }
 

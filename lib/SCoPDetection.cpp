@@ -37,6 +37,8 @@ using namespace polly;
 //===----------------------------------------------------------------------===//
 // Some statistic
 
+STATISTIC(ValidRegion,"Number of regions that a valid part of SCoP");
+
 #define BADSCOP_STAT(NAME, DESC) STATISTIC(Bad##NAME##ForSCoP, \
                                            "Number of bad regions for SCoP: "\
                                            DESC)
@@ -419,13 +421,14 @@ void SCoPDetection::runOnRegion(Region &R) {
 
   // Check current region.
   // Do not check toplevel region, it is not support at this moment.
-  if ((R.getParent() == 0) || !isValidRegion(R, R))
+  if (R.getParent() == 0)
     return;
 
-  ValidRegions.insert(&R);
-
-  // Kill all temporary values that can be rewrite by SCEVExpander.
-  killAllTempValFor(R);
+  // Check the Region and remember it if it is valid
+  if (isValidRegion(R, R)) {
+    ++ValidRegion;
+    ValidRegions.insert(&R);
+  }
 }
 
 bool SCoPDetection::isValidRegion(Region &RefRegion,
@@ -465,58 +468,12 @@ bool SCoPDetection::isValidRegion(Region &RefRegion,
   return true;
 }
 
-void SCoPDetection::killAllTempValFor(const Region &R) {
-  // Do not kill tempval in not valid region
-  assert(isSCoP(R) && "killAllTempValFor only work on valid region");
-
-  for (Region::const_element_iterator I = R.element_begin(),
-      E = R.element_end();I != E; ++I)
-    if (!I->isSubRegion())
-      killAllTempValFor(*I->getNodeAs<BasicBlock>());
-
-  if (Loop *L = castToLoop(R, *LI))
-    killAllTempValFor(*L);
-}
-
-void SCoPDetection::killAllTempValFor(Loop &L) {
-  PHINode *IndVar = L.getCanonicalInductionVariable();
-  Instruction *IndVarInc = L.getCanonicalInductionVariableIncrement();
-
-  assert(IndVar && IndVarInc && "Why these are null in a valid region?");
-
-  // Take away the Induction Variable and its increment
-  SDR->killTempRefFor(*IndVar);
-  SDR->killTempRefFor(*IndVarInc);
-}
-
-void SCoPDetection::killAllTempValFor(BasicBlock &BB) {
-  for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I){
-    Instruction &Inst = *I;
-    if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
-      Value *Ptr = getPointerOperand(Inst);
-      DEBUG(dbgs() << "Reduce ptr of " << Inst << "\n");
-      // The address express as affine function can be rewrite by SCEV.
-      // FIXME: Do not kill the not affine one in irregular scop?
-      if (Instruction *GEP = dyn_cast<Instruction>(Ptr))
-        SDR->killTempRefFor(*GEP);
-    }
-  }
-
-  // TODO: support switch
-  if(BranchInst *Br = dyn_cast<BranchInst>(BB.getTerminator()))
-    if (Br->getNumSuccessors() > 1)
-      if(Instruction *Cond = dyn_cast<Instruction>(Br->getCondition()))
-        // The affine condition also could be rewrite.
-        SDR->killTempRefFor(*Cond);
-}
-
 bool SCoPDetection::runOnFunction(llvm::Function &F) {
   DT = &getAnalysis<DominatorTree>();
   PDT = &getAnalysis<PostDominatorTree>();
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   RI = &getAnalysis<RegionInfo>();
-  SDR = &getAnalysis<ScalarDataRef>();
   Region *TopRegion = RI->getTopLevelRegion();
 
   ParamSetType Params;
@@ -530,7 +487,6 @@ void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<LoopInfo>();
   AU.addRequiredTransitive<RegionInfo>();
   AU.addRequiredTransitive<ScalarEvolution>();
-  AU.addRequiredTransitive<ScalarDataRef>();
   AU.setPreservesAll();
 }
 

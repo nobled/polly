@@ -15,7 +15,6 @@
 #define POLLY_SCOP_DETECTION_H
 
 #include "polly/PollyType.h"
-#include "polly/ScalarDataRef.h"
 #include "polly/Support/AffineSCEVIterator.h"
 
 #include "llvm/Analysis/RegionInfo.h"
@@ -89,9 +88,6 @@ class SCoPDetection : public FunctionPass {
 
   // RegionInfo for regiontrees
   RegionInfo *RI;
-
-  // Capture scalar data reference.
-  ScalarDataRef *SDR;
 
   // FIXME: This is only a temporary hack, we need a standalone condition
   // analysis and construction pass.
@@ -178,12 +174,6 @@ class SCoPDetection : public FunctionPass {
   /// @return True if the loop is valid in the region.
   bool isValidLoop(Loop *L, Region &RefRegion) const;
 
-  // Kill all temporary value that can be rewrite by SCEV Expander.
-  void killAllTempValFor(const Region &R);
-
-  void killAllTempValFor(Loop &L);
-
-  void killAllTempValFor(BasicBlock &BB);
 public:
   static char ID;
   explicit SCoPDetection() : FunctionPass(&ID) {}

@@ -210,7 +210,7 @@ public:
   /// @param  BB The BasicBlock that containing the access functions.
   ///
   /// @return All access functions in BB
-  //
+  ///
   const AccFuncSetType *getAccessFunctions(const BasicBlock* BB) const {
     AccFuncMapType::const_iterator at = AccFuncMap.find(BB);
     return at != AccFuncMap.end()? &(at->second) : 0;

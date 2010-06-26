@@ -16,9 +16,12 @@
 #ifndef POLLY_SCALAR_DATA_REF
 #define POLLY_SCALAR_DATA_REF
 
+#include "polly/SCoPDetection.h"
+
 #include "llvm/Instruction.h"
 #include "llvm/Pass.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/Dominators.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/ADT/DenseMap.h"
@@ -54,6 +57,10 @@ namespace polly {
 /// instruction is killed, all its operand maybe useless, so we just perform
 /// step 2 - step 3 on all of its instruction operand.
 ///
+/// In fact, this pass preform per-region analyze, but all Scalar data
+/// reference analysis must be preform before temporary SCoP information
+///  extraction, so this pass is implemented as a FunctionPass.
+///
 class ScalarDataRef : public FunctionPass {
   // Mapping instruction to use number.
   typedef DenseMap<const Instruction*, int> SDRDataRefMapTy;
@@ -76,6 +83,8 @@ class ScalarDataRef : public FunctionPass {
   LoopInfo *LI;
   // DominatorTree to compute cyclic reference.
   DominatorTree *DT;
+  // SCoPDetection help the check the valid region for scops.
+  SCoPDetection *SD;
 
   // Clear the context.
   void clear();
@@ -91,6 +100,20 @@ class ScalarDataRef : public FunctionPass {
   // loop dependence pair?)
   bool isCyclicUse(const Instruction* def, const Instruction* use) const;
 
+
+  // Kill all temporary value that can be rewrite by SCEV Expander.
+  void killAllTempValFor(const Region &R);
+  void killAllTempValFor(Loop &L);
+  void killAllTempValFor(BasicBlock &BB);
+
+  /// @brief Hide all instructions that only contribute to the computation of
+  ///        Inst
+  ///
+  /// @param Inst The final result of all killed instruction.
+  void killTempRefFor(const Instruction& Inst);
+
+  // Run On regions to preform Scalar data reference analysis
+  void runOnRegion(Region &R);
 public:
   static char ID;
 
@@ -111,12 +134,6 @@ public:
   /// @param Inst The Instruction that reading others.
   /// @param Defs The Instructions that are read by Inst.
   void getAllUsing(Instruction &Inst, SmallVectorImpl<Value*> &Defs);
-
-  /// @brief Hide all instructions that only contribute to the computation of
-  ///        Inst
-  ///
-  /// @param Inst The final result of all killed instruction.
-  void killTempRefFor(const Instruction& Inst);
 
   /// @name FunctionPass interface
   //@{

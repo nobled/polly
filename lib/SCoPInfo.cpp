@@ -30,8 +30,6 @@
 using namespace llvm;
 using namespace polly;
 
-STATISTIC(ValidRegion,"Number of regions that a valid part of SCoP");
-
 STATISTIC(SCoPFound,  "Number of valid SCoP");
 
 STATISTIC(RichSCoPFound,   "Number of SCoP has loop inside");

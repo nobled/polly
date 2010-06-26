@@ -273,10 +273,8 @@ char TempSCoPInfo::ID = 0;
 static RegisterPass<TempSCoPInfo>
 X("polly-scop-extract", "Polly - Extract TempSCoPs");
 
-
-void TempSCoPInfo::buildAffineFunction(const SCEV *S,
-                                             SCEVAffFunc &FuncToBuild,
-                                             TempSCoP &SCoP) const {
+void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
+                                       TempSCoP &SCoP) const {
   assert(S && "S can not be null!");
 
   assert(!isa<SCEVCouldNotCompute>(S)
@@ -625,8 +623,9 @@ void TempSCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<PostDominatorTree>();
   AU.addRequiredTransitive<LoopInfo>();
   AU.addRequiredTransitive<ScalarEvolution>();
-  AU.addRequiredTransitive<ScalarDataRef>();
   AU.addRequiredTransitive<SCoPDetection>();
+  // Request ScalarDataRef pass run
+  AU.addRequiredTransitive<ScalarDataRef>();
   AU.setPreservesAll();
 }
 
