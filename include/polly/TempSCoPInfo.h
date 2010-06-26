@@ -325,10 +325,6 @@ class TempSCoPInfo : public RegionPass {
   // a given SCoP
   void buildLoopBounds(TempSCoP &SCoP);
 
-  // Capture scalar data reference. Fill the scalar "memory access" to the
-  // access function map.
-  void buildScalarDataRef(Instruction &I, AccFuncSetType &ScalarAccs);
-
 public:
   static char ID;
   explicit TempSCoPInfo() : RegionPass(&ID) {}

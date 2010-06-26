@@ -31,6 +31,7 @@ using namespace polly;
 
 //===----------------------------------------------------------------------===//
 /// ScalarDataRef implement
+typedef std::map<Instruction*, AllocaInst*> SlotMapType;
 
 void ScalarDataRef::clear() {
   DataRefs.clear();
@@ -65,11 +66,10 @@ bool ScalarDataRef::isKilledAsTempVal(const Instruction &Inst) const {
   return at != DataRefs.end() && at->second == 0;
 }
 
-void ScalarDataRef::getAllUsing(Instruction &Inst,
-                                SmallVectorImpl<Value*> &Defs) {
+bool ScalarDataRef::isUseExported(Instruction &Inst) const {
   // XXX: temporary value not using anything?
   if (isKilledAsTempVal(Inst))
-    return;
+    return false;
 
   DEBUG(dbgs() << "get the reading values of :" << Inst << "\n");
   Value *Ptr = 0;
@@ -77,6 +77,8 @@ void ScalarDataRef::getAllUsing(Instruction &Inst,
     Ptr = Ld->getPointerOperand();
   else if (StoreInst *St = dyn_cast<StoreInst>(&Inst))
     Ptr = St->getPointerOperand();
+  else if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&Inst))
+    Ptr = GEP->getPointerOperand();
 
   BasicBlock *useBB = Inst.getParent();
 
@@ -98,24 +100,22 @@ void ScalarDataRef::getAllUsing(Instruction &Inst,
 
       // If operand is from others BBs, we need to read it explicitly
       if (useBB != opInst->getParent())
-        Defs.push_back(opInst);
+        return true;
       // Or the loop carried variable
-      else if (isCyclicUse(opInst, &Inst))
-        Defs.push_back(opInst);
+      if (isCyclicUse(opInst, &Inst))
+        return true;
     }
   }
 
-  DEBUG(
-    for (SmallVector<Value*, 4>::iterator VI = Defs.begin(),
-      VE = Defs.end(); VI != VE; ++VI)
-    dbgs() << "get read: " << **VI << "\n";
-  dbgs() << "\n";
-  );
+  return false;
 }
 
 bool ScalarDataRef::isDefExported(Instruction &Inst) const {
   // A instruction have void type never exported
   if (Inst.getType()->isVoidTy())
+    return false;
+  // Do not export alloca
+  if (isa<AllocaInst>(Inst))
     return false;
 
   SDRDataRefMapTy::const_iterator at = DataRefs.find(&Inst);
@@ -240,6 +240,40 @@ void ScalarDataRef::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
 }
 
+static Instruction *getAllocaPoint(Function &F) {
+  // Insert all new allocas into entry block.
+  BasicBlock *BBEntry = &F.getEntryBlock();
+  assert(pred_begin(BBEntry) == pred_end(BBEntry) &&
+    "Entry block to function must not have predecessors!");
+  // Copy from Reg2Mem
+  // Find first non-alloca instruction and create insertion point. This is
+  // safe if block is well-formed: it always have terminator, otherwise
+  // we'll get and assertion.
+  BasicBlock::iterator I = BBEntry->begin();
+  while (isa<AllocaInst>(I)) ++I;
+
+  return
+    new BitCastInst(Constant::getNullValue(Type::getInt32Ty(F.getContext())),
+                    Type::getInt32Ty(F.getContext()),
+                    "sdf alloca point", I);
+}
+
+static AllocaInst *CreateSlotAndStore(Instruction *I, Instruction *AllocaPoint) {
+  AllocaInst *Slot = new AllocaInst(I->getType(), 0,
+                                    I->getName()+".scalar", AllocaPoint);
+
+  // Store the value to stack, after the definition of the instruction
+  assert(!isa<InvokeInst>(I) && "SCoP should not have invoke inst!");
+  BasicBlock::iterator InsertPt = I;
+  // Don't insert before any PHI nodes.
+  do
+    ++InsertPt;
+  while (isa<PHINode>(InsertPt));
+  new StoreInst(I, Slot, InsertPt);
+
+  return Slot;
+}
+
 bool ScalarDataRef::runOnFunction(Function &F) {
   LI = &getAnalysis<LoopInfo>();
   DT = &getAnalysis<DominatorTree>();
@@ -248,19 +282,80 @@ bool ScalarDataRef::runOnFunction(Function &F) {
   // Run on the region tree to preform scalar data reference analyze
   RegionInfo &RI = getAnalysis<RegionInfo>();
   runOnRegion(*RI.getTopLevelRegion());
-  // TODO: Translate scalar dependencies to arrays that
-  // just contain one element.
+
+  // Find all exported scalar dependencies
+  Instruction *AllocaPoint = getAllocaPoint(F);
+
+  typedef std::vector<Instruction*>  InstVecType;
+  InstVecType ExportedDef;
+
+  std::set<Instruction*> UsingSet;
+  for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+    Instruction &Inst = *I;
+    // Remember the export scalar definition and its uses.
+    if (isDefExported(Inst)) {
+      DEBUG(dbgs() << Inst << " Def export!\n");
+      ExportedDef.push_back(&Inst);
+    }
+    if (isUseExported(Inst))
+      UsingSet.insert(&Inst);
+  }
+
+  // Create the slot for all exported scalars
+  typedef std::vector<User*>  UserVecType;
+  UserVecType UseList;
+
+  for (InstVecType::iterator I = ExportedDef.begin(), E = ExportedDef.end();
+      I != E; ++I) {
+    Instruction *Inst = *I;
+    AllocaInst *Slot = CreateSlotAndStore(Inst, AllocaPoint);
+    UseList.insert(UseList.end(), Inst->use_begin(), Inst->use_end());
+    for (UserVecType::iterator UI = UseList.begin(), UE = UseList.end();
+        UI != UE; ++UI) {
+      Instruction *U = cast<Instruction>(*UI);
+      // Only replace the exported use.
+      if (!UsingSet.count(U))
+        continue;
+
+      if (PHINode *PN = dyn_cast<PHINode>(U)) {
+        // If this is a PHI node, we can't insert a load of the value before the
+        // use.  Instead, insert the load in the predecessor block corresponding
+        // to the incoming value.
+        //
+        // Note that if there are multiple edges from a basic block to this PHI
+        // node that we cannot multiple loads.  The problem is that the resultant
+        // PHI node will have multiple values (from each load) coming in from the
+        // same block, which is illegal SSA form.  For this reason, we keep track
+        // and reuse loads we insert.
+        std::map<BasicBlock*, Value*> Loads;
+        for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i)
+          if (PN->getIncomingValue(i) == Inst) {
+            Value *&V = Loads[PN->getIncomingBlock(i)];
+            if (V == 0) {
+              // Insert the load into the predecessor block
+              V = new LoadInst(Slot, Inst->getName()+".sload", false,
+                               PN->getIncomingBlock(i)->getTerminator());
+            }
+            PN->setIncomingValue(i, V);
+          }
+
+      } else {
+        // If this is a normal instruction, just insert a load.
+        Value *V = new LoadInst(Slot, Inst->getName()+".sload", false, U);
+        U->replaceUsesOfWith(Inst, V);
+      }
+    }
+    UseList.clear();
+  }
+
+  // The AllocaPoint is not use any more
+  AllocaPoint->eraseFromParent();
+
   return false;
 }
 
 void ScalarDataRef::releaseMemory() {
   clear();
-}
-
-void ScalarDataRef::print(raw_ostream &OS, const Module *) const {
-  for (SDRDataRefMapTy::const_iterator I = DataRefs.begin(), E = DataRefs.end();
-      I != E; ++I)
-    OS << *(I->first) << " use left " << I->second << "\n";
 }
 
 char ScalarDataRef::ID = 0;

@@ -308,6 +308,7 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
       FuncToBuild.LnrTrans.insert(*I);
       // Do not add the indvar to the parameter list
       if (!isIndVar(Var, CurRegion, CurBB, *LI, *SE)) {
+        DEBUG(dbgs() << "Non indvar: "<< *Var << '\n');
         assert(isParameter(Var, CurRegion, CurBB, *LI, *SE)
                && "Find non affine function in scop!");
         SCoP.getParamSet().insert(Var);
@@ -316,34 +317,40 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
   }
 }
 
-void TempSCoPInfo::buildScalarDataRef(Instruction &Inst,
-                                         AccFuncSetType &ScalarAccs) {
-  SmallVector<Value*, 4> Defs;
-  SDR->getAllUsing(Inst, Defs);
-  // Capture scalar read access.
-  for (SmallVector<Value*, 4>::iterator VI = Defs.begin(),
-    VE = Defs.end(); VI != VE; ++VI)
-      ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::ReadMem, *VI));
-  // And write access.
-  if (SDR->isDefExported(Inst))
-    ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::WriteMem, &Inst));
-}
-
-
 void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
-                                           AccFuncSetType &Functions) {
+                                        AccFuncSetType &Functions) {
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
     Instruction &Inst = *I;
-    // Extract scalar "memory access" functions.
-    buildScalarDataRef(Inst, Functions);
-    // and the non-scalar one.
     if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
+      // If the load for PHINode only?
+      if (Instruction *Load = dyn_cast<LoadInst>(&Inst))
+        if (Load->hasOneUse() && isa<PHINode>(Load->use_back()))
+          continue;
+
       SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(Inst);
       // Make the access function.
       Functions.push_back(SCEVAffFunc(MemAcc.second));
       // And build the access function
       buildAffineFunction(SE->getSCEV(MemAcc.first), Functions.back(), SCoP);
+    } else if (PHINode *PN = dyn_cast<PHINode>(&Inst)) {
+      // PHINode may have incomming value from Load instruction
+      for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i)
+        if (LoadInst *Load = dyn_cast<LoadInst>(PN->getIncomingValue(i))) {
+          // The load generate by scalar data reference with will always have
+          // a alloca pointer operand
+          // FIXME: we need to check pointer of this kind of load in SCoPDetect
+          if (!isa<AllocaInst>(Load->getPointerOperand()))
+            continue;
+
+          SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(*Load);
+          // Make the access function.
+          Functions.push_back(SCEVAffFunc(MemAcc.second));
+          // And build the access function
+          buildAffineFunction(SE->getSCEV(MemAcc.first), Functions.back(),
+                              SCoP);
+        }
     }
+
   }
 }
 
