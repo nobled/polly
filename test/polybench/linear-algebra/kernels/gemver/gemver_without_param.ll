@@ -131,19 +131,19 @@ return:                                           ; preds = %bb18
 ; CHECK: SCoP: bb.nph => return Parameters: (), Max Loop Depth: 2
 ; CHECK: Bounds of Loop: bb.nph:        { 1 * {0,+,1}<%bb.nph> + 0 >= 0, -1 * {0,+,1}<%bb.nph> + 3999 >= 0}
 ; CHECK:   BB: bb.nph{
-; CHECK:     Writes %.promoted[]
 ; CHECK:     Reads @w[8 * {0,+,1}<%bb.nph> + 0]
+; CHECK:     Writes %.promoted.scalar[0]
 ; CHECK:   }
 ; CHECK:   Bounds of Loop: bb16:        { 1 * {0,+,1}<%bb16> + 0 >= 0, -1 * {0,+,1}<%bb16> + 3999 >= 0}
 ; CHECK:     BB: bb16{
-; CHECK:       Reads %.promoted[]
-; CHECK:       Reads %27[]
+; CHECK:       Reads %.promoted.scalar[0]
+; CHECK:       Reads %.scalar64[0]
 ; CHECK:       Reads @A[8 * {0,+,1}<%bb16> + 32000 * {0,+,1}<%bb.nph> + 0]
-; CHECK:       Reads %30[]
+; CHECK:       Reads %.scalar67[0]
 ; CHECK:       Reads @x[8 * {0,+,1}<%bb16> + 0]
-; CHECK:       Writes %27[]
+; CHECK:       Writes %.scalar64[0]
 ; CHECK:     }
 ; CHECK:   BB: bb18{
-; CHECK:     Reads %27[]
+; CHECK:     Reads %.scalar64[0]
 ; CHECK:     Writes @w[8 * {0,+,1}<%bb.nph> + 0]
 ; CHECK:   }

@@ -74,20 +74,20 @@ return:                                           ; preds = %bb9
 ; CHECK:   }
 ; CHECK:   Bounds of Loop: bb4: { 1 * {0,+,1}<%bb4> + 0 >= 0, -1 * {0,+,1}<%bb4> + 7999 >= 0}
 ; CHECK:     BB: bb4{
-; CHECK:       Reads %4[]
+; CHECK:       Reads %.scalar[0]
 ; CHECK:       Reads @A[8 * {0,+,1}<%bb4> + 64000 * {0,+,1}<%bb.nph> + 0]
 ; CHECK:       Reads @x[8 * {0,+,1}<%bb4> + 0]
-; CHECK:       Writes %4[]
+; CHECK:       Writes %.scalar[0]
 ; CHECK:     }
 ; CHECK:   BB: bb8.loopexit{
-; CHECK:     Reads %4[]
-; CHECK:     Writes %.lcssa[]
+; CHECK:     Reads %.scalar[0]
+; CHECK:     Writes %.lcssa.scalar[0]
 ; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph> + 0]
 ; CHECK:   }
 ; CHECK:   Bounds of Loop: bb7: { 1 * {0,+,1}<%bb7> + 0 >= 0, -1 * {0,+,1}<%bb7> + 7999 >= 0}
 ; CHECK:     BB: bb7{
 ; CHECK:       Reads @y[8 * {0,+,1}<%bb7> + 0]
 ; CHECK:       Reads @A[64000 * {0,+,1}<%bb.nph> + 8 * {0,+,1}<%bb7> + 0]
-; CHECK:       Reads %.lcssa[]
+; CHECK:       Reads %.lcssa.scalar[0]
 ; CHECK:       Writes @y[8 * {0,+,1}<%bb7> + 0]
 ; CHECK:     }

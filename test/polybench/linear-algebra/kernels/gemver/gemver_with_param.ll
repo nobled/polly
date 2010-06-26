@@ -141,17 +141,17 @@ return:                                           ; preds = %bb18, %bb19.prehead
 ; CHECK: SCoP: bb.nph40 => bb10.preheader       Parameters: (%n, ), Max Loop Depth: 2
 ; CHECK: Bounds of Loop: bb.nph40:      { 1 * {0,+,1}<%bb.nph40> + 0 >= 0, 1 * %n + -1 * {0,+,1}<%bb.nph40> + -1 >= 0}
 ; CHECK:   BB: bb.nph40{
-; CHECK:     Writes %1[]
 ; CHECK:     Reads @u1[8 * {0,+,1}<%bb.nph40> + 0]
-; CHECK:     Writes %2[]
+; CHECK:     Writes %.scalar51[0]
 ; CHECK:     Reads @u2[8 * {0,+,1}<%bb.nph40> + 0]
+; CHECK:     Writes %.scalar53[0]
 ; CHECK:   }
 ; CHECK:   Bounds of Loop: bb1: { 1 * {0,+,1}<%bb1> + 0 >= 0, 1 * %n + -1 * {0,+,1}<%bb1> + -1 >= 0}
 ; CHECK:     BB: bb1{
 ; CHECK:       Reads @A[32000 * {0,+,1}<%bb.nph40> + 8 * {0,+,1}<%bb1> + 0]
 ; CHECK:       Reads @v1[8 * {0,+,1}<%bb1> + 0]
-; CHECK:       Reads %1[]
+; CHECK:       Reads %.scalar51[0]
 ; CHECK:       Reads @v2[8 * {0,+,1}<%bb1> + 0]
-; CHECK:       Reads %2[]
+; CHECK:       Reads %.scalar53[0]
 ; CHECK:       Writes @A[32000 * {0,+,1}<%bb.nph40> + 8 * {0,+,1}<%bb1> + 0]
 ; CHECK:     }
