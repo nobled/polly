@@ -1,6 +1,6 @@
-; RUN: opt -indvars -polly-scop-detect -print-top-scop-only  -analyze %s | FileCheck %s -check-prefix=INDVARS
-; RUN: opt -polly-scop-detect -print-top-scop-only  -analyze %s | FileCheck %s
-; RUN: opt -O3 -indvars -polly-scop-detect -polly-print-temp-scop-in-detail -print-top-scop-only -analyze %s | FileCheck %s -check-prefix=WITHAF
+; RUN: opt -indvars -polly-scop-extract -print-top-scop-only  -analyze %s | FileCheck %s -check-prefix=INDVARS
+; RUN: opt -polly-scop-extract -print-top-scop-only  -analyze %s | FileCheck %s
+; RUN: opt -O3 -indvars -polly-scop-extract -polly-print-temp-scop-in-detail -print-top-scop-only -analyze %s | FileCheck %s -check-prefix=WITHAF
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;

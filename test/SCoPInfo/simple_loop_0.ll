@@ -1,5 +1,5 @@
-; RUN: opt -indvars -polly-scop-detect -polly-print-temp-scop-in-detail -print-top-scop-only -analyze %s | FileCheck %s -check-prefix=WITHAF
-; RUN: opt -polly-scop-detect  -analyze %s | FileCheck %s
+; RUN: opt -indvars -polly-scop-extract -polly-print-temp-scop-in-detail -print-top-scop-only -analyze %s | FileCheck %s -check-prefix=WITHAF
+; RUN: opt -polly-scop-extract  -analyze %s | FileCheck %s
 
 ;void f(long a[], long N) {
 ;  long i;

@@ -1,5 +1,5 @@
-; RUN: opt -indvars -polly-scop-detect  -analyze %s | FileCheck %s
-; RUN: opt -polly-scop-detect  -analyze %s | FileCheck %s
+; RUN: opt -indvars -polly-scop-extract  -analyze %s | FileCheck %s
+; RUN: opt -polly-scop-extract  -analyze %s | FileCheck %s
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;
@@ -43,4 +43,5 @@ return:                                           ; preds = %bb3, %entry
 
 declare i64 @rnd(...)
 
-; CHECK: No SCoP found!
+; CHECK-NOT: SCoP:
+; CHECK: Not Valid SCoP!

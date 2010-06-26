@@ -1,4 +1,4 @@
-; RUN: opt -O3 -indvars -polly-scop-detect -polly-print-temp-scop-in-detail -print-top-scop-only  -analyze %s | FileCheck %s
+; RUN: opt -O3 -indvars -polly-scop-extract -polly-print-temp-scop-in-detail -print-top-scop-only  -analyze %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-linux-gnu"
@@ -40,9 +40,6 @@ bb2:                                              ; preds = %bb, %entry
   ret i64 %k.0.lcssa
 }
 
-; CHECK: Printing analysis 'Canonicalize Induction Variables':
-; CHECK: Pass::print not implemented for pass: 'Canonicalize Induction Variables'!
-; CHECK: Printing analysis 'Polly - Detect SCoPs' for function 'f':
 ; CHECK: SCoP: bb => bb2.loopexit       Parameters: (%n, ), Max Loop Depth: 1
 ; CHECK: Bounds of Loop: bb:    { 1 * {0,+,1}<%bb> + 0 >= 0, -1 * {0,+,1}<%bb> + 1 * %n + -2 >= 0}
 ; CHECK:   BB: bb{
