@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/ScalarDataRef.h"
+#include "polly/Support/SCoPHelper.h"
 
 #include "llvm/Use.h"
 #include "llvm/Analysis/RegionIterator.h"

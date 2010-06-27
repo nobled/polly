@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/SCoPDetection.h"
+#include "polly/Support/SCoPHelper.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/AffineSCEVIterator.h"
 
@@ -62,134 +63,6 @@ BADSCOP_STAT(AffFunc,     "Expression not affine");
 
 BADSCOP_STAT(Other,       "Others");
 
-//===----------------------------------------------------------------------===//
-// Temporary Hack for extended region tree.
-
-// Cast the region to loop if there is a loop have the same header and exit.
-Loop *polly::castToLoop(const Region &R, LoopInfo &LI) {
-  BasicBlock *entry = R.getEntry();
-
-  if (!LI.isLoopHeader(entry))
-    return 0;
-
-  Loop *L = LI.getLoopFor(entry);
-
-  BasicBlock *exit = L->getExitBlock();
-
-  // Is the loop with multiple exits?
-  if (!exit) return 0;
-
-  if (exit != R.getExit()) {
-    // SubRegion/ParentRegion with the same entry.
-    assert((R.getNode(R.getEntry())->isSubRegion()
-            || R.getParent()->getEntry() == entry)
-           && "Expect the loop is the smaller or bigger region");
-    return 0;
-  }
-
-  return L;
-}
-
-// Get the Loop containing all bbs of this region, for ScalarEvolution
-// "getSCEVAtScope"
-Loop *polly::getScopeLoop(const Region &R, LoopInfo &LI) {
-  const Region *tempR = &R;
-  while (tempR) {
-    if (Loop *L = castToLoop(*tempR, LI))
-      return L;
-
-    tempR = tempR->getParent();
-  }
-  return 0;
-}
-
-static Value *getPointerOperand(Instruction &Inst) {
-  assert((isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst))
-    && "Only accept Load or Store!");
-
-  if (LoadInst *load = dyn_cast<LoadInst>(&Inst)) {
-    return load->getPointerOperand();
-  } else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
-    return store->getPointerOperand();
-  } else
-    llvm_unreachable("Already check in the assert");
-
-  return 0;
-}
-
-//===----------------------------------------------------------------------===//
-// Helper functions
-
-// Helper function to check parameter
-bool polly::isParameter(const SCEV *Var, Region &RefRegion, BasicBlock *CurBB,
-                        LoopInfo &LI, ScalarEvolution &SE) {
-  assert(Var && CurBB && "Var and CurBB can not be null!");
-  // Find the biggest loop that is contained by RefR.
-  Loop *topL =  RefRegion.outermostLoopInRegion(&LI, CurBB);
-
-  // The parameter is always loop invariant.
-  if (!Var->isLoopInvariant(topL))
-      return false;
-
-  if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)) {
-    DEBUG(dbgs() << "Find AddRec: " << *AddRec
-      << " at region: " << RefRegion.getNameStr() << "\n");
-    // The indvar only expect come from outer loop
-    // Or from a loop whose backend taken count could not compute.
-    assert((AddRec->getLoop()->contains(getScopeLoop(RefRegion, LI))
-            || isa<SCEVCouldNotCompute>(
-                 SE.getBackedgeTakenCount(AddRec->getLoop())))
-           && "Where comes the indvar?");
-    return true;
-  } else if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(Var)) {
-    // Some SCEVUnknown will depend on loop variant or conditions:
-    // 1. Phi node depend on conditions
-    if (PHINode *phi = dyn_cast<PHINode>(U->getValue()))
-      // If the phinode contained in the non-entry block of current region,
-      // it is not invariant but depend on conditions.
-      // TODO: maybe we need special analysis for phi node?
-      if (RefRegion.contains(phi) && (RefRegion.getEntry() != phi->getParent()))
-        return false;
-    // TODO: add others conditions.
-    return true;
-  }
-  // FIXME: Should we accept casts?
-  else if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var))
-    return isParameter(Cast->getOperand(), RefRegion, CurBB, LI, SE);
-  // Not a SCEVUnknown.
-  return false;
-}
-
-bool polly::isIndVar(const SCEV *Var, Region &RefRegion, BasicBlock *CurBB,
-                     LoopInfo &LI, ScalarEvolution &SE) {
-  assert(RefRegion.contains(CurBB)
-         && "Expect reference region contain current region!");
-  const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var);
-  // Not an Induction variable
-  if (!AddRec) return false;
-
-  // If the addrec is the indvar of any loop that containing current region
-  Loop *curL = LI.getLoopFor(CurBB),
-       *topL = RefRegion.outermostLoopInRegion(curL),
-       *recL = const_cast<Loop*>(AddRec->getLoop());
-  // If recL contains curL, that means curL will not be null, so topL will not
-  // be null because topL will at least contains curL.
-  if (recL->contains(curL) && topL->contains(recL))
-    return true;
-
-  // If the loop of addrec is not containing current region, that maybe:
-  // 1. The loop is containing reference region and this expect to
-  //    recognize as parameter
-  // 2. The loop is containing by reference region, but not containing the
-  //    current region, this because the loop backedge taken count is could
-  //    not compute because Var is expect to get by "getSCEVAtScope", and
-  //    this means reference region is not valid
-  assert((AddRec->getLoop()->contains(getScopeLoop(RefRegion, LI))
-          || isa<SCEVCouldNotCompute>(
-            SE.getBackedgeTakenCount(AddRec->getLoop())))
-        && "getAtScope not work?");
-  return false;
-}
 
 //===----------------------------------------------------------------------===//
 // SCoPDetection Implementation.

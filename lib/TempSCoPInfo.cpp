@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/TempSCoPInfo.h"
+#include "polly/Support/SCoPHelper.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/AffineSCEVIterator.h"
 

@@ -14,6 +14,7 @@
 #include "polly/TempSCoPInfo.h"
 #include "polly/SCoPInfo.h"
 #include "polly/Support/GmpConv.h"
+#include "polly/Support/SCoPHelper.h"
 
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/RegionIterator.h"

@@ -16,7 +16,7 @@
 
 #include "polly/ClastParser.h"
 #include "polly/Support/GmpConv.h"
-#include "polly/Support/IRHelper.h"
+#include "polly/Support/SCoPHelper.h"
 #include "polly/Support/BasicBlockEdge.h"
 #include "polly/CLooG.h"
 #include "llvm/ADT/APInt.h"

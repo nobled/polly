@@ -11,8 +11,8 @@ add_polly_library(LLVMPolly
   ScalarDataRef.cpp
   TempSCoPInfo.cpp
   Support/GmpConv.cpp
-  Support/IRHelper.cpp
   Support/AffSCEVItTester.cpp
+  Support/SCoPHelper.cpp
   )
 
 if (OPENSCOP_FOUND)

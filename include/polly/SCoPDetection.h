@@ -36,36 +36,6 @@ class SCoPDetection;
 class SCEVAffFunc;
 
 //===----------------------------------------------------------------------===//
-/// Temporary Hack for extended regiontree.
-///
-/// @brief Cast the region to loop.
-///
-/// @param R  The Region to be casted.
-/// @param LI The LoopInfo to help the casting.
-///
-/// @return If there is a loop have the same entry and exit, return the loop,
-///         otherwise, return null.
-Loop *castToLoop(const Region &R, LoopInfo &LI);
-
-/// @brief Get the Loop containing all bbs of this region,
-///
-/// This function is mainly use for get the loop for ScalarEvolution
-/// "getSCEVAtScope"
-///
-/// @param R  The "Scope"
-/// @param LI The LoopInfo to help the casting.
-///
-/// @return If there is a loop have the same entry and exit with R or its parent,
-///          return the loop, otherwise, return null.
-Loop *getScopeLoop(const Region &R, LoopInfo &LI);
-
-bool isParameter(const SCEV *Var, Region &RefRegion, BasicBlock *CurBB,
-                 LoopInfo &LI, ScalarEvolution &SE);
-
-bool isIndVar(const SCEV *Var, Region &RefRegion, BasicBlock *CurBB,
-              LoopInfo &LI, ScalarEvolution &SE);
-
-//===----------------------------------------------------------------------===//
 /// @brief The Function Pass to detection Static control part in llvm function.
 ///
 /// Please run "Canonicalize Induction Variables" pass(-indvars) before this

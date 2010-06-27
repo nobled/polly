@@ -12,7 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/CLooG.h"
-#include "polly/Support/IRHelper.h"
+#include "polly/Support/SCoPHelper.h"
 #include "llvm/Analysis/RegionPass.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/Debug.h"
