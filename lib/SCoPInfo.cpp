@@ -98,7 +98,7 @@ polly_set *buildIterateDomain(SCoP &SCoP, TempSCoP &tempSCoP,
   polly_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
 
 
-  // isl int for iterate domain construction
+  // isl int for iteration domain construction.
   isl_int v;
   isl_int_init(v);
 
@@ -110,19 +110,18 @@ polly_set *buildIterateDomain(SCoP &SCoP, TempSCoP &tempSCoP,
     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
     bset = isl_basic_set_add_constraint(bset, c);
 
-    // Build upper bound
+    // Build upper bound.
     c = bound.toConditionConstrain(SCoP.getCtx(),
       dim, IndVars, SCoP.getParams());
     isl_int_set_si(v, -1);
     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
     bset = isl_basic_set_add_constraint(bset, c);
   }
-  // v is not used any more
   isl_int_clear(v);
 
   polly_set *dom = isl_set_from_basic_set(bset);
 
-  // Build the BB condition constrains, by travel up the region tree.
+  // Build the BB condition constrains, by traveling up the region tree.
   // NOTE: These are only a temporary hack.
   const Region *TopR = tempSCoP.getMaxRegion().getParent(),
                *CurR = &CurRegion;
@@ -132,7 +131,8 @@ polly_set *buildIterateDomain(SCoP &SCoP, TempSCoP &tempSCoP,
     // Skip when multiple regions share the same entry
     if (CurEntry != CurR->getEntry())
       if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
-        for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end(); I != E; ++I) {
+        for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end();
+            I != E; ++I) {
           polly_set *c = (*I).toConditionSet(SCoP.getCtx(), dim,
             IndVars, SCoP.getParams());
           dom = isl_set_intersect(dom, c);
@@ -186,7 +186,7 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
 
   polly_ctx *ctx = parent.getCtx();
 
-  // Build the iterate domain
+  // Build the iteration domain
   Domain = buildIterateDomain(parent, tempSCoP, CurRegion, *BB,
                                              SE, SIVS);
 
@@ -330,7 +330,7 @@ SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &SE)
   // Initialize the scattering function
   Scatter.assign(numScatter, 0);
 
-  // Build the iterate domain, access functions and scattering functions
+  // Build the iteration domain, access functions and scattering functions
   // by traverse the region tree.
   buildSCoP(tempSCoP, getRegion(), NestLoops, Scatter, LI, SE);
 

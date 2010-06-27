@@ -55,7 +55,7 @@ Loop *polly::castToLoop(const Region &R, LoopInfo &LI) {
 }
 
 // Get the Loop containing all bbs of this region, for ScalarEvolution
-// "getSCEVAtScope"
+// "getSCEVAtScope".
 Loop *polly::getScopeLoop(const Region &R, LoopInfo &LI) {
   const Region *tempR = &R;
   while (tempR) {

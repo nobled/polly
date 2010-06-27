@@ -42,7 +42,7 @@ namespace polly {
 ///
 /// But the dependence for instructions that only help to compute the affine
 /// function of conditions or address is no need to consider because we
-/// already express them in access functions and iterate domain, so what we
+/// already express them in access functions and iteration domain, so what we
 /// need to do is "kill" them and not expose them as scalar access functions.
 ///
 /// The ScalarDataRef pass to compute which instructions should be expose as

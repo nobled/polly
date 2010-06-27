@@ -107,7 +107,7 @@ struct codegenctx : cp_ctx {
 // @param UB      The upper bound of the loop iv.
 // @param Stride  The number by which the loop iv is incremented after every
 //                iteration.
-void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
+static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
                 PHINode*& IV, BasicBlock*& AfterBB, Value*& IncrementedIV,
                 DominatorTree *DT) {
   Function *F = Builder->GetInsertBlock()->getParent();
@@ -157,8 +157,8 @@ void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
 //                For new statements a relation old->new is inserted in this
 //                map.
 //
-void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
-             DominatorTree *DT, const Region *R, ScalarEvolution *SE) {
+static void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
+                    DominatorTree *DT, const Region *R, ScalarEvolution *SE) {
   Function *F = Builder->GetInsertBlock()->getParent();
   LLVMContext &Context = F->getContext();
 

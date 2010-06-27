@@ -52,7 +52,7 @@ SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, ScalarEvolution *S
   assert(S && "S can not be null!");
 
   assert(!isa<SCEVCouldNotCompute>(S)
-    && "Un Expect broken affine function in SCoP!");
+    && "Broken affine function in SCoP");
 
   for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
     I != E; ++I) {
@@ -62,33 +62,16 @@ SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, ScalarEvolution *S
 
       const SCEV *Var = I->first;
       // Extract the constant part
-      if(isa<SCEVConstant>(Var))
+      if (isa<SCEVConstant>(Var))
         // Add the translation component
         TransComp = I->second;
-      else if (Var->getType()->isPointerTy()) { // Extract the base address
+      else if (Var->getType()->isPointerTy()) { // Extract the base address.
         const SCEVUnknown *Addr = dyn_cast<SCEVUnknown>(Var);
         assert(Addr && "Why we got a broken scev?");
         BaseAddr = Addr->getValue();
-      } else // Extract others affine component
+      } else // Extract other affine component.
         LnrTrans.insert(*I);
   }
-}
-
-static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
-  assert((isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst))
-    && "Only accept Load or Store!");
-
-  // Try to handle the load/store.
-  Value *Pointer = getPointerOperand(Inst);
-  SCEVAffFunc::SCEVAffFuncType AccType = SCEVAffFunc::None;
-
-  if (isa<LoadInst>(Inst))
-    AccType = SCEVAffFunc::ReadMem;
-  else //Else it must be a StoreInst
-    AccType = SCEVAffFunc::WriteMem;
-
-  assert(Pointer && "Why pointer is null?");
-  return SCEVAffFunc::MemAccTy(Pointer, AccType);
 }
 
 static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative) {
@@ -135,6 +118,7 @@ polly_constraint *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
 
    return c;
 }
+
 polly_set *SCEVAffFunc::toConditionSet(polly_ctx *ctx,
                          polly_dim *dim,
                          const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
@@ -247,7 +231,7 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
                            LoopInfo *LI, const Region *CurR,
                            unsigned ind) const {
   // Print the loopbounds if current region is a loop,
-  // in form of IV >= 0, LoopCount - IV >= 0
+  // In form of IV >= 0, LoopCount - IV >= 0.
   LoopBoundMapType::const_iterator at = LoopBounds.find(castToLoop(*CurR, *LI));
   if (at != LoopBounds.end()) {
     const Loop *L = at->first;
@@ -256,15 +240,15 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
     // IV >= LB ==> IV - LB >= 0 and LB is 0 in canonical loop.
     const SCEV *LB = SIV;
     const SCEV *UB = SE->getBackedgeTakenCount(L);
-    // FIXME: Is this necessary?
-    UB = SE->getSCEVAtScope(UB, L);
     // Match the type, the type of BackedgeTakenCount mismatch when we have
     // something like this in loop exit:
+    //
     //    br i1 false, label %for.body, label %for.end
+    //
     // In fact, we could do some optimization before SCoPDetecion, so we do not
     // need to worry about this.
     // Be careful of the sign of the upper bounds, if we meet iv <= -1
-    // this means the iterate domain is empty since iv >= 0
+    // this means the iteration domain is empty since iv >= 0
     // but if we do a zero extend, this will make a non-empty domain
     UB = SE->getTruncateOrSignExtend(UB, SIV->getType());
     // IV <= UB ==> UB - IV >= 0
@@ -272,7 +256,6 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
     //
     SCEVAffFunc lb(LB, SCEVAffFunc::GE, SE), ub(UB, SCEVAffFunc::GE, SE);
 
-    // Print the loop bounds if these is an loops
     OS.indent(ind) << "Bounds of Loop: " << at->first->getHeader()->getName()
       << ":\t{ ";
     lb.print(OS,SE);
@@ -380,28 +363,28 @@ void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
       if (Instruction *Load = dyn_cast<LoadInst>(&Inst))
         if (Load->hasOneUse() && isa<PHINode>(Load->use_back()))
           continue;
+      // Create the SCEVAffFunc.
+      if (isa<LoadInst>(Inst))
+        Functions.push_back(SCEVAffFunc(SCEVAffFunc::ReadMem));
+      else //Else it must be a StoreInst.
+        Functions.push_back(SCEVAffFunc(SCEVAffFunc::WriteMem));
 
-      SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(Inst);
-      // Make the access function.
-      Functions.push_back(SCEVAffFunc(MemAcc.second));
-      // And build the access function
-      buildAffineFunction(SE->getSCEV(MemAcc.first), Functions.back(), SCoP);
+      Value *Ptr = getPointerOperand(Inst);
+      buildAffineFunction(SE->getSCEV(Ptr), Functions.back(), SCoP);
     } else if (PHINode *PN = dyn_cast<PHINode>(&Inst)) {
       // PHINode may have incomming value from Load instruction
       for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i)
         if (LoadInst *Load = dyn_cast<LoadInst>(PN->getIncomingValue(i))) {
           // The load generate by scalar data reference with will always have
-          // a alloca pointer operand
-          // FIXME: we need to check pointer of this kind of load in SCoPDetect
+          // a alloca pointer operand.
+          // FIXME: we need to check pointer of this kind of load in SCoPDetect.
           if (!isa<AllocaInst>(Load->getPointerOperand()))
             continue;
 
-          SCEVAffFunc::MemAccTy MemAcc = extractMemoryAccess(*Load);
-          // Make the access function.
-          Functions.push_back(SCEVAffFunc(MemAcc.second));
-          // And build the access function
-          buildAffineFunction(SE->getSCEV(MemAcc.first), Functions.back(),
-                              SCoP);
+          // Make the access function, this is a load instruction.
+          Functions.push_back(SCEVAffFunc(SCEVAffFunc::ReadMem));
+          buildAffineFunction(SE->getSCEV(getPointerOperand(*Load)),
+                              Functions.back(), SCoP);
         }
     }
 
@@ -413,7 +396,7 @@ void TempSCoPInfo::buildLoopBound(TempSCoP &SCoP) {
     const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
     std::pair<LoopBoundMapType::iterator, bool> at =
             LoopBounds.insert(std::make_pair(L, SCEVAffFunc(SCEVAffFunc::GE)));
-    // Build the affine function for loop count
+    // Build the affine function for loop count.
     buildAffineFunction(LoopCount, at.first->second, SCoP);
 
     // Increase the loop depth because we found a loop.

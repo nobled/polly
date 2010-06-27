@@ -56,7 +56,7 @@ public:
   };
 
 private:
-  // The access function map iterate domain to memory location.
+  // The access function map iteration domain to memory location.
   PointerIntPair<polly_map*, 1, AccessType> AccFunc;
 
   // Base address and access type.
@@ -159,9 +159,9 @@ public:
 
   ~SCoPStmt();
 
-  /// @brief Get the iterate domain of this SCoPStmt.
+  /// @brief Get the iteration domain of this SCoPStmt.
   ///
-  /// @return The iterate domain of this SCoPStmt.
+  /// @return The iteration domain of this SCoPStmt.
   polly_set *getDomain() const { return Domain; }
 
   /// @brief Get the scattering function of this SCoPStmt.

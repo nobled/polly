@@ -27,7 +27,7 @@ namespace llvm {
 }
 
 namespace polly {
-  // Helper function for SCoP
+  // Helper function for SCoP.
   //===----------------------------------------------------------------------===//
   /// Temporary Hack for extended regiontree.
   ///
@@ -36,24 +36,24 @@ namespace polly {
   /// @param R  The Region to be casted.
   /// @param LI The LoopInfo to help the casting.
   ///
-  /// @return If there is a loop have the same entry and exit, return the loop,
-  ///         otherwise, return null.
+  /// @return If there is a a loop that has the same entry and exit as the region,
+  ///         return the loop, otherwise, return null.
   llvm::Loop *castToLoop(const llvm::Region &R, llvm::LoopInfo &LI);
 
   /// @brief Get the Loop containing all bbs of this region,
   ///
-  /// This function is mainly use for get the loop for ScalarEvolution
-  /// "getSCEVAtScope"
+  /// This function is mainly used to get the loop for ScalarEvolution
+  /// "getSCEVAtScope".
   ///
-  /// @param R  The "Scope"
+  /// @param R  The "Scope".
   /// @param LI The LoopInfo to help the casting.
   ///
-  /// @return If there is a loop have the same entry and exit with R or its parent,
-  ///          return the loop, otherwise, return null.
+  /// @return If there is a loop that has the same entry and exit as R or its
+  ///          parent, return the loop, otherwise, return null.
   llvm::Loop *getScopeLoop(const llvm::Region &R, llvm::LoopInfo &LI);
 
   //===----------------------------------------------------------------------===//
-  // Functions for checking affine functions
+  // Functions for checking affine functions.
 
   bool isParameter(const llvm::SCEV *Var, llvm::Region &RefRegion,
     llvm::BasicBlock *CurBB, llvm::LoopInfo &LI, llvm::ScalarEvolution &SE);
@@ -63,7 +63,7 @@ namespace polly {
 
   llvm::Value *getPointerOperand(llvm::Instruction &Inst);
 
-  // Helper function for LLVM-IR about SCoP
+  // Helper function for LLVM-IR about SCoP.
   llvm::BasicBlock *createSingleEntryEdge(llvm::Region *R, llvm::Pass *P);
   void createSingleExitEdge(llvm::Region *R, llvm::Pass *P);
 }

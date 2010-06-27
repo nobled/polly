@@ -82,22 +82,30 @@ public:
   explicit SCEVAffFunc(SCEVAffFuncType Type, Value* baseAddr = 0)
     : TransComp(0), BaseAddr(baseAddr), FuncType(Type) {}
 
-  explicit SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
-                       ScalarEvolution *SE);
+  SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, ScalarEvolution *SE);
 
-  /// @brief Build a loop bound constrain from an affine function.
+  /// @brief Build a constraint from an affine condition
+  ///       (affine function + inequality modifier ).
   ///
   /// @param ctx      The context of isl objects.
-  /// @param dim      The dimension of the the constrain.
+  /// @param dim      The dimension of the constraint.
   /// @param IndVars  The induction variable may appear in the affine function.
-  /// @param Params   The parameters may appear in the affine funcion.
-  /// @param isLower  Is this the lower bound?
+  /// @param Params   The parameters may appear in the affine function.
   ///
-  /// @return         The isl_constrain represent by this affine function.
+  /// @return         The isl_constrain represented by this affine function.
   polly_constraint *toConditionConstrain(polly_ctx *ctx, polly_dim *dim,
     const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
 
+  /// @brief Build a constraint from an affine condition
+  ///       (affine function + inequality modifier ).
+  ///
+  /// @param ctx      The context of isl objects.
+  /// @param dim      The dimension of the isl set.
+  /// @param IndVars  The induction variable may appear in the affine function.
+  /// @param Params   The parameters may appear in the affine function.
+  ///
+  /// @return         The isl_set represented by this affine function.
   polly_set *toConditionSet(polly_ctx *ctx, polly_dim *dim,
     const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
@@ -130,8 +138,12 @@ public:
 // The condition of a Basicblock, combine brcond with "And" operator.
 typedef SmallVector<SCEVAffFunc, 4> BBCond;
 
-/// Mapping loops to its bounds.
-/// The backedge taken count already enough as we only allow canonical loop.
+/// Maps from a loop to the affine function expressing its backedge taken count.
+/// The backedge taken count already enough to express iteration domain as we
+/// only allow loops with canonical induction variable.
+/// A canonical induction variable is:
+/// an integer recurrence that starts at 0 and increments by one each time
+/// through the loop.
 typedef std::map<const Loop*, SCEVAffFunc> LoopBoundMapType;
 
 /// Mapping BBs to its condition constrains
@@ -158,7 +170,7 @@ class TempSCoP {
   // The max loop depth of this SCoP
   unsigned MaxLoopDepth;
 
-  // Remember the bounds of loops, to help us build iterate domain of BBs.
+  // Remember the bounds of loops, to help us build iteration domain of BBs.
   const LoopBoundMapType &LoopBounds;
   const BBCondMapType &BBConds;
 
@@ -275,7 +287,7 @@ class TempSCoPInfo : public RegionPass {
   DominatorTree *DT;
   PostDominatorTree *PDT;
 
-  // Remember the bounds of loops, to help us build iterate domain of BBs.
+  // Remember the bounds of loops, to help us build iteration domain of BBs.
   LoopBoundMapType LoopBounds;
 
   // And also Remember the constrains for BBs
