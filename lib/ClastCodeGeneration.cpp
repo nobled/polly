@@ -24,6 +24,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/IRBuilder.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
@@ -547,6 +548,7 @@ class ClastCodeGeneration : public RegionPass {
   DominatorTree *DT;
   ScalarEvolution *SE;
   CLooG *C;
+  LoopInfo *LI;
 
   public:
   static char ID;
@@ -598,6 +600,7 @@ class ClastCodeGeneration : public RegionPass {
   void createIndependentBlocks(BasicBlock *BB) {
     std::vector<Instruction*> work;
     SCEVExpander Rewriter(*SE);
+    Rewriter.disableInstructionHoisting();
 
     for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
          II != IE; ++II) {
@@ -608,9 +611,9 @@ class ClastCodeGeneration : public RegionPass {
           work.push_back(Inst);
       }
 
-    while (!work.empty()) {
-      Instruction *Inst = work.back();
-      work.pop_back();
+    for (std::vector<Instruction*>::iterator II = work.begin(), IE = work.end();
+         II != IE; ++II) {
+      Instruction *Inst = *II;
 
       for (Instruction::op_iterator UI = Inst->op_begin(),
            UE = Inst->op_end(); UI != UE; ++UI) {
@@ -630,20 +633,46 @@ class ClastCodeGeneration : public RegionPass {
       createIndependentBlocks((*SI)->getBasicBlock());
   }
 
+  bool isIV(Instruction *I) {
+    Loop *L = LI->getLoopFor(I->getParent());
+
+    return L && I == L->getCanonicalInductionVariable();
+  }
+
   bool isIndependentBlock(const Region *R, BasicBlock *BB) {
     for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
          II != IE; ++II) {
       Instruction *Inst = &*II;
 
-      if (Inst->use_begin() != Inst->use_end())
+      if (isIV(Inst))
         continue;
+
+      // A value inside the SCoP is referenced outside.
+      for (Instruction::use_iterator UI = Inst->use_begin(),
+           UE = Inst->use_end(); UI != UE; ++UI) {
+        Value *V = *UI;
+        Instruction *Use = dyn_cast<Instruction>(V);
+
+        if (Use && !R->contains(Use)) {
+          DEBUG(dbgs() << "Instruction not independent:\n");
+          DEBUG(dbgs() << "Instruction used outside the SCoP!\n");
+          DEBUG(Inst->print(dbgs()));
+          DEBUG(dbgs() << "\n");
+          return false;
+        }
+      }
 
       for (Instruction::op_iterator UI = Inst->op_begin(),
            UE = Inst->op_end(); UI != UE; ++UI) {
         Instruction *Op = dyn_cast<Instruction>(&(*UI));
 
-        if (Op && R->contains(Op) && !(Op->getParent() == BB)) {
-          Inst->getParent()->dump();
+        if (Op && R->contains(Op) && !(Op->getParent() == BB)
+            && !isIV(Op)) {
+          DEBUG(dbgs() << "Instruction not independent:\n");
+          DEBUG(dbgs() << "Uses invalid operator\n");
+          DEBUG(Inst->print(dbgs()));
+          DEBUG(dbgs() << "\n");
+          DEBUG(dbgs() << "Invalid operator is: " << Op->getNameStr() << "\n");
           return false;
         }
       }
@@ -665,6 +694,7 @@ class ClastCodeGeneration : public RegionPass {
     S = getAnalysis<SCoPInfo>().getSCoP();
     DT = &getAnalysis<DominatorTree>();
     SE = &getAnalysis<ScalarEvolution>();
+    LI = &getAnalysis<LoopInfo>();
 
     if (!S) {
       C = 0;
@@ -678,7 +708,6 @@ class ClastCodeGeneration : public RegionPass {
       return false;
     }
 
-    createSeSeEdges(R);
     createIndependentBlocks(S);
 
     if (!hasIndependentBlocks(S)) {
@@ -687,6 +716,8 @@ class ClastCodeGeneration : public RegionPass {
       return false;
       // llvm_unreachable("");
     }
+
+    createSeSeEdges(R);
 
     if (C)
       delete(C);
@@ -710,7 +741,8 @@ class ClastCodeGeneration : public RegionPass {
     addParameters(((clast_root*)clast)->names, ctx.CharMap, &Builder);
 
     cp.parse(clast, &ctx);
-    Builder.CreateBr(R->getExit());
+    BasicBlock *AfterSCoP = *pred_begin(R->getExit());
+    Builder.CreateBr(AfterSCoP);
 
     // Update old PHI nodes to pass LLVM verification.
     for (BasicBlock::iterator SI = succ_begin(R->getEntry())->begin(),
@@ -721,7 +753,7 @@ class ClastCodeGeneration : public RegionPass {
       }
 
     if (DT->dominates(R->getEntry(), R->getExit()))
-      DT->changeImmediateDominator(R->getExit(), Builder.GetInsertBlock());
+      DT->changeImmediateDominator(AfterSCoP, Builder.GetInsertBlock());
 
     // Enable the new polly code.
     R->getEntry()->getTerminator()->setSuccessor(0, PollyBB);
@@ -738,6 +770,7 @@ class ClastCodeGeneration : public RegionPass {
     AU.addRequired<SCoPInfo>();
     AU.addRequired<DominatorTree>();
     AU.addRequired<ScalarEvolution>();
+    AU.addRequired<LoopInfo>();
     AU.addPreserved<DominatorTree>();
     AU.addPreserved<SCoPInfo>();
     AU.addPreserved<RegionInfo>();
