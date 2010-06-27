@@ -411,7 +411,7 @@ void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
   }
 }
 
-void TempSCoPInfo::buildLoopBounds(TempSCoP &SCoP) {
+void TempSCoPInfo::buildLoopBound(TempSCoP &SCoP) {
   if (Loop *L = castToLoop(SCoP.getMaxRegion(), *LI)) {
     const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
     std::pair<LoopBoundMapType::iterator, bool> at =
@@ -577,7 +577,7 @@ TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
       }
   }
   // Try to extract the loop bounds
-  buildLoopBounds(*SCoP);
+  buildLoopBound(*SCoP);
   return SCoP;
 }
 

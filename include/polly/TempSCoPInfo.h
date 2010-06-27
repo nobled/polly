@@ -332,7 +332,7 @@ class TempSCoPInfo : public RegionPass {
 
   // Build the bounds of loop that corresponding to the outer most region of 
   // a given SCoP
-  void buildLoopBounds(TempSCoP &SCoP);
+  void buildLoopBound(TempSCoP &SCoP);
 
 public:
   static char ID;
