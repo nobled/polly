@@ -79,17 +79,13 @@ static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
     && "Only accept Load or Store!");
 
   // Try to handle the load/store.
-  Value *Pointer = 0;
+  Value *Pointer = getPointerOperand(Inst);
   SCEVAffFunc::SCEVAffFuncType AccType = SCEVAffFunc::None;
 
-  if (LoadInst *load = dyn_cast<LoadInst>(&Inst)) {
-    Pointer = load->getPointerOperand();
+  if (isa<LoadInst>(Inst))
     AccType = SCEVAffFunc::ReadMem;
-  } else if (StoreInst *store = dyn_cast<StoreInst>(&Inst)) {
-    Pointer = store->getPointerOperand();
+  else //Else it must be a StoreInst
     AccType = SCEVAffFunc::WriteMem;
-  } else
-    llvm_unreachable("Already check in the assert");
 
   assert(Pointer && "Why pointer is null?");
   return SCEVAffFunc::MemAccTy(Pointer, AccType);

@@ -73,13 +73,7 @@ bool ScalarDataRef::isUseExported(Instruction &Inst) const {
     return false;
 
   DEBUG(dbgs() << "get the reading values of :" << Inst << "\n");
-  Value *Ptr = 0;
-  if (LoadInst *Ld = dyn_cast<LoadInst>(&Inst))
-    Ptr = Ld->getPointerOperand();
-  else if (StoreInst *St = dyn_cast<StoreInst>(&Inst))
-    Ptr = St->getPointerOperand();
-  else if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(&Inst))
-    Ptr = GEP->getPointerOperand();
+  Value *Ptr = getPointerOperand(Inst);
 
   BasicBlock *useBB = Inst.getParent();
 
@@ -197,19 +191,10 @@ void ScalarDataRef::killAllTempValFor(Loop &L) {
 
 void ScalarDataRef::killAllTempValFor(BasicBlock &BB) {
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I){
-    Instruction *Inst = &*I;
-    Value *Ptr = 0;
-    // Try to extract the pointer operand
-    if (LoadInst *Load = dyn_cast<LoadInst>(Inst))
-      Ptr = Load->getPointerOperand();
-    else if (StoreInst *Store = dyn_cast<StoreInst>(Inst))
-      Ptr = Store->getPointerOperand();
-    // If any pointer operand appear
-    if (Ptr != 0) {
-      DEBUG(dbgs() << "Reduce ptr of " << Inst << "\n");
+    if (isa<LoadInst>(*I) || isa<StoreInst>(*I)) {
+      DEBUG(dbgs() << "Reduce ptr of " << *I << "\n");
       // The address express as affine function can be rewrite by SCEV.
-      // FIXME: Do not kill the not affine one in irregular scop?
-      if (Instruction *GEP = dyn_cast<Instruction>(Ptr))
+      if (Instruction *GEP = dyn_cast<Instruction>(getPointerOperand(*I)))
         killTempRefFor(*GEP);
     }
   }

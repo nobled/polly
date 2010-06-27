@@ -72,7 +72,8 @@ Value *polly::getPointerOperand(Instruction &Inst) {
     return load->getPointerOperand();
   else if (StoreInst *store = dyn_cast<StoreInst>(&Inst))
     return store->getPointerOperand();
-  // TODO: GEP also have a pointer operand
+  else if (GetElementPtrInst *gep = dyn_cast<GetElementPtrInst>(&Inst))
+    return gep->getPointerOperand();
 
   return 0;
 }

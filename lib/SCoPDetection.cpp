@@ -214,8 +214,8 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
 
     return true;
   }
-
-  if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst))
+  // Check the access function.
+  if (isa<LoadInst>(Inst) || isa<StoreInst>(Inst))
     return isValidMemoryAccess(Inst, RefRegion);
 
   // We do not know this instruction, therefore we assume it is invalid.
