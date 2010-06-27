@@ -38,29 +38,22 @@ using namespace polly;
 //===----------------------------------------------------------------------===//
 // Some statistic
 
-STATISTIC(ValidRegion,"Number of regions that a valid part of SCoP");
+STATISTIC(ValidRegion, "Number of regions that a valid part of SCoP");
 
 #define BADSCOP_STAT(NAME, DESC) STATISTIC(Bad##NAME##ForSCoP, \
                                            "Number of bad regions for SCoP: "\
                                            DESC)
 
-#define STATSCOP(NAME);              \
-  ++Bad##NAME##ForSCoP;
+#define STATSCOP(NAME); ++Bad##NAME##ForSCoP;
 
-// Note: This will make loop bounds could not compute,
-// but this is checked before loop bounds.
-BADSCOP_STAT(LoopNest,    "Some loop have multiple exit");
-
+// Note: This also implies loop bounds can not be computed,
+// but this one is checked before the loop bounds.
+BADSCOP_STAT(LoopNest,    "Some loop has multiple exits");
 BADSCOP_STAT(CFG,         "CFG too complex");
-
-BADSCOP_STAT(IndVar,      "Cant canonical induction variable in loop");
-
-BADSCOP_STAT(LoopBound,   "Loop bound could not compute");
-
-BADSCOP_STAT(FuncCall,    "Function call occur");
-
+BADSCOP_STAT(IndVar,      "Non canonical induction variable in loop");
+BADSCOP_STAT(LoopBound,   "Loop bounds can not be computed");
+BADSCOP_STAT(FuncCall,    "Function call with side effects appeared");
 BADSCOP_STAT(AffFunc,     "Expression not affine");
-
 BADSCOP_STAT(Other,       "Others");
 
 
@@ -94,7 +87,7 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
     if(isa<SCEVConstant>(Var))
       continue;
 
-    // The pointer is ok.
+    // The pointer is OK.
     if (Var->getType()->isPointerTy()) {
       // If this is not expect a memory access
       if (!isMemAcc) return false;
@@ -119,8 +112,7 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
 
     // A bad SCEV found.
     DEBUG(dbgs() << "Bad SCEV: " << *Var << " at loop"
-      << (Scope ?
-        Scope->getHeader()->getName():"Top Level")
+      << (Scope ? Scope->getHeader()->getName() : "Top Level")
       << "Cur BB: " << CurBB->getName()
       << "Ref Region: " << RefRegion.getNameStr()
       << "\n");
@@ -180,15 +172,15 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
                                         Region &RefRegion) const {
   Value *Ptr = getPointerOperand(Inst);
 
-  if (!isValidAffineFunction(SE->getSCEV(Ptr),
-                             RefRegion, Inst.getParent(), true)) {
-    DEBUG(dbgs() << "Bad memory addr "
-                 << *SE->getSCEV(Ptr) << "\n");
+  if (!isValidAffineFunction(SE->getSCEV(Ptr), RefRegion, Inst.getParent(),
+                             true)) {
+    DEBUG(dbgs() << "Bad memory addr " << *SE->getSCEV(Ptr) << "\n");
     STATSCOP(AffFunc);
     return false;
   }
-  // FIXME: Why expression like int *j = **k; where k has int ** type can pass
-  //        affine function check?
+
+  // FIXME: Why can expression like int *j = **k; where k has int ** type, pass
+  //        the affine function check?
   return true;
 }
 
@@ -205,7 +197,7 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
   }
 
   if (!Inst.mayWriteToMemory() && !Inst.mayReadFromMemory()) {
-    // Handle cast instruction
+    // Handle cast instruction.
     if (isa<IntToPtrInst>(Inst) || isa<BitCastInst>(Inst)) {
       DEBUG(dbgs() << "Bad cast Inst!\n");
       STATSCOP(Other);
@@ -225,7 +217,6 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
 
 bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
                                       Region &RefRegion) const {
-
   // Check all instructions, except the terminator instruction.
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I)
     if (!isValidInstruction(*I, RefRegion))
@@ -263,12 +254,11 @@ void SCoPDetection::runOnRegion(Region &R) {
     // TODO: Analyse the failure and hide the region.
     runOnRegion(**I);
 
-  // Check current region.
   // Do not check toplevel region, it is not support at this moment.
   if (R.getParent() == 0)
     return;
 
-  // Check the Region and remember it if it is valid
+  // Check the Region and remember if it is valid.
   if (isValidRegion(R, R)) {
     ++ValidRegion;
     ValidRegions.insert(&R);
@@ -277,15 +267,14 @@ void SCoPDetection::runOnRegion(Region &R) {
 
 bool SCoPDetection::isValidRegion(Region &RefRegion,
                                   Region &CurRegion) const {
-  // Check if getScopeLoop work on the current loop nest and region tree,
-  // if it not work, we could not handle any further
+  // Does getScopeLoop work on the current loop nest and region tree?
   if (getScopeLoop(CurRegion, *LI)
       != LI->getLoopFor(CurRegion.getEntry())) {
     STATSCOP(LoopNest);
     return false;
   }
 
-  // Visit all sub region node.
+  // Visit all sub region nodes.
   for (Region::element_iterator I = CurRegion.element_begin(),
        E = CurRegion.element_end(); I != E; ++I) {
     if (I->isSubRegion()) {
@@ -320,7 +309,6 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   RI = &getAnalysis<RegionInfo>();
   Region *TopRegion = RI->getTopLevelRegion();
 
-  ParamSetType Params;
   runOnRegion(*TopRegion);
   return false;
 }
@@ -337,8 +325,6 @@ void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
 void SCoPDetection::clear() {
   ValidRegions.clear();
 }
-
-/// Debug/Testing function
 
 void SCoPDetection::print(raw_ostream &OS, const Module *) const {
   for (RegionSet::const_iterator I = ValidRegions.begin(),
@@ -357,4 +343,3 @@ char SCoPDetection::ID = 0;
 static RegisterPass<SCoPDetection>
 X("polly-scop-detect", "Polly - Detect SCoPs");
 
-// Do not link this pass. This pass suppose to be only used by SCoPInfo.
