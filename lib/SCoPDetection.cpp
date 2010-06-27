@@ -362,11 +362,10 @@ bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
 }
 
 bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
-  // We can only handle loops whose induction variables in are in canonical
-  // form.
   PHINode *IndVar = L->getCanonicalInductionVariable();
   Instruction *IndVarInc = L->getCanonicalInductionVariableIncrement();
 
+  // No canonical induction variable.
   if (!IndVar || !IndVarInc) {
     DEBUG(dbgs() << "No canonical iv for loop : " << L->getHeader()->getName()
           << "\n");
@@ -374,39 +373,11 @@ bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
     return false;
   }
 
-  const SCEV *SIV = SE->getSCEV(IndVar);
+  // If the loop count affine?
   const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
-
   DEBUG(dbgs() << "Backedge taken count: " << *LoopCount << "\n");
-
-  // We can not handle the loop if its loop bounds can not be computed.
-  if (isa<SCEVCouldNotCompute>(LoopCount)) {
+  if (!isValidAffineFunction(LoopCount, RefRegion, L->getHeader(), false)) {
     STATSCOP(LoopBound);
-    return false;
-  }
-
-  // The AffineSCEVIterator will always return the induction variable
-  // which start from 0, and step by 1.
-  const SCEV *LB = SE->getConstant(SIV->getType(), 0),
-        *UB = LoopCount;
-
-  // IV >= LB ==> IV - LB >= 0
-  LB = SE->getMinusSCEV(SIV, LB);
-  // Match the type, the type of BackedgeTakenCount mismatch when we have
-  // something like this in loop exit:
-  //    br i1 false, label %for.body, label %for.end
-  // In fact, we could do some optimization before SCoPDetecion, so we do not
-  // need to worry about this.
-  // Be careful of the sign of the upper bounds, if we meet iv <= -1
-  // this means the iterate domain is empty since iv >= 0
-  // but if we do a zero extend, this will make a non-empty domain
-  UB = SE->getTruncateOrSignExtend(UB, SIV->getType());
-  // IV <= UB ==> UB - IV >= 0
-  UB = SE->getMinusSCEV(UB, SIV);
-  // Check the lower bound.
-  if (!isValidAffineFunction(LB, RefRegion, L->getHeader(), false)
-      || !isValidAffineFunction(UB, RefRegion, L->getHeader(), false)){
-    STATSCOP(AffFunc);
     return false;
   }
 

@@ -95,19 +95,31 @@ polly_set *buildIterateDomain(SCoP &SCoP, TempSCoP &tempSCoP,
   polly_dim *dim = isl_dim_set_alloc(SCoP.getCtx(), SCoP.getNumParams(),
                                     IndVars.size());
   polly_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
-  polly_set *dom = isl_set_from_basic_set(bset);
+
+
+  // isl int for iterate domain construction
+  isl_int v;
+  isl_int_init(v);
 
   for (int i = 0, e = IndVars.size(); i != e; ++i) {
-    const BBCond &bounds = tempSCoP.getLoopBound(IndVars[i]->getLoop());
-    // Build the constrain of bounds
-    polly_set *lb = bounds[0].toConditionConstrain(SCoP.getCtx(),
-      dim, IndVars, SCoP.getParams());
-    dom = isl_set_intersect(dom, lb);
-    polly_set *ub = bounds[1].toConditionConstrain(SCoP.getCtx(),
-      dim, IndVars, SCoP.getParams());
+    const SCEVAffFunc &bound = tempSCoP.getLoopBound(IndVars[i]->getLoop());
+    polly_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
+    // Build lower bound IV >= 0
+    isl_int_set_si(v, 1);
+    isl_constraint_set_coefficient(c, isl_dim_set, i, v);
+    bset = isl_basic_set_add_constraint(bset, c);
 
-    dom = isl_set_intersect(dom, ub);
+    // Build upper bound
+    c = bound.toConditionConstrain(SCoP.getCtx(),
+      dim, IndVars, SCoP.getParams());
+    isl_int_set_si(v, -1);
+    isl_constraint_set_coefficient(c, isl_dim_set, i, v);
+    bset = isl_basic_set_add_constraint(bset, c);
   }
+  // v is not used any more
+  isl_int_clear(v);
+
+  polly_set *dom = isl_set_from_basic_set(bset);
 
   // Build the BB condition constrains, by travel up the region tree.
   // NOTE: These are only a temporary hack.
@@ -120,7 +132,7 @@ polly_set *buildIterateDomain(SCoP &SCoP, TempSCoP &tempSCoP,
     if (CurEntry != CurR->getEntry())
       if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
         for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end(); I != E; ++I) {
-          polly_set *c = (*I).toConditionConstrain(SCoP.getCtx(), dim,
+          polly_set *c = (*I).toConditionSet(SCoP.getCtx(), dim,
             IndVars, SCoP.getParams());
           dom = isl_set_intersect(dom, c);
         }

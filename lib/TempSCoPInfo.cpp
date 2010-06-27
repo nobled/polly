@@ -46,6 +46,33 @@ PrintTempSCoPInDetail("polly-print-temp-scop-in-detail",
 //===----------------------------------------------------------------------===//
 /// Helper Class
 
+SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, ScalarEvolution *SE)
+: FuncType(Type) {
+  assert(S && "S can not be null!");
+
+  assert(!isa<SCEVCouldNotCompute>(S)
+    && "Un Expect broken affine function in SCoP!");
+
+  for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
+    I != E; ++I) {
+      // The constant part must be a SCEVConstant.
+      // TODO: support sizeof in coefficient.
+      assert(isa<SCEVConstant>(I->second) && "Expect SCEVConst in coefficient!");
+
+      const SCEV *Var = I->first;
+      // Extract the constant part
+      if(isa<SCEVConstant>(Var))
+        // Add the translation component
+        TransComp = I->second;
+      else if (Var->getType()->isPointerTy()) { // Extract the base address
+        const SCEVUnknown *Addr = dyn_cast<SCEVUnknown>(Var);
+        assert(Addr && "Why we got a broken scev?");
+        BaseAddr = Addr->getValue();
+      } else // Extract others affine component
+        LnrTrans.insert(*I);
+  }
+}
+
 static SCEVAffFunc::MemAccTy extractMemoryAccess(Instruction &Inst) {
   assert((isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst))
     && "Only accept Load or Store!");
@@ -77,7 +104,7 @@ static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative) {
     isl_int_set_si(v, 0);
 }
 
-polly_set *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
+polly_constraint *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
                          polly_dim *dim,
                          const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
                          const SmallVectorImpl<const SCEV*> &Params) const {
@@ -109,7 +136,14 @@ polly_set *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
    isl_constraint_set_constant(c, v);
    isl_int_clear(v);
 
+   return c;
+}
+polly_set *SCEVAffFunc::toConditionSet(polly_ctx *ctx,
+                         polly_dim *dim,
+                         const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
+                         const SmallVectorImpl<const SCEV*> &Params) const {
    polly_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
+   polly_constraint *c = toConditionConstrain(ctx, dim, IndVars, Params);
    bset = isl_basic_set_add_constraint(bset, c);
    polly_set *ret = isl_set_from_basic_set(bset);
    if (getType() == Ne) {
@@ -215,15 +249,38 @@ void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const {
 void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
                            LoopInfo *LI, const Region *CurR,
                            unsigned ind) const {
-  // Print the loopbounds if current region is a loop
+  // Print the loopbounds if current region is a loop,
+  // in form of IV >= 0, LoopCount - IV >= 0
   LoopBoundMapType::const_iterator at = LoopBounds.find(castToLoop(*CurR, *LI));
   if (at != LoopBounds.end()) {
+    const Loop *L = at->first;
+    PHINode *IV = L->getCanonicalInductionVariable();
+    const SCEV *SIV = SE->getSCEV(IV);
+    // IV >= LB ==> IV - LB >= 0 and LB is 0 in canonical loop.
+    const SCEV *LB = SIV;
+    const SCEV *UB = SE->getBackedgeTakenCount(L);
+    // FIXME: Is this necessary?
+    UB = SE->getSCEVAtScope(UB, L);
+    // Match the type, the type of BackedgeTakenCount mismatch when we have
+    // something like this in loop exit:
+    //    br i1 false, label %for.body, label %for.end
+    // In fact, we could do some optimization before SCoPDetecion, so we do not
+    // need to worry about this.
+    // Be careful of the sign of the upper bounds, if we meet iv <= -1
+    // this means the iterate domain is empty since iv >= 0
+    // but if we do a zero extend, this will make a non-empty domain
+    UB = SE->getTruncateOrSignExtend(UB, SIV->getType());
+    // IV <= UB ==> UB - IV >= 0
+    UB = SE->getMinusSCEV(UB, SIV);
+    //
+    SCEVAffFunc lb(LB, SCEVAffFunc::GE, SE), ub(UB, SCEVAffFunc::GE, SE);
+
     // Print the loop bounds if these is an loops
     OS.indent(ind) << "Bounds of Loop: " << at->first->getHeader()->getName()
       << ":\t{ ";
-    (at->second)[0].print(OS,SE);
+    lb.print(OS,SE);
     OS << ", ";
-    (at->second)[1].print(OS,SE);
+    ub.print(OS,SE);
     OS << "}\n";
     // Increase the indent
     ind += 2;
@@ -356,34 +413,11 @@ void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
 
 void TempSCoPInfo::buildLoopBounds(TempSCoP &SCoP) {
   if (Loop *L = castToLoop(SCoP.getMaxRegion(), *LI)) {
-    Value *IV = L->getCanonicalInductionVariable();
-    assert(IV && "Valid SCoP will always have an IV!");
-    const SCEV *SIV = SE->getSCEV(IV);
-    // Get the loop bounds
-    // FIXME: The lower bound is always 0.
-    const SCEV *LB = SE->getConstant(SIV->getType(),0);
-    // IV >= LB ==> IV - LB >= 0
-    LB = SE->getMinusSCEV(SIV, LB);
-
-    const SCEV *UB = SE->getBackedgeTakenCount(L);
-    // Match the type, the type of BackedgeTakenCount mismatch when we have
-    // something like this in loop exit:
-    //    br i1 false, label %for.body, label %for.end
-    // In fact, we could do some optimization before SCoPDetecion, so we do not
-    // need to worry about this.
-    // Be careful of the sign of the upper bounds, if we meet iv <= -1
-    // this means the iterate domain is empty since iv >= 0
-    // but if we do a zero extend, this will make a non-empty domain
-    UB = SE->getTruncateOrSignExtend(UB, SIV->getType());
-    // IV <= UB ==> UB - IV >= 0
-    UB = SE->getMinusSCEV(UB, SIV);
-
-    BBCond &affbounds = LoopBounds[L];
-    affbounds.push_back(SCEVAffFunc(SCEVAffFunc::GE));
-    // Build the affine function of loop bounds
-    buildAffineFunction(LB, affbounds[0], SCoP);
-    affbounds.push_back(SCEVAffFunc(SCEVAffFunc::GE));
-    buildAffineFunction(UB, affbounds[1], SCoP);
+    const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
+    std::pair<LoopBoundMapType::iterator, bool> at =
+            LoopBounds.insert(std::make_pair(L, SCEVAffFunc(SCEVAffFunc::GE)));
+    // Build the affine function for loop count
+    buildAffineFunction(LoopCount, at.first->second, SCoP);
 
     // Increase the loop depth because we found a loop.
     ++SCoP.MaxLoopDepth;

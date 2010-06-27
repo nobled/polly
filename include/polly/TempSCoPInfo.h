@@ -82,6 +82,9 @@ public:
   explicit SCEVAffFunc(SCEVAffFuncType Type, Value* baseAddr = 0)
     : TransComp(0), BaseAddr(baseAddr), FuncType(Type) {}
 
+  explicit SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
+                       ScalarEvolution *SE);
+
   /// @brief Build a loop bound constrain from an affine function.
   ///
   /// @param ctx      The context of isl objects.
@@ -91,7 +94,11 @@ public:
   /// @param isLower  Is this the lower bound?
   ///
   /// @return         The isl_constrain represent by this affine function.
-  polly_set *toConditionConstrain(polly_ctx *ctx, polly_dim *dim,
+  polly_constraint *toConditionConstrain(polly_ctx *ctx, polly_dim *dim,
+    const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
+    const SmallVectorImpl<const SCEV*> &Params) const;
+
+  polly_set *toConditionSet(polly_ctx *ctx, polly_dim *dim,
     const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
 
@@ -124,7 +131,9 @@ public:
 typedef SmallVector<SCEVAffFunc, 4> BBCond;
 
 /// Mapping loops to its bounds.
-typedef std::map<const Loop*, BBCond> LoopBoundMapType;
+/// The backedge taken count already enough as we only allow canonical loop.
+typedef std::map<const Loop*, SCEVAffFunc> LoopBoundMapType;
+
 /// Mapping BBs to its condition constrains
 typedef std::map<const BasicBlock*, BBCond> BBCondMapType;
 
@@ -188,7 +197,7 @@ public:
   ///
   /// @return The bounds of the loop L in { Lower bound, Upper bound } form.
   ///
-  const BBCond &getLoopBound(const Loop *L) const {
+  const SCEVAffFunc &getLoopBound(const Loop *L) const {
     LoopBoundMapType::const_iterator at = LoopBounds.find(L);
     assert(at != LoopBounds.end() && "Only valid loop is allow!");
     return at->second;
