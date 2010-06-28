@@ -334,7 +334,7 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
 
     const SCEV *Var = I->first;
     // Extract the constant part
-    if(isa<SCEVConstant>(Var))
+    if (isa<SCEVConstant>(Var))
       // Add the translation component
       FuncToBuild.TransComp = I->second;
     else if (Var->getType()->isPointerTy()) { // Extract the base address
@@ -343,7 +343,7 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
       FuncToBuild.BaseAddr = BaseAddr->getValue();
     } else { // Extract others affine component
       FuncToBuild.LnrTrans.insert(*I);
-      // Do not add the indvar to the parameter list
+      // Do not add the indvar to the parameter list.
       if (!isIndVar(Var, CurRegion, CurBB, *LI, *SE)) {
         DEBUG(dbgs() << "Non indvar: "<< *Var << '\n');
         assert(isParameter(Var, CurRegion, CurBB, *LI, *SE)
@@ -372,7 +372,7 @@ void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
       Value *Ptr = getPointerOperand(Inst);
       buildAffineFunction(SE->getSCEV(Ptr), Functions.back(), SCoP);
     } else if (PHINode *PN = dyn_cast<PHINode>(&Inst)) {
-      // PHINode may have incomming value from Load instruction
+      // PHINode may have incomming value from Load instruction.
       for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i)
         if (LoadInst *Load = dyn_cast<LoadInst>(PN->getIncomingValue(i))) {
           // The load generate by scalar data reference with will always have
@@ -408,64 +408,66 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
                                          SCEVAffFunc &FuncToBuild,
                                          TempSCoP &SCoP) const {
   if (ConstantInt *C = dyn_cast<ConstantInt>(&V)) {
-    const SCEV *One = SE->getConstant(C->getType(), 1);
     // If this is always true condition, we will create 1 >= 0,
-    // otherwise we will create 1 == 0
+    // otherwise we will create 1 == 0.
     if (C->isOne() == inverted)
       FuncToBuild.FuncType = SCEVAffFunc::Eq;
     else
       FuncToBuild.FuncType = SCEVAffFunc::GE;
-    // Build the condition
-    buildAffineFunction(One, FuncToBuild, SCoP);
-  } else {
-    ICmpInst *ICmp = dyn_cast<ICmpInst>(&V);
-    // FIXME: we should check this in isValidSCoP
-    assert(ICmp && "Only ICmpInst of constant as condition supported!");
-    const SCEV *LHS = SE->getSCEV(ICmp->getOperand(0)),
-               *RHS = SE->getSCEV(ICmp->getOperand(1));
 
-    ICmpInst::Predicate Pred = ICmp->getPredicate();
-    // Invert the predicate if need
-    if (inverted)
-      Pred = ICmpInst::getInversePredicate(Pred);
+    buildAffineFunction(SE->getConstant(C->getType(), 1), FuncToBuild, SCoP);
 
-    // FIXME: In fact, this is only loop exit condition, try to use
-    // getBackedgeTakenCount.
-    switch (Pred) {
-    case ICmpInst::ICMP_EQ:
-      FuncToBuild.FuncType = SCEVAffFunc::Eq;
-      break;
-    case ICmpInst::ICMP_NE:
-      FuncToBuild.FuncType = SCEVAffFunc::Ne;
-      break;
-    case ICmpInst::ICMP_SLT:
-    case ICmpInst::ICMP_ULT:
-      // A < B => B > A
-      std::swap(LHS, RHS);
-      // goto case ICmpInst::ICMP_UGT:
-    case ICmpInst::ICMP_SGT:
-    case ICmpInst::ICMP_UGT:
-      // A > B ==> A >= B + 1
-      // FIXME: NSW or NUW?
-      RHS = SE->getAddExpr(RHS, SE->getConstant(RHS->getType(), 1));
-      FuncToBuild.FuncType = SCEVAffFunc::GE;
-      break;
-    case ICmpInst::ICMP_SLE:
-    case ICmpInst::ICMP_ULE:
-      // A <= B ==> B => A
-      std::swap(LHS, RHS);
-      // goto case ICmpInst::ICMP_UGE:
-    case ICmpInst::ICMP_SGE:
-    case ICmpInst::ICMP_UGE:
-      FuncToBuild.FuncType = SCEVAffFunc::GE;
-      break;
-    default:
-      llvm_unreachable("Unknown Predicate!");
-    }
-    // Build the condition with FuncType
-    // Transform A >= B to A - B >= 0
-    buildAffineFunction(SE->getMinusSCEV(LHS, RHS), FuncToBuild, SCoP);
+    return;
   }
+
+  ICmpInst *ICmp = dyn_cast<ICmpInst>(&V);
+  // FIXME: we should check this in isValidSCoP
+  assert(ICmp && "Only ICmpInst of constant as condition supported!");
+  const SCEV *LHS = SE->getSCEV(ICmp->getOperand(0)),
+             *RHS = SE->getSCEV(ICmp->getOperand(1));
+
+  ICmpInst::Predicate Pred = ICmp->getPredicate();
+
+  // Invert the predicate if needed.
+  if (inverted)
+    Pred = ICmpInst::getInversePredicate(Pred);
+
+  // FIXME: In fact, this is only loop exit condition, try to use
+  // getBackedgeTakenCount.
+  switch (Pred) {
+  case ICmpInst::ICMP_EQ:
+    FuncToBuild.FuncType = SCEVAffFunc::Eq;
+    break;
+  case ICmpInst::ICMP_NE:
+    FuncToBuild.FuncType = SCEVAffFunc::Ne;
+    break;
+  case ICmpInst::ICMP_SLT:
+  case ICmpInst::ICMP_ULT:
+    // A < B => B > A
+    std::swap(LHS, RHS);
+    // goto case ICmpInst::ICMP_UGT:
+  case ICmpInst::ICMP_SGT:
+  case ICmpInst::ICMP_UGT:
+    // A > B ==> A >= B + 1
+    // FIXME: NSW or NUW?
+    RHS = SE->getAddExpr(RHS, SE->getConstant(RHS->getType(), 1));
+    FuncToBuild.FuncType = SCEVAffFunc::GE;
+    break;
+  case ICmpInst::ICMP_SLE:
+  case ICmpInst::ICMP_ULE:
+    // A <= B ==> B => A
+    std::swap(LHS, RHS);
+    // goto case ICmpInst::ICMP_UGE:
+  case ICmpInst::ICMP_SGE:
+  case ICmpInst::ICMP_UGE:
+    FuncToBuild.FuncType = SCEVAffFunc::GE;
+    break;
+  default:
+    llvm_unreachable("Unknown Predicate!");
+  }
+  // Build the condition with FuncType
+  // Transform A >= B to A - B >= 0
+  buildAffineFunction(SE->getMinusSCEV(LHS, RHS), FuncToBuild, SCoP);
 }
 
 void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,

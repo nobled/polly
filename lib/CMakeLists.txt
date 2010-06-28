@@ -2,10 +2,10 @@ set(LLVM_NO_RTTI 1)
 
 add_polly_library(LLVMPolly
   CLooG.cpp
-  ClastCodeGeneration.cpp
+  CodeGeneration.cpp
   ClastParser.cpp
   ClastPrinter.cpp
-  CodeGen.cpp
+  SCoPPrinter.cpp
   SCoPDetection.cpp
   SCoPInfo.cpp
   ScalarDataRef.cpp

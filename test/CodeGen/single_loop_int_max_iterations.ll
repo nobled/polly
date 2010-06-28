@@ -1,4 +1,4 @@
-; RUN: opt -polly-print-scop -S -analyze < %s | FileCheck %s
+; RUN: opt -polly-print -S < %s | FileCheck %s
 ; RUN: opt -polly-codegen -O3 < %s | lli
 
 ; ModuleID = 'single_loop_int_max_iterations.s'

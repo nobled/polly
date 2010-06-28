@@ -1,4 +1,4 @@
-; RUN: opt -polly-print-scop -S -analyze < %s | FileCheck %s
+; RUN: opt -polly-print -S < %s | FileCheck %s
 ; RUN: opt -O3 < %s | lli
 ; RUN: opt -polly-codegen -O3 < %s | lli
 ; RUN: opt -polly-import -polly-codegen -O3 < %s | lli
