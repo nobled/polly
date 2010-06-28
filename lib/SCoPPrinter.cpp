@@ -46,7 +46,7 @@ public:
       return false;
 
     Function *F = S->getRegion().getEntry()->getParent();
-    dbgs() << "\nIn function: '" << F->getNameStr() << "' SCoP: "
+    std::cout << "\nIn function: '" << F->getNameStr() << "' SCoP: "
       << S->getRegion().getNameStr() << ":\n";
 
     CLooG C = CLooG(S);
