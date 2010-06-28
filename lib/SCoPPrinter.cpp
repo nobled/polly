@@ -41,29 +41,28 @@ public:
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     S = getAnalysis<SCoPInfo>().getSCoP();
+
+    if (!S)
+      return false;
+
+    Function *F = S->getRegion().getEntry()->getParent();
+    dbgs() << "\nIn function: '" << F->getNameStr() << "' SCoP: "
+      << S->getRegion().getNameStr() << ":\n";
+
+    CLooG C = CLooG(S);
+    C.generate();
+    C.pprint();
+
     return false;
   }
 
-  void print(raw_ostream &OS, const Module *) const {
-
-    if (!S) {
-      OS << "Invalid SCoP\n";
-      return;
-    }
-    OS << "SCoP: " << S->getRegion().getNameStr() << "\n";
-    CLooG C = CLooG(S);
-    C.generate();
-    struct clast_stmt *clast = C.getClast();
-    OS << "Generated CLAST '" << clast << "'\n";
-    C.pprint();
-  }
+  void print(raw_ostream &OS, const Module *) const {}
 
   virtual void releaseMemory() { S = 0; }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-    // XXX: Cannot be removed, as otherwise LLVM crashes.
-    AU.setPreservesAll();
     AU.addRequired<SCoPInfo>();
+    AU.setPreservesAll();
   }
 };
 } //end anonymous namespace
@@ -71,7 +70,7 @@ public:
 char ScopPrinter::ID = 0;
 
 static RegisterPass<ScopPrinter>
-X("polly-print-scop", "Polly - Print SCoP as C code");
+X("polly-print", "Polly - Print SCoP as C code to stdout");
 
 Pass* polly::createScopPrinterPass() {
   return new ScopPrinter();
