@@ -55,9 +55,6 @@ struct codegenctx : cp_ctx {
   DominatorTree *DT;
   ScalarEvolution *SE;
 
-  // The last value calculated by a subexpression.
-  Value *exprValue;
-
   // Map the Values from the old code to their counterparts in the new code.
   ValueMapT ValueMap;
 
@@ -66,20 +63,6 @@ struct codegenctx : cp_ctx {
   // appearance of such a string in the clast to the value created
   // because of a loop iv or an assignment.
   CharMapT CharMap;
-
-  // Count the current assignment.  This is for user statements
-  // to track how an IV from the old code corresponds to a value
-  // or expression in the new code.
-  //
-  // There is one assignment with an empty LHS for every IV dimension
-  // of each statement.
-  unsigned assignmentCount;
-
-  // The current statement we are working on.
-  //
-  // Also used to track the assignment of old IVS to new values or
-  // expressions.
-  SCoPStmt *stmt;
 
   codegenctx(SCoP *scop, DominatorTree *DomTree, ScalarEvolution *ScEv):
     S(scop), DT(DomTree), SE(ScEv) {}
@@ -361,17 +344,34 @@ class CPCodeGenerationActions : public CPActions {
   // For each open condition the merge basic block.
   std::vector<BasicBlock*> GuardMergeBBs;
 
+  // The last value calculated by a subexpression.
+  Value *exprValue;
+
+  // The current statement we are working on.
+  //
+  // Also used to track the assignment of old IVS to new values or
+  // expressions.
+  SCoPStmt *stmt;
+
+  // Count the current assignment.  This is for user statements
+  // to track how an IV from the old code corresponds to a value
+  // or expression in the new code.
+  //
+  // There is one assignment with an empty LHS for every IV dimension
+  // of each statement.
+  unsigned assignmentCount;
+
   protected:
   void print(struct clast_assignment *a, codegenctx *ctx) {
     switch(ctx->dir) {
       case DFS_IN:
         {
           eval(a->RHS, ctx);
-          Value *RHS = ctx->exprValue;
+          Value *RHS = exprValue;
 
           if (!a->LHS) {
-            PHINode *PN = ctx->stmt->IVS[ctx->assignmentCount];
-            ctx->assignmentCount++;
+            PHINode *PN = stmt->IVS[assignmentCount];
+            assignmentCount++;
             Value *V = PN;
 
             if (PN->getNumOperands() == 2)
@@ -388,12 +388,12 @@ class CPCodeGenerationActions : public CPActions {
 
   void print(struct clast_user_stmt *u, codegenctx *ctx) {
     // Actually we have a list of pointers here. be careful.
-    SCoPStmt *stmt = (SCoPStmt *)u->statement->usr;
+    SCoPStmt *UsrStmt = (SCoPStmt *)u->statement->usr;
     BasicBlock *BB = stmt->getBasicBlock();
     switch(ctx->dir) {
       case DFS_IN:
-        ctx->stmt = stmt;
-        ctx->assignmentCount = 0;
+        stmt = UsrStmt;
+        assignmentCount = 0;
 	break;
       case DFS_OUT:
         copyBB(Builder, BB, ctx->ValueMap, ctx->DT, &ctx->S->getRegion(),
@@ -413,9 +413,9 @@ class CPCodeGenerationActions : public CPActions {
         Value *IncrementedIV;
         BasicBlock *AfterBB;
 	eval(f->LB, ctx);
-        Value *LB = ctx->exprValue;
+        Value *LB = exprValue;
 	eval(f->UB, ctx);
-        Value *UB = ctx->exprValue;
+        Value *UB = exprValue;
         createLoop(Builder, LB, UB, stride, IV, AfterBB, IncrementedIV,
                    ctx->DT);
         (ctx->CharMap)[f->iterator] = IV;
@@ -445,9 +445,9 @@ class CPCodeGenerationActions : public CPActions {
 
   void print(struct clast_equation *eq, codegenctx *ctx) {
     eval(eq->LHS, ctx);
-    Value *LHS = ctx->exprValue;
+    Value *LHS = exprValue;
     eval(eq->RHS, ctx);
-    Value *RHS = ctx->exprValue;
+    Value *RHS = exprValue;
     Value *Result;
     CmpInst::Predicate P;
 
@@ -460,7 +460,7 @@ class CPCodeGenerationActions : public CPActions {
 
     Result = Builder->CreateICmp(P, LHS, RHS);
 
-    ctx->exprValue = Result;
+    exprValue = Result;
   }
 
   void print(struct clast_guard *g, codegenctx *ctx) {
@@ -475,12 +475,12 @@ class CPCodeGenerationActions : public CPActions {
           ctx->DT->addNewBlock(MergeBB, Builder->GetInsertBlock());
 
           print(&(g->eq[0]), ctx);
-          Value *Predicate = ctx->exprValue;
+          Value *Predicate = exprValue;
 
           for (int i = 1; i < g->n; ++i) {
             Value *TmpPredicate;
             print(&(g->eq[i]), ctx);
-            TmpPredicate = ctx->exprValue;
+            TmpPredicate = exprValue;
             Predicate = Builder->CreateAnd(Predicate, TmpPredicate);
           }
 
@@ -536,7 +536,7 @@ class CPCodeGenerationActions : public CPActions {
     ctx->dir = DFS_OUT;
     codegenctx *pctx = static_cast<codegenctx*>(ctx);
     ClastExpCodeGen ExpGen(Builder, &pctx->CharMap);
-    pctx->exprValue = ExpGen.codegen(e);
+    exprValue = ExpGen.codegen(e);
   }
 };
 }
