@@ -112,15 +112,6 @@ class ScalarDataRef : public FunctionPass {
   /// @param Inst The final result of all killed instruction.
   void killTempRefFor(const Instruction& Inst);
 
-  /// @brief If an Instruction should be expose as a "write memory" access?
-  ///
-  /// @param I The Instruction to query.
-  ///
-  /// @return Return true if the instruction should be export
-  //          as a "write memory" access.
-  bool isDefExported(Instruction &I) const;
-  bool isUseExported(Instruction &I) const;
-
   // Run On regions to preform Scalar data reference analysis
   void runOnRegion(Region &R);
 public:
@@ -129,11 +120,27 @@ public:
   explicit ScalarDataRef() : FunctionPass(&ID) {}
   ~ScalarDataRef();
 
+  /// @brief If an Instruction should be expose as a "write memory" access?
+  ///
+  /// @param I The Instruction to query.
+  ///
+  /// @return Return true if the instruction should be export
+  //          as a "write memory" access.
+  bool isDefExported(Instruction &I) const;
+
+  /// @brief Get all Instructions that use by Inst and should be expose as
+  ///        a "read memory" access.
+  ///
+  /// @param Inst The Instruction that reading others.
+  /// @param Defs The Instructions that are read by Inst.
+  void getAllUsing(Instruction &Inst, SmallVectorImpl<Value*> &Defs);
+
   /// @name FunctionPass interface
   //@{
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
   virtual void releaseMemory();
   virtual bool runOnFunction(Function &F);
+  virtual void print(raw_ostream &OS, const Module *) const;
   //@}
 
 };
