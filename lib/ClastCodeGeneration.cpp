@@ -55,21 +55,6 @@ struct codegenctx : cp_ctx {
   DominatorTree *DT;
   ScalarEvolution *SE;
 
-  // The Builder specifies the current location to code generate at.
-  IRBuilder<> *Builder;
-
-  // For each open condition the merge basic block.
-  std::vector<BasicBlock*> GuardMergeBBs;
-
-  // For each open loop the induction variable.
-  std::vector<PHINode*> LoopIVs;
-
-  // For each open loop the induction variable after it was incremented.
-  std::vector<Value*> LoopIncrementedIVs;
-
-  // For each open loop the basic block following the loop exit.
-  std::vector<BasicBlock*> LoopAfterBBs;
-
   // The last value calculated by a subexpression.
   Value *exprValue;
 
@@ -96,9 +81,8 @@ struct codegenctx : cp_ctx {
   // expressions.
   SCoPStmt *stmt;
 
-  codegenctx(SCoP *scop, DominatorTree *DomTree, ScalarEvolution *ScEv,
-             IRBuilder<> *builder):
-    S(scop), DT(DomTree), SE(ScEv), Builder(builder) {}
+  codegenctx(SCoP *scop, DominatorTree *DomTree, ScalarEvolution *ScEv):
+    S(scop), DT(DomTree), SE(ScEv) {}
 };
 
 // Create a new loop.
@@ -355,9 +339,28 @@ public:
         llvm_unreachable("Unknown clast expression!");
     }
   }
+
+  Value *codegen(clast_expr *e) {
+    return codegen(e, Builder->getInt64Ty());
+  }
 };
 
 class CPCodeGenerationActions : public CPActions {
+  // The Builder specifies the current location to code generate at.
+  IRBuilder<> *Builder;
+
+  // For each open loop the induction variable.
+  std::vector<PHINode*> LoopIVs;
+
+  // For each open loop the induction variable after it was incremented.
+  std::vector<Value*> LoopIncrementedIVs;
+
+  // For each open loop the basic block following the loop exit.
+  std::vector<BasicBlock*> LoopAfterBBs;
+
+  // For each open condition the merge basic block.
+  std::vector<BasicBlock*> GuardMergeBBs;
+
   protected:
   void print(struct clast_assignment *a, codegenctx *ctx) {
     switch(ctx->dir) {
@@ -393,7 +396,7 @@ class CPCodeGenerationActions : public CPActions {
         ctx->assignmentCount = 0;
 	break;
       case DFS_OUT:
-        copyBB(ctx->Builder, BB, ctx->ValueMap, ctx->DT, &ctx->S->getRegion(),
+        copyBB(Builder, BB, ctx->ValueMap, ctx->DT, &ctx->S->getRegion(),
                ctx->SE);
 	break;
     }
@@ -403,8 +406,6 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   void print(struct clast_for *f, codegenctx *ctx) {
-    IRBuilder<> *Builder = ctx->Builder;
-
     switch(ctx->dir) {
       case DFS_IN: {
 	APInt stride = APInt_from_MPZ(f->stride);
@@ -419,25 +420,25 @@ class CPCodeGenerationActions : public CPActions {
                    ctx->DT);
         (ctx->CharMap)[f->iterator] = IV;
 
-        ctx->LoopIncrementedIVs.push_back(IncrementedIV);
-        ctx->LoopAfterBBs.push_back(AfterBB);
-        ctx->LoopIVs.push_back(IV);
+        LoopIncrementedIVs.push_back(IncrementedIV);
+        LoopAfterBBs.push_back(AfterBB);
+        LoopIVs.push_back(IV);
 	break;
       }
       case DFS_OUT:
-        BasicBlock *AfterBB = ctx->LoopAfterBBs.back();
+        BasicBlock *AfterBB = LoopAfterBBs.back();
         BasicBlock *HeaderBB = *pred_begin(AfterBB);
         BasicBlock *LastBodyBB = Builder->GetInsertBlock();
-        Value *IncrementedIV = ctx->LoopIncrementedIVs.back();
-        PHINode *IV = ctx->LoopIVs.back();
+        Value *IncrementedIV = LoopIncrementedIVs.back();
+        PHINode *IV = LoopIVs.back();
 
         Builder->CreateBr(HeaderBB);
         IV->addIncoming(IncrementedIV, LastBodyBB);
         Builder->SetInsertPoint(AfterBB);
 
-        ctx->LoopIncrementedIVs.pop_back();
-        ctx->LoopIVs.pop_back();
-        ctx->LoopAfterBBs.pop_back();
+        LoopIncrementedIVs.pop_back();
+        LoopIVs.pop_back();
+        LoopAfterBBs.pop_back();
 	break;
     }
   }
@@ -457,14 +458,12 @@ class CPCodeGenerationActions : public CPActions {
     else
       P = ICmpInst::ICMP_SLE;
 
-    Result = ctx->Builder->CreateICmp(P, LHS, RHS);
+    Result = Builder->CreateICmp(P, LHS, RHS);
 
     ctx->exprValue = Result;
   }
 
   void print(struct clast_guard *g, codegenctx *ctx) {
-    IRBuilder<> *Builder = ctx->Builder;
-
     switch(ctx->dir) {
       case DFS_IN:
         {
@@ -487,13 +486,13 @@ class CPCodeGenerationActions : public CPActions {
 
           Builder->CreateCondBr(Predicate, ThenBB, MergeBB);
           Builder->SetInsertPoint(ThenBB);
-          ctx->GuardMergeBBs.push_back(MergeBB);
+          GuardMergeBBs.push_back(MergeBB);
           break;
         }
       case DFS_OUT:
-        Builder->CreateBr(ctx->GuardMergeBBs.back());
-        Builder->SetInsertPoint(ctx->GuardMergeBBs.back());
-        ctx->GuardMergeBBs.pop_back();
+        Builder->CreateBr(GuardMergeBBs.back());
+        Builder->SetInsertPoint(GuardMergeBBs.back());
+        GuardMergeBBs.pop_back();
 	break;
     }
   }
@@ -516,7 +515,8 @@ class CPCodeGenerationActions : public CPActions {
   }
 
   public:
-  CPCodeGenerationActions(raw_ostream& strm) {
+  CPCodeGenerationActions(IRBuilder<> *B) {
+    Builder = B;
   }
 
   virtual void in(clast_stmt *s, int depth, cp_ctx *ctx) {
@@ -535,8 +535,8 @@ class CPCodeGenerationActions : public CPActions {
   virtual void out(clast_expr *e, cp_ctx *ctx) {
     ctx->dir = DFS_OUT;
     codegenctx *pctx = static_cast<codegenctx*>(ctx);
-    ClastExpCodeGen ExpGen(pctx->Builder, &pctx->CharMap);
-    pctx->exprValue = ExpGen.codegen(e, pctx->Builder->getInt64Ty());
+    ClastExpCodeGen ExpGen(Builder, &pctx->CharMap);
+    pctx->exprValue = ExpGen.codegen(e);
   }
 };
 }
@@ -725,9 +725,6 @@ class ClastCodeGeneration : public RegionPass {
     C = new CLooG(S);
     C->generate();
 
-    CPCodeGenerationActions cpa = CPCodeGenerationActions(dbgs());
-    ClastParser cp = ClastParser(cpa);
-
     Function *F = R->getEntry()->getParent();
 
     // Create a basic block in which to start code generation.
@@ -735,7 +732,10 @@ class ClastCodeGeneration : public RegionPass {
     IRBuilder<> Builder(PollyBB);
     DT->addNewBlock(PollyBB, R->getEntry());
 
-    codegenctx ctx (S, DT, SE, &Builder);
+    CPCodeGenerationActions cpa = CPCodeGenerationActions(&Builder);
+    ClastParser cp = ClastParser(cpa);
+
+    codegenctx ctx (S, DT, SE);
     clast_stmt *clast = C->getClast();
 
     addParameters(((clast_root*)clast)->names, ctx.CharMap, &Builder);
