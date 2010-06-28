@@ -67,19 +67,19 @@ return:                                           ; preds = %bb3.us
 ; CHECK:   }
 ; CHECK:   Bounds of Loop: bb1.us:      { 1 * {0,+,1}<%bb1.us> + 0 >= 0, -1 * {0,+,1}<%bb1.us> + 3999 >= 0}
 ; CHECK:     BB: bb1.us{
-; CHECK:       Reads %.scalar28[0]
-; CHECK:       Reads %.scalar25[0]
+; CHECK:       Reads %12[]
+; CHECK:       Reads %9[]
 ; CHECK:       Reads @A[8 * {0,+,1}<%bb1.us> + 32000 * {0,+,1}<%bb.nph.us> + 0]
 ; CHECK:       Reads @x[8 * {0,+,1}<%bb1.us> + 0]
-; CHECK:       Writes %.scalar25[0]
+; CHECK:       Writes %9[]
 ; CHECK:       Reads @B[8 * {0,+,1}<%bb1.us> + 32000 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:       Writes %.scalar28[0]
+; CHECK:       Writes %12[]
 ; CHECK:     }
 ; CHECK:   BB: bb3.us{
-; CHECK:     Reads %.scalar28[0]
-; CHECK:     Reads %.scalar25[0]
+; CHECK:     Reads %12[]
+; CHECK:     Reads %9[]
 ; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:     Reads %.scalar[0]
-; CHECK:     Reads %.scalar23[0]
+; CHECK:     Reads %0[]
+; CHECK:     Reads %1[]
 ; CHECK:     Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
 ; CHECK:   }

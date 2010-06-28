@@ -48,12 +48,12 @@ bb2:                                              ; preds = %bb, %entry
 ; CHECK: SCoP: bb => bb2.loopexit       Parameters: (%n, ), Max Loop Depth: 1
 ; CHECK: Bounds of Loop: bb:    { 1 * {0,+,1}<%bb> + 0 >= 0, -1 * {0,+,1}<%bb> + 1 * %n + -2 >= 0}
 ; CHECK:   BB: bb{
-; CHECK:     Reads %.pre.scalar[0]
-; CHECK:     Reads %.scalar[0]
-; CHECK:     Reads %.scalar18[0]
-; CHECK:     Writes %.scalar[0]
+; CHECK:     Reads %.pre[]
+; CHECK:     Reads %2[]
+; CHECK:     Reads %5[]
+; CHECK:     Writes %2[]
 ; CHECK:     Writes %a[8 * {0,+,1}<%bb> + 8]
 ; CHECK:     Reads %a[16 * {0,+,1}<%bb> + 16]
 ; CHECK:     Reads %a[8 * {0,+,1}<%bb> + 32]
-; CHECK:     Writes %.scalar18[0]
+; CHECK:     Writes %5[]
 ; CHECK:   }
