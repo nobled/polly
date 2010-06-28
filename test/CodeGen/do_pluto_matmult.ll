@@ -192,12 +192,14 @@ entry:
 ; CHECK: }
 
 
+; Do not dump the complete CLooG output. New CLooG version optimize more
+; in this test case.
 ; IMPORT: for (s1=0;s1<=35;s1+=4) {
-; IMPORT:   for (s2=max(0,s1);s2<=min(35,s1+3);s2++) {
+; IMPORT:   s2<=min(35,s1+3);s2++) {
 ; IMPORT:     for (s5=0;s5<=35;s5+=4) {
-; IMPORT:       for (s6=max(0,s5);s6<=min(35,s5+3);s6++) {
+; IMPORT:       s6<=min(35,s5+3);s6++) {
 ; IMPORT:         for (s9=0;s9<=35;s9+=4) {
-; IMPORT:           for (s10=max(0,s9);s10<=min(35,s9+3);s10++)
+; IMPORT:           s10<=min(35,s9+3);s10++)
 ; IMPORT:           {
 ; IMPORT:             S0(s2,s6,s10);
 ; IMPORT:           }
