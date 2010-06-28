@@ -329,9 +329,6 @@ class CPCodeGenerationActions : public CPActions {
   // For each open condition the merge basic block.
   std::vector<BasicBlock*> GuardMergeBBs;
 
-  // The last value calculated by a subexpression.
-  Value *exprValue;
-
   // The current statement we are working on.
   //
   // Also used to track the assignment of old IVS to new values or
@@ -349,6 +346,9 @@ class CPCodeGenerationActions : public CPActions {
   // Map the Values from the old code to their counterparts in the new code.
   ValueMapT ValueMap;
 
+  // Codegenerator for clast expressions.
+  ClastExpCodeGen ExpGen;
+
 public:
   // Map the textual representation of variables in clast to the actual
   // Values* created during code generation.  It is used to map every
@@ -361,8 +361,7 @@ public:
     switch(ctx->dir) {
       case DFS_IN:
         {
-          eval(a->RHS, ctx);
-          Value *RHS = exprValue;
+          Value *RHS = ExpGen.codegen(a->RHS);
 
           if (!a->LHS) {
             PHINode *PN = stmt->IVS[assignmentCount];
@@ -406,10 +405,8 @@ public:
         PHINode *IV;
         Value *IncrementedIV;
         BasicBlock *AfterBB;
-	eval(f->LB, ctx);
-        Value *LB = exprValue;
-	eval(f->UB, ctx);
-        Value *UB = exprValue;
+        Value *LB = ExpGen.codegen(f->LB);
+        Value *UB = ExpGen.codegen(f->UB);
         createLoop(Builder, LB, UB, stride, IV, AfterBB, IncrementedIV,
                    DT);
         (CharMap)[f->iterator] = IV;
@@ -437,12 +434,9 @@ public:
     }
   }
 
-  void print(struct clast_equation *eq, cp_ctx *ctx) {
-    eval(eq->LHS, ctx);
-    Value *LHS = exprValue;
-    eval(eq->RHS, ctx);
-    Value *RHS = exprValue;
-    Value *Result;
+  Value *codegen(struct clast_equation *eq) {
+    Value *LHS = ExpGen.codegen(eq->LHS);
+    Value *RHS = ExpGen.codegen(eq->RHS);
     CmpInst::Predicate P;
 
     if (eq->sign == 0)
@@ -452,9 +446,8 @@ public:
     else
       P = ICmpInst::ICMP_SLE;
 
-    Result = Builder->CreateICmp(P, LHS, RHS);
+    return Builder->CreateICmp(P, LHS, RHS);
 
-    exprValue = Result;
   }
 
   void print(struct clast_guard *g, cp_ctx *ctx) {
@@ -468,13 +461,10 @@ public:
           DT->addNewBlock(ThenBB, Builder->GetInsertBlock());
           DT->addNewBlock(MergeBB, Builder->GetInsertBlock());
 
-          print(&(g->eq[0]), ctx);
-          Value *Predicate = exprValue;
+          Value *Predicate = codegen(&(g->eq[0]));
 
           for (int i = 1; i < g->n; ++i) {
-            Value *TmpPredicate;
-            print(&(g->eq[i]), ctx);
-            TmpPredicate = exprValue;
+            Value *TmpPredicate = codegen(&(g->eq[i]));
             Predicate = Builder->CreateAnd(Predicate, TmpPredicate);
           }
 
@@ -511,7 +501,8 @@ public:
   public:
   CPCodeGenerationActions(SCoP *scop, DominatorTree *dt, ScalarEvolution *se,
                           IRBuilder<> *B) : S(scop), DT(dt), SE(se),
-  Builder(B) {}
+  Builder(B), ExpGen(Builder, &CharMap) {
+  }
 
   virtual void in(clast_stmt *s, int depth, cp_ctx *ctx) {
     ctx->dir = DFS_IN;
@@ -523,14 +514,9 @@ public:
     print(s, ctx);
   }
 
-  virtual void in(clast_expr *e, cp_ctx *ctx) {
-  }
-
-  virtual void out(clast_expr *e, cp_ctx *ctx) {
-    ctx->dir = DFS_OUT;
-    ClastExpCodeGen ExpGen(Builder, &CharMap);
-    exprValue = ExpGen.codegen(e);
-  }
+  // Unused.
+  virtual void in(clast_expr *e, cp_ctx *ctx) {}
+  virtual void out(clast_expr *e, cp_ctx *ctx) {}
 };
 }
 
