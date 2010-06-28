@@ -1,4 +1,4 @@
-//===- ClastCodeGeneration.cpp - Create LLVM IR from the CLooG AST --------===//
+//===------ CodeGeneration.cpp - Create LLVM IR from the CLooG AST --------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
