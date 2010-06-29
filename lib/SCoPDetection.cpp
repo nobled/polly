@@ -83,6 +83,11 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
       return false;
 
     const SCEV *Var = I->first;
+    // S is not fully evaluate at current scope, it is not our jobs to fully
+    // evaluate it here.
+    if (Var != SE->getSCEVAtScope(Var, Scope))
+      return false;
+
     // The constant offset is affine.
     if(isa<SCEVConstant>(Var))
       continue;
