@@ -72,7 +72,10 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
 
   Builder->SetInsertPoint(HeaderBB);
 
-  // Use the type of UB, because IV will compare to UB.
+  // Use the type of upper and lower bound.
+  assert(LB->getType() == UB->getType()
+         && "Different types for upper and lower bound.");
+
   const IntegerType *LoopIVType = dyn_cast<IntegerType>(UB->getType());
   assert(LoopIVType && "UB is not integer?");
 
@@ -81,7 +84,7 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   IV->addIncoming(LB, PreheaderBB);
 
   // IV increment.
-  Stride.zext(64);
+  Stride.zext(LoopIVType->getBitWidth());
   Value *StrideValue = ConstantInt::get(Context, Stride);
   IncrementedIV = Builder->CreateAdd(IV, StrideValue, "polly.next_loopiv");
 
