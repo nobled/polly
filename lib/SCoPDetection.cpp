@@ -186,6 +186,13 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
 
 bool SCoPDetection::isValidInstruction(Instruction &Inst,
                                        Region &RefRegion) const {
+  // Only canonical IVs are allowed.
+  if (isa<PHINode>(Inst)) {
+    Loop *L = LI->getLoopFor(Inst.getParent());
+    if (!L || L->getCanonicalInductionVariable() != &Inst)
+      return false;
+  }
+
   // We only check the call instruction but not invoke instruction.
   if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
     if (isValidCallInst(*CI))
