@@ -72,18 +72,20 @@ class SCoPDetection : public FunctionPass {
   // Clear the context.
   void clear();
 
-  // Run on region to:
-  // 1. check if the region is a valid part of SCoP,
-  // 2. remember valid regions
-  // 3. kill all temporary instructions that can be rewrite
-  //    in the codegen phase.
-  void runOnRegion(Region &R);
+  // Find the SCoPs in this region tree.
+  void findSCoPs(Region &R);
 
   /////////////////////////////////////////////////////////////////////////////
   // Check if the max region of SCoP is valid, return true if it is valid
   // false otherwise.
   //
   // NOTE: All this function will increase the statistic counters.
+
+  /// @brief Check if a region is a SCoP.
+  ///
+  /// @param R The region to check.
+  /// @return True it R is a SCoP, false otherwise.
+  bool isValidRegion(Region &R) const;
 
   /// @brief Check if a Region is a valid element of a SCoP.
   ///

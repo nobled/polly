@@ -248,21 +248,25 @@ bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
   return true;
 }
 
-void SCoPDetection::runOnRegion(Region &R) {
-  // FIXME: We visit the same region multiple times.
-  for (Region::iterator I = R.begin(), E = R.end(); I != E; ++I)
-    // TODO: Analyse the failure and hide the region.
-    runOnRegion(**I);
-
-  // Do not check toplevel region, it is not support at this moment.
-  if (R.getParent() == 0)
-    return;
-
-  // Check the Region and remember if it is valid.
-  if (isValidRegion(R, R)) {
+void SCoPDetection::findSCoPs(Region &R) {
+  if (isValidRegion(R)) {
     ++ValidRegion;
     ValidRegions.insert(&R);
   }
+
+  // FIXME: We visit the same region multiple times.
+  //        All subregions of a valid region are valid. So we can just insert
+  //        them in the set.
+  for (Region::iterator I = R.begin(), E = R.end(); I != E; ++I)
+    findSCoPs(**I);
+}
+
+bool SCoPDetection::isValidRegion(Region &R) const {
+  // The toplevel region is no valid region.
+  if (!R.getParent())
+    return false;
+
+  return isValidRegion(R,R);
 }
 
 bool SCoPDetection::isValidRegion(Region &RefRegion,
@@ -309,7 +313,7 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   RI = &getAnalysis<RegionInfo>();
   Region *TopRegion = RI->getTopLevelRegion();
 
-  runOnRegion(*TopRegion);
+  findSCoPs(*TopRegion);
   return false;
 }
 
