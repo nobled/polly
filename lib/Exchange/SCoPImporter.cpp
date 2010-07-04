@@ -19,7 +19,6 @@
 #define OPENSCOP_INT_T_IS_MP
 #include "openscop/openscop.h"
 
-#include "stdio.h"
 #include "isl/isl_set.h"
 #include "isl/isl_constraint.h"
 
