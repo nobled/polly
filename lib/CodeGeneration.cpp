@@ -509,7 +509,7 @@ class ClastCodeGeneration : public RegionPass {
       Instruction *InsertInst = &(*Builder->GetInsertBlock()->begin());
 
       VariableMap[names->parameters[i]] = Rewriter.expandCodeFor(Param, Ty,
-                                                                 InsertInst);
+      InsertInst);
       ++i;
     }
   }
@@ -626,13 +626,6 @@ class ClastCodeGeneration : public RegionPass {
 
     if (!S) {
       C = 0;
-      return false;
-    }
-
-    // Parameters not yet supported.
-    if (S->param_begin() != S->param_end()) {
-      errs() << "Code generation for SCoP " << S->getRegion().getNameStr()
-        << " failed. Parameters not yet supported.\n";
       return false;
     }
 

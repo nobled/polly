@@ -616,9 +616,8 @@ TempSCoP *TempSCoPInfo::getTempSCoP() const {
 }
 
 void TempSCoPInfo::print(raw_ostream &OS, const Module *) const {
-  if (SD->isSCoP(*CurR)
-      && (!PrintTopSCoPOnly || SD->isMaxRegionInSCoP(*CurR)))
-      getTempSCoP()->print(OS, SE, LI);
+  if (TempSCoP *TS = getTempSCoP())
+      TS->print(OS, SE, LI);
   else
     OS << "Region: " << CurR->getNameStr() << " is Not Valid SCoP!\n";
 }
