@@ -110,11 +110,10 @@ public:
     const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
 
-  polly_constraint *toAccessFunction(polly_ctx *ctx, polly_dim* dim,
+  polly_constraint *toAccessFunction(polly_dim* dim,
     const SmallVectorImpl<Loop*> &NestLoops,
     const SmallVectorImpl<const SCEV*> &Params,
     ScalarEvolution &SE) const;
-
 
   bool isDataRef() const {
     return FuncType == ReadMem || FuncType == WriteMem;

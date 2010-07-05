@@ -87,32 +87,64 @@ polly_map *buildScattering(__isl_keep polly_ctx *ctx, unsigned ParamDim,
   return isl_map_from_basic_map(bmap);
 }
 
+
+void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
+                             ScalarEvolution &SE, SmallVectorImpl<Loop*>
+                             &NestLoops) {
+  const AccFuncSetType *AccFuncs = tempSCoP.getAccessFunctions(BB);
+
+  if (!AccFuncs)
+    return;
+
+  // At this moment, getelementptr translates multiple dimension to
+  // one dimension.
+  polly_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
+                                 NestLoops.size(), 1);
+  for (AccFuncSetType::const_iterator I = AccFuncs->begin(),
+       E = AccFuncs->end(); I != E; ++I) {
+    const SCEVAffFunc &AffFunc = *I;
+    polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+    polly_constraint *c = AffFunc.toAccessFunction(dim, NestLoops,
+                                                   Parent.getParams(), SE);
+    bmap = isl_basic_map_add_constraint(bmap, c);
+    polly_map *map = isl_map_from_basic_map(bmap);
+
+    DataRef::AccessType AccessType;
+    if (AffFunc.isRead())
+      AccessType = DataRef::Read;
+    else
+      AccessType = DataRef::Write;
+
+    DataRef *access = new DataRef(AffFunc.getBaseAddr(), AccessType, map);
+    MemAccs.push_back(access);
+  }
+}
+
 static __isl_give
-polly_set *buildIterateDomain(SCoP &SCoP, TempSCoP &tempSCoP,
-                              const Region &CurRegion, const BasicBlock &CurBB,
-                              ScalarEvolution &SE,
-                              SmallVectorImpl<const SCEVAddRecExpr*> &IndVars) {
-  // Create the basic set;
+polly_set *buildIterationDomain(SCoP &SCoP, TempSCoP &tempSCoP,
+                                const Region &CurRegion, const BasicBlock
+                                &CurBB, ScalarEvolution &SE,
+                                SmallVectorImpl<const SCEVAddRecExpr*> &IndVars)
+{
   polly_dim *dim = isl_dim_set_alloc(SCoP.getCtx(), SCoP.getNumParams(),
                                     IndVars.size());
   polly_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
-
-
-  // isl int for iteration domain construction.
   isl_int v;
   isl_int_init(v);
 
+  // Loop bounds.
   for (int i = 0, e = IndVars.size(); i != e; ++i) {
     const SCEVAffFunc &bound = tempSCoP.getLoopBound(IndVars[i]->getLoop());
     polly_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
-    // Build lower bound IV >= 0
+
+    // Lower bound IV >= 0.
     isl_int_set_si(v, 1);
     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
     bset = isl_basic_set_add_constraint(bset, c);
 
-    // Build upper bound.
-    c = bound.toConditionConstrain(SCoP.getCtx(),
-      dim, IndVars, SCoP.getParams());
+    // Upper bound.
+    c = bound.toConditionConstrain(SCoP.getCtx(), dim, IndVars,
+                                   SCoP.getParams());
     isl_int_set_si(v, -1);
     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
     bset = isl_basic_set_add_constraint(bset, c);
@@ -121,14 +153,14 @@ polly_set *buildIterateDomain(SCoP &SCoP, TempSCoP &tempSCoP,
 
   polly_set *dom = isl_set_from_basic_set(bset);
 
-  // Build the BB condition constrains, by traveling up the region tree.
-  // NOTE: These are only a temporary hack.
+  // Build BB condition constrains, by traveling up the region tree.
+  // NOTE: This is only a temporary hack.
   const Region *TopR = tempSCoP.getMaxRegion().getParent(),
                *CurR = &CurRegion;
   const BasicBlock *CurEntry = &CurBB;
   do {
     assert(CurR && "We exceed the top region?");
-    // Skip when multiple regions share the same entry
+    // Skip when multiple regions share the same entry.
     if (CurEntry != CurR->getEntry())
       if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
         for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end();
@@ -137,7 +169,6 @@ polly_set *buildIterateDomain(SCoP &SCoP, TempSCoP &tempSCoP,
             IndVars, SCoP.getParams());
           dom = isl_set_intersect(dom, c);
         }
-    //
     CurEntry = CurR->getEntry();
     CurR = CurR->getParent();
   } while (TopR != CurR);
@@ -152,7 +183,7 @@ DataRef::~DataRef() {
 }
 
 void DataRef::print(raw_ostream &OS) const {
-   // Print BaseAddr
+  // Print BaseAddr.
   OS << (isRead() ? "Reads" : "Writes") << " ";
   if (isScalar())
     OS << *getScalar() << "\n";
@@ -176,6 +207,7 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
                    ScalarEvolution &SE)
   : Parent(parent), BB(&bb), IVS(NestLoops.size()) {
   SmallVector<const SCEVAddRecExpr*, 8> SIVS(NestLoops.size());
+
   // Setup the induction variables
   for (unsigned i = 0, e = NestLoops.size(); i < e; ++i) {
     PHINode *PN = NestLoops[i]->getCanonicalInductionVariable();
@@ -186,61 +218,12 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
 
   polly_ctx *ctx = parent.getCtx();
 
-  // Build the iteration domain
-  Domain = buildIterateDomain(parent, tempSCoP, CurRegion, *BB,
-                                             SE, SIVS);
+  Domain = buildIterationDomain(parent, tempSCoP, CurRegion, *BB, SE, SIVS);
+  Scattering = buildScattering(ctx, parent.getNumParams(), Scatter,
+                               parent.getMaxLoopDepth() * 2 + 1,
+                               NestLoops.size());
+  buildAccesses(tempSCoP, CurRegion, SE, NestLoops);
 
-  DEBUG(std::cerr << "\n\nIterate domain of BB: " << bb.getNameStr() << " is:\n");
-  DEBUG(isl_set_print(Domain, stderr, 20, ISL_FORMAT_ISL));
-  DEBUG(std::cerr << std::endl);
-
-  // Build the scattering function
-  DEBUG(dbgs() << "For BB: " << bb.getName() << " ScatDim: " << Scatter.size()
-    << " LoopDepth: " << NestLoops.size() << " { ");
-  DEBUG(
-    for (unsigned i = 0, e = Scatter.size(); i != e; ++i)
-      dbgs() << Scatter[i] << ", ";
-  dbgs() << "}\n";
-  );
-  Scattering = buildScattering(ctx, parent.getNumParams(),
-                                          Scatter,
-                                          parent.getMaxLoopDepth() * 2 + 1,
-                                          NestLoops.size());
-  DEBUG(std::cerr << "\nScattering:\n");
-  DEBUG(isl_map_print(Scattering, stderr, 20, ISL_FORMAT_ISL));
-  DEBUG(std::cerr << std::endl);
-
-  // Build the access function
-  if (const AccFuncSetType *AccFuncs = tempSCoP.getAccessFunctions(BB)) {
-    // At this moment, getelementptr translate multiple dimension to
-    // one dimension.
-    polly_dim *dim = isl_dim_alloc(ctx, parent.getNumParams(),
-                                    NestLoops.size(), 1);
-    for (AccFuncSetType::const_iterator I=AccFuncs->begin(), E=AccFuncs->end();
-        I != E; ++I) {
-      const SCEVAffFunc &AffFunc = *I;
-      polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
-
-      bmap = isl_basic_map_add_constraint(bmap,
-        AffFunc.toAccessFunction(ctx, dim, NestLoops, parent.getParams(), SE));
-
-      polly_map *map = isl_map_from_basic_map(bmap);
-
-      // Create the access function and add it to the access function list
-      // of the statement.
-      DataRef *access = new DataRef(AffFunc.getBaseAddr(),
-        AffFunc.isRead() ? DataRef::Read : DataRef::Write, map);
-
-      DEBUG(dbgs() << "Translate access function:\n");
-      DEBUG(AffFunc.print(dbgs(), &SE));
-      DEBUG(dbgs() << "\nto:\n");
-      DEBUG(isl_map_print(map, stderr, 20, ISL_FORMAT_ISL));
-      DEBUG(std::cerr << std::endl);
-
-      MemAccs.push_back(access);
-    }
-
-  }
 }
 unsigned SCoPStmt::getNumParams() {
   return isl_set_n_param(Domain);

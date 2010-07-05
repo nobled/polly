@@ -145,6 +145,8 @@ class SCoPStmt {
   typedef SmallVector<DataRef*, 8> DataRefVec;
   DataRefVec MemAccs;
 
+  void buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
+                     ScalarEvolution &SE, SmallVectorImpl<Loop*> &NestLoops);
   /// Create the SCoPStmt from a BasicBlock.
   SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
           const Region &CurRegion, BasicBlock &bb,

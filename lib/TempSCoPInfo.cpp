@@ -139,7 +139,7 @@ polly_set *SCEVAffFunc::toConditionSet(polly_ctx *ctx,
    return ret;
 }
 
-polly_constraint *SCEVAffFunc::toAccessFunction(polly_ctx *ctx, polly_dim* dim,
+polly_constraint *SCEVAffFunc::toAccessFunction(polly_dim* dim,
                                     const SmallVectorImpl<Loop*> &NestLoops,
                                     const SmallVectorImpl<const SCEV*> &Params,
                                     ScalarEvolution &SE) const {
