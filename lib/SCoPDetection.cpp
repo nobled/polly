@@ -56,6 +56,10 @@ BADSCOP_STAT(FuncCall,    "Function call with side effects appeared");
 BADSCOP_STAT(AffFunc,     "Expression not affine");
 BADSCOP_STAT(Other,       "Others");
 
+static cl::opt<bool>
+AllowConditions("polly-detect-conditions",
+                cl::desc("Allow conditions in SCoPs."),
+                cl::Hidden,  cl::init(false));
 
 //===----------------------------------------------------------------------===//
 // SCoPDetection Implementation.
@@ -126,6 +130,42 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
   return !isMemAcc || PtrExist;
 }
 
+// Return the exit of the maximal refined region, that starts at
+// BB.
+BasicBlock *SCoPDetection::maxRegionExit(BasicBlock *BB) const {
+  BasicBlock *Exit = NULL;
+
+  while (true) {
+    // Get largest region that starts at BB.
+    Region *R = RI->getRegionFor(BB);
+    while (R && R->getParent() && R->getParent()->getEntry() == BB)
+      R = R->getParent();
+
+    // Get the single exit of BB.
+    if (R && R->getEntry() == BB)
+      Exit = R->getExit();
+    else if (++succ_begin(BB) == succ_end(BB))
+      Exit = *succ_begin(BB);
+    else
+      return Exit;
+
+    // Get largest region that starts at BB.
+    Region *ExitR = RI->getRegionFor(Exit);
+    while (ExitR && ExitR->getParent()
+           && ExitR->getParent()->getEntry() == Exit)
+      ExitR = ExitR->getParent();
+
+    for (pred_iterator PI = pred_begin(Exit), PE = pred_end(Exit); PI != PE;
+         ++PI)
+      if (!R->contains(*PI) && !ExitR->contains(*PI))
+        break;
+
+    BB = Exit;
+  }
+
+  return Exit;
+}
+
 bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   TerminatorInst *TI = BB.getTerminator();
 
@@ -143,17 +183,22 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
         || isa<Instruction>(Br->getCondition())))
     return false;
 
+  // Allow loop exit conditions.
   Loop *L = LI->getLoopFor(&BB);
+  if (L && L->getExitingBlock() == &BB)
+    return true;
 
-  // Conditions are not yet supported, except at loop exits.
-  // TODO: Allow conditions in structured CFGs.
-  if (!L || L->getExitingBlock() != &BB) {
-    DEBUG(dbgs() << "Bad BB in cfg: " << BB.getName() << "\n");
-    STATSCOP(CFG);
-    return false;
-  }
+  // Allow perfectly nested conditions.
+  assert(Br->getNumSuccessors() == 2 && "Unexpected number of successors");
 
-  return true;
+  if (AllowConditions)
+    if (maxRegionExit(Br->getSuccessor(0)) == maxRegionExit(Br->getSuccessor(1))
+        && maxRegionExit(Br->getSuccessor(0)))
+      return true;
+
+  DEBUG(dbgs() << "Bad BB in cfg: " << BB.getName() << "\n");
+  STATSCOP(CFG);
+  return false;
 }
 
 bool SCoPDetection::isValidCallInst(CallInst &CI) {

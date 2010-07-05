@@ -115,6 +115,7 @@ class SCoPDetection : public FunctionPass {
   // Check if the BB is a valid part of SCoP, return true and extract the
   // corresponding information, return false otherwise.
   bool isValidBasicBlock(BasicBlock &BB, Region &RefRegion) const;
+  BasicBlock *maxRegionExit(BasicBlock *BB) const;
 
   /// @brief Check if the control flow in a basic block is valid.
   ///
