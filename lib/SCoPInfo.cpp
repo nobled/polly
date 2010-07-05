@@ -36,14 +36,34 @@ STATISTIC(SCoPFound,  "Number of valid SCoP");
 STATISTIC(RichSCoPFound,   "Number of SCoP has loop inside");
 
 //===----------------------------------------------------------------------===//
-/// Help function to build isl objects
+DataRef::~DataRef() {
+  isl_map_free(getAccessFunction());
+}
 
-static __isl_give
-polly_map *buildScattering(__isl_keep polly_ctx *ctx, unsigned ParamDim,
-                           SmallVectorImpl<unsigned> &Scatter,
-                           unsigned ScatDim, unsigned CurLoopDepth) {
-  // FIXME: No parameter need?
-  polly_dim *dim = isl_dim_alloc(ctx, ParamDim, CurLoopDepth, ScatDim);
+void DataRef::print(raw_ostream &OS) const {
+  // Print BaseAddr.
+  OS << (isRead() ? "Reads" : "Writes") << " ";
+  if (isScalar())
+    OS << *getScalar() << "\n";
+  else {
+    WriteAsOperand(OS, getBaseAddr(), false);
+    OS << " at:\n";
+    isl_map_print(getAccessFunction(), stderr, 20, ISL_FORMAT_ISL);
+    DEBUG(OS << "\n");
+    DEBUG(isl_map_dump(getAccessFunction(), stderr, 20));
+  }
+}
+
+void DataRef::dump() const {
+  print(errs());
+}
+
+//===----------------------------------------------------------------------===//
+void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
+                               unsigned CurLoopDepth) {
+  unsigned ScatDim = Parent.getMaxLoopDepth() * 2 + 1;
+  polly_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
+                                 CurLoopDepth, ScatDim);
   polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
   isl_int v;
   isl_int_init(v);
@@ -84,7 +104,7 @@ polly_map *buildScattering(__isl_keep polly_ctx *ctx, unsigned ParamDim,
 
   isl_int_clear(v);
   isl_dim_free(dim);
-  return isl_map_from_basic_map(bmap);
+  Scattering = isl_map_from_basic_map(bmap);
 }
 
 
@@ -120,13 +140,19 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
   }
 }
 
-static __isl_give
-polly_set *buildIterationDomain(SCoP &SCoP, TempSCoP &tempSCoP,
-                                const Region &CurRegion, const BasicBlock
-                                &CurBB, ScalarEvolution &SE,
-                                SmallVectorImpl<const SCEVAddRecExpr*> &IndVars)
+void SCoPStmt::buildIterationDomain(TempSCoP &tempSCoP,
+                                const Region &CurRegion,
+                                ScalarEvolution &SE)
 {
-  polly_dim *dim = isl_dim_set_alloc(SCoP.getCtx(), SCoP.getNumParams(),
+  SmallVector<const SCEVAddRecExpr*, 8> IndVars(IVS.size());
+
+  // Setup the induction variables.
+  for (unsigned i = 0, e = IVS.size(); i < e; ++i) {
+    PHINode *PN = IVS[i];
+    IndVars[i] = cast<SCEVAddRecExpr>(SE.getSCEV(PN));
+  }
+
+  polly_dim *dim = isl_dim_set_alloc(Parent.getCtx(), Parent.getNumParams(),
                                     IndVars.size());
   polly_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
   isl_int v;
@@ -143,8 +169,8 @@ polly_set *buildIterationDomain(SCoP &SCoP, TempSCoP &tempSCoP,
     bset = isl_basic_set_add_constraint(bset, c);
 
     // Upper bound.
-    c = bound.toConditionConstrain(SCoP.getCtx(), dim, IndVars,
-                                   SCoP.getParams());
+    c = bound.toConditionConstrain(Parent.getCtx(), dim, IndVars,
+                                   Parent.getParams());
     isl_int_set_si(v, -1);
     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
     bset = isl_basic_set_add_constraint(bset, c);
@@ -157,7 +183,7 @@ polly_set *buildIterationDomain(SCoP &SCoP, TempSCoP &tempSCoP,
   // NOTE: This is only a temporary hack.
   const Region *TopR = tempSCoP.getMaxRegion().getParent(),
                *CurR = &CurRegion;
-  const BasicBlock *CurEntry = &CurBB;
+  const BasicBlock *CurEntry = BB;
   do {
     assert(CurR && "We exceed the top region?");
     // Skip when multiple regions share the same entry.
@@ -165,8 +191,8 @@ polly_set *buildIterationDomain(SCoP &SCoP, TempSCoP &tempSCoP,
       if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
         for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end();
             I != E; ++I) {
-          polly_set *c = (*I).toConditionSet(SCoP.getCtx(), dim,
-            IndVars, SCoP.getParams());
+          polly_set *c = (*I).toConditionSet(Parent.getCtx(), dim,
+            IndVars, Parent.getParams());
           dom = isl_set_intersect(dom, c);
         }
     CurEntry = CurR->getEntry();
@@ -174,54 +200,24 @@ polly_set *buildIterationDomain(SCoP &SCoP, TempSCoP &tempSCoP,
   } while (TopR != CurR);
 
   isl_dim_free(dim);
-  return dom;
+  Domain = dom;
 }
 
-//===----------------------------------------------------------------------===//
-DataRef::~DataRef() {
-  isl_map_free(getAccessFunction());
-}
-
-void DataRef::print(raw_ostream &OS) const {
-  // Print BaseAddr.
-  OS << (isRead() ? "Reads" : "Writes") << " ";
-  if (isScalar())
-    OS << *getScalar() << "\n";
-  else {
-    WriteAsOperand(OS, getBaseAddr(), false);
-    OS << " at:\n";
-    isl_map_print(getAccessFunction(), stderr, 20, ISL_FORMAT_ISL);
-    DEBUG(OS << "\n");
-    DEBUG(isl_map_dump(getAccessFunction(), stderr, 20));
-  }
-}
-
-void DataRef::dump() const {
-  print(errs());
-}
-//===----------------------------------------------------------------------===//
 SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
                    const Region &CurRegion, BasicBlock &bb,
                    SmallVectorImpl<Loop*> &NestLoops,
                    SmallVectorImpl<unsigned> &Scatter,
                    ScalarEvolution &SE)
   : Parent(parent), BB(&bb), IVS(NestLoops.size()) {
-  SmallVector<const SCEVAddRecExpr*, 8> SIVS(NestLoops.size());
-
-  // Setup the induction variables
+  // Setup the induction variables.
   for (unsigned i = 0, e = NestLoops.size(); i < e; ++i) {
     PHINode *PN = NestLoops[i]->getCanonicalInductionVariable();
     assert(PN && "SCoPDetect never allow loop without CanIV in SCoP!");
     IVS[i] = PN;
-    SIVS[i] = cast<SCEVAddRecExpr>(SE.getSCEV(PN));
   }
 
-  polly_ctx *ctx = parent.getCtx();
-
-  Domain = buildIterationDomain(parent, tempSCoP, CurRegion, *BB, SE, SIVS);
-  Scattering = buildScattering(ctx, parent.getNumParams(), Scatter,
-                               parent.getMaxLoopDepth() * 2 + 1,
-                               NestLoops.size());
+  buildIterationDomain(tempSCoP, CurRegion, SE);
+  buildScattering(Scatter, NestLoops.size());
   buildAccesses(tempSCoP, CurRegion, SE, NestLoops);
 
 }
@@ -259,8 +255,7 @@ void SCoPStmt::print(raw_ostream &OS) const {
     isl_set_print(Domain, stderr, 20, ISL_FORMAT_ISL);
     DEBUG(OS << "\n");
     DEBUG(isl_set_dump(Domain, stderr, 20));
-  }
-  else
+  } else
     OS << "\t\t\tn/a\n";
 
   OS << "\n";
@@ -280,7 +275,6 @@ void SCoPStmt::print(raw_ostream &OS) const {
     (*I)->print(OS);
     OS << "\n";
   }
-
 }
 
 void SCoPStmt::dump() const { print(dbgs()); }
