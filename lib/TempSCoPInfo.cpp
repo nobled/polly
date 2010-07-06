@@ -168,7 +168,7 @@ polly_constraint *SCEVAffFunc::toAccessFunction(polly_dim* dim,
   return c;
 }
 
-void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
+void SCEVAffFunc::print(raw_ostream &OS) const {
   // Print BaseAddr.
   if (isDataRef()) {
     OS << (isRead() ? "Reads" : "Writes") << " ";
@@ -195,13 +195,12 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
 }
 
 /// Helper function to print the condition
-static void printBBCond(raw_ostream &OS, const BBCond &Cond,
-                        ScalarEvolution *SE) {
+static void printBBCond(raw_ostream &OS, const BBCond &Cond) {
   assert(!Cond.empty() && "Unexpected empty condition!");
-  Cond[0].print(OS, SE);
+  Cond[0].print(OS);
   for (unsigned i = 1, e = Cond.size(); i != e; ++i) {
     OS << " && ";
-    Cond[i].print(OS, SE);
+    Cond[i].print(OS);
   }
 }
 
@@ -254,9 +253,9 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
 
     OS.indent(ind) << "Bounds of Loop: " << at->first->getHeader()->getName()
       << ":\t{ ";
-    lb.print(OS,SE);
+    lb.print(OS);
     OS << ", ";
-    ub.print(OS,SE);
+    ub.print(OS);
     OS << "}\n";
     // Increase the indent
     ind += 2;
@@ -272,7 +271,7 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
       // Print the condition
       if (const BBCond *Cond = getBBCond(subR->getEntry())) {
         OS << "Constrain of Region " << subR->getNameStr() << ":\t";
-        printBBCond(OS, *Cond, SE);
+        printBBCond(OS, *Cond);
         OS << '\n';
       }
       printDetail(OS, SE, LI, subR, subInd);
@@ -282,7 +281,7 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
       if (BB != CurR->getEntry())
         if (const BBCond *Cond = getBBCond(BB)) {
           OS << "Constrain of BB " << BB->getName() << ":\t";
-          printBBCond(OS, *Cond, SE);
+          printBBCond(OS, *Cond);
           OS << '\n';
         }
 
@@ -290,7 +289,7 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
         OS.indent(ind) << "BB: " << BB->getName() << "{\n";
         for (AccFuncSetType::const_iterator FI = AccFunc->begin(),
             FE = AccFunc->end(); FI != FE; ++FI) {
-          FI->print(OS.indent(bb_ind),SE);
+          FI->print(OS.indent(bb_ind));
           OS << "\n";
         }
         OS.indent(ind) << "}\n";
@@ -493,7 +492,7 @@ void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
     Cond.push_back(SCEVAffFunc());
     buildAffineCondition(*(Br->getCondition()), inverted, Cond.back(), SCoP);
     DEBUG(
-      Cond.back().print(dbgs(), SE);
+      Cond.back().print(dbgs());
       dbgs() << " && ";
     );
   }

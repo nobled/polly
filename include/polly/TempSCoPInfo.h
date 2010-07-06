@@ -128,8 +128,7 @@ public:
   /// @brief Print the affine function.
   ///
   /// @param OS The output stream the affine function is printed to.
-  /// @param SE The ScalarEvolution that help printing the affine function.
-  void print(raw_ostream &OS, ScalarEvolution *SE) const;
+  void print(raw_ostream &OS) const;
 };
 
 //===---------------------------------------------------------------------===//
