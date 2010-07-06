@@ -90,7 +90,6 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
 
   // Fill scattering dimensions.
   for (unsigned i = 2 * CurLoopDepth + 1; i < ScatDim ; ++i) {
-
     polly_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, 1);
     isl_constraint_set_coefficient(c, isl_dim_out, i, v);
@@ -114,7 +113,7 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
   if (!AccFuncs)
     return;
 
-  // At this moment, getelementptr translates multiple dimension to
+  // At the moment, getelementptr translates multiple dimensions to
   // one dimension.
   polly_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
                                  NestLoops.size(), 1);
@@ -122,8 +121,9 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
        E = AccFuncs->end(); I != E; ++I) {
     const SCEVAffFunc &AffFunc = *I;
     polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
-    polly_constraint *c = AffFunc.toAccessFunction(dim, NestLoops,
-                                                   Parent.getParams(), SE);
+    polly_constraint *c;
+
+    c = AffFunc.toAccessFunction(dim, NestLoops, Parent.getParams(), SE);
     bmap = isl_basic_map_add_constraint(bmap, c);
     polly_map *map = isl_map_from_basic_map(bmap);
 
@@ -137,22 +137,12 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
     MemAccs.push_back(access);
   }
 }
-
-void SCoPStmt::buildIterationDomain(TempSCoP &tempSCoP,
-                                const Region &CurRegion,
-                                ScalarEvolution &SE)
-{
-  SmallVector<const SCEVAddRecExpr*, 8> IndVars(IVS.size());
-
-  // Setup the induction variables.
-  for (unsigned i = 0, e = IVS.size(); i < e; ++i) {
-    PHINode *PN = IVS[i];
-    IndVars[i] = cast<SCEVAddRecExpr>(SE.getSCEV(PN));
-  }
-
+void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
+                                             IndVarVec &IndVars) {
   polly_dim *dim = isl_dim_set_alloc(Parent.getCtx(), Parent.getNumParams(),
-                                    IndVars.size());
-  polly_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
+                                     IndVars.size());
+  polly_basic_set *bset = isl_basic_set_universe(dim);
+
   isl_int v;
   isl_int_init(v);
 
@@ -161,21 +151,27 @@ void SCoPStmt::buildIterationDomain(TempSCoP &tempSCoP,
     const SCEVAffFunc &bound = tempSCoP.getLoopBound(IndVars[i]->getLoop());
     polly_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
 
-    // Lower bound IV >= 0.
+    // Lower bound: IV >= 0.
     isl_int_set_si(v, 1);
     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
     bset = isl_basic_set_add_constraint(bset, c);
 
-    // Upper bound.
+    // Upper bound: IV <= NumberOfIterations.
     c = bound.toConditionConstrain(Parent.getCtx(), dim, IndVars,
                                    Parent.getParams());
     isl_int_set_si(v, -1);
     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
     bset = isl_basic_set_add_constraint(bset, c);
   }
-  isl_int_clear(v);
 
-  polly_set *dom = isl_set_from_basic_set(bset);
+  isl_int_clear(v);
+  Domain = isl_set_from_basic_set(bset);
+}
+
+void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
+                                     const Region &CurRegion,
+                                     IndVarVec &IndVars) {
+  polly_dim *dim = isl_set_get_dim(Domain);
 
   // Build BB condition constrains, by traveling up the region tree.
   // NOTE: This is only a temporary hack.
@@ -191,14 +187,29 @@ void SCoPStmt::buildIterationDomain(TempSCoP &tempSCoP,
             I != E; ++I) {
           polly_set *c = (*I).toConditionSet(Parent.getCtx(), dim,
             IndVars, Parent.getParams());
-          dom = isl_set_intersect(dom, c);
+          Domain = isl_set_intersect(Domain, c);
         }
     CurEntry = CurR->getEntry();
     CurR = CurR->getParent();
   } while (TopR != CurR);
 
   isl_dim_free(dim);
-  Domain = dom;
+}
+
+void SCoPStmt::buildIterationDomain(TempSCoP &tempSCoP,
+                                const Region &CurRegion,
+                                ScalarEvolution &SE)
+{
+  IndVarVec IndVars(IVS.size());
+
+  // Setup the induction variables.
+  for (unsigned i = 0, e = IVS.size(); i < e; ++i) {
+    PHINode *PN = IVS[i];
+    IndVars[i] = cast<SCEVAddRecExpr>(SE.getSCEV(PN));
+  }
+
+  buildIterationDomainFromLoops(tempSCoP, IndVars);
+  addConditionsToDomain(tempSCoP, CurRegion, IndVars);
 }
 
 SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,

@@ -20,9 +20,11 @@
 #include "llvm/Analysis/RegionPass.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/ScalarEvolution.h"
+#include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/PointerUnion.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 
@@ -145,6 +147,12 @@ class SCoPStmt {
   typedef SmallVector<DataRef*, 8> DataRefVec;
   DataRefVec MemAccs;
 
+  typedef SmallVector<const SCEVAddRecExpr*, 8> IndVarVec;
+  void addConditionsToDomain(TempSCoP &tempSCoP,
+                             const Region &CurRegion,
+                             IndVarVec &IndVars);
+  void buildIterationDomainFromLoops(TempSCoP &tempSCoP,
+                                     IndVarVec &IndVars);
   void buildIterationDomain(TempSCoP &tempSCoP,
                             const Region &CurRegion,
                             ScalarEvolution &SE);
