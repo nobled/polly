@@ -39,7 +39,6 @@ namespace {
       (void) polly::createSCoPInfoPass();
       (void) polly::createScopPrinterPass();
       (void) polly::createAffSCEVItTesterPass();
-      (void) polly::createClastPrinterPass();
       (void) polly::createClastCodeGenerationPass();
       (void) polly::createScalarDataRefPass();
       (void) polly::createCLooGExporterPass();
