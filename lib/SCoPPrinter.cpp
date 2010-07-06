@@ -46,12 +46,21 @@ public:
       return false;
 
     Function *F = S->getRegion().getEntry()->getParent();
-    std::cout << "\nIn function: '" << F->getNameStr() << "' SCoP: "
+    fflush(stdout);
+    outs() << "\nIn function: '" << F->getNameStr() << "' SCoP: "
       << S->getRegion().getNameStr() << ":\n";
 
     CLooG C = CLooG(S);
     C.generate();
     C.pprint();
+
+    int i = 0;
+    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+      outs() << "S" << i << ": ";
+      WriteAsOperand(outs(), (*SI)->getBasicBlock(), false);
+      outs() << "\n";
+      i++;
+    }
 
     return false;
   }
