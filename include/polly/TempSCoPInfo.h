@@ -129,6 +129,7 @@ public:
   ///
   /// @param OS The output stream the affine function is printed to.
   void print(raw_ostream &OS) const;
+  void dump() const;
 };
 
 //===---------------------------------------------------------------------===//

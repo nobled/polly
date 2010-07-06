@@ -194,6 +194,10 @@ void SCEVAffFunc::print(raw_ostream &OS) const {
     OS << " != 0";
 }
 
+void SCEVAffFunc::dump() const {
+  print(errs());
+}
+
 /// Helper function to print the condition
 static void printBBCond(raw_ostream &OS, const BBCond &Cond) {
   assert(!Cond.empty() && "Unexpected empty condition!");
