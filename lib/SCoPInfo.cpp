@@ -31,9 +31,8 @@
 using namespace llvm;
 using namespace polly;
 
-STATISTIC(SCoPFound,  "Number of valid SCoP");
-
-STATISTIC(RichSCoPFound,   "Number of SCoP has loop inside");
+STATISTIC(SCoPFound,  "Number of valid SCoPs");
+STATISTIC(RichSCoPFound,   "Number of SCoPs containing a loop");
 
 //===----------------------------------------------------------------------===//
 DataRef::~DataRef() {
@@ -41,7 +40,6 @@ DataRef::~DataRef() {
 }
 
 void DataRef::print(raw_ostream &OS) const {
-  // Print BaseAddr.
   OS << (isRead() ? "Reads" : "Writes") << " ";
   if (isScalar())
     OS << *getScalar() << "\n";
@@ -315,12 +313,13 @@ SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &SE)
 }
 
 SCoP::~SCoP() {
-  // Free the context
   isl_set_free(Context);
+
   // Free the statements;
   for (iterator I = begin(), E = end(); I != E; ++I)
     delete *I;
-  // We need a singleton to manage this?
+
+  // Do we need a singleton to manage this?
   //isl_ctx_free(ctx);
 }
 
@@ -379,7 +378,7 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
   if (L)
     NestLoops.push_back(L);
 
-  // TODO: scattering function for non-linear CFG
+  // TODO: Scattering function for non-linear CFG.
   unsigned loopDepth = NestLoops.size();
   assert(Scatter.size() > loopDepth && "Scatter not big enough!");
 
@@ -394,14 +393,14 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
       if (isTrivialBB(BB, tempSCoP))
         continue;
 
-      // Build the statement
+      // Build the statement.
       SCoPStmt *stmt = new SCoPStmt(*this, tempSCoP, CurRegion, *BB,
                                     NestLoops, Scatter, SE);
 
       // Add the new statement to statements list.
       Stmts.push_back(stmt);
 
-      // Increasing the Scattering function is ok for at the moment, because
+      // Increasing the Scattering function is OK for at the moment, because
       // we are using a depth iterator and the program is linear
       ++Scatter[loopDepth];
     }
