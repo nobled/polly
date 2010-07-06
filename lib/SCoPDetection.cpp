@@ -402,5 +402,5 @@ SCoPDetection::~SCoPDetection() {
 char SCoPDetection::ID = 0;
 
 static RegisterPass<SCoPDetection>
-X("polly-scop-detect", "Polly - Detect SCoPs");
+X("polly-detect", "Polly - Detect SCoPs in functions");
 
