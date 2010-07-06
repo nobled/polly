@@ -36,41 +36,36 @@ using namespace llvm;
 using namespace polly;
 
 static cl::opt<bool>
-PrintTopSCoPOnly("print-top-scop-only", cl::desc("Print out subSCoP."),
-                 cl::Hidden);
-
-static cl::opt<bool>
 PrintTempSCoPInDetail("polly-print-temp-scop-in-detail",
-                      cl::desc("Print the temporary scop information in detail"),
+                      cl::desc("Print temporary scop information in detail"),
                       cl::Hidden);
 
 //===----------------------------------------------------------------------===//
 /// Helper Class
 
-SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, ScalarEvolution *SE)
-: FuncType(Type) {
+SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
+                         ScalarEvolution *SE) : FuncType(Type) {
   assert(S && "S can not be null!");
-
   assert(!isa<SCEVCouldNotCompute>(S)
     && "Broken affine function in SCoP");
 
   for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
-    I != E; ++I) {
-      // The constant part must be a SCEVConstant.
-      // TODO: support sizeof in coefficient.
-      assert(isa<SCEVConstant>(I->second) && "Expect SCEVConst in coefficient!");
+       I != E; ++I) {
+    // The constant part must be a SCEVConstant.
+    // TODO: support sizeof in coefficient.
+    assert(isa<SCEVConstant>(I->second) && "Expect SCEVConst in coefficient!");
 
-      const SCEV *Var = I->first;
-      // Extract the constant part
-      if (isa<SCEVConstant>(Var))
-        // Add the translation component
-        TransComp = I->second;
-      else if (Var->getType()->isPointerTy()) { // Extract the base address.
-        const SCEVUnknown *Addr = dyn_cast<SCEVUnknown>(Var);
-        assert(Addr && "Why we got a broken scev?");
-        BaseAddr = Addr->getValue();
-      } else // Extract other affine component.
-        LnrTrans.insert(*I);
+    const SCEV *Var = I->first;
+    // Extract the constant part
+    if (isa<SCEVConstant>(Var))
+      // Add the translation component
+      TransComp = I->second;
+    else if (Var->getType()->isPointerTy()) { // Extract the base address.
+      const SCEVUnknown *Addr = dyn_cast<SCEVUnknown>(Var);
+      assert(Addr && "Why we got a broken scev?");
+      BaseAddr = Addr->getValue();
+    } else // Extract other affine component.
+      LnrTrans.insert(*I);
   }
 }
 
@@ -173,7 +168,7 @@ polly_constraint *SCEVAffFunc::toAccessFunction(polly_dim* dim,
 }
 
 void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
-  // Print BaseAddr
+  // Print BaseAddr.
   if (isDataRef()) {
     OS << (isRead() ? "Reads" : "Writes") << " ";
     WriteAsOperand(OS, getBaseAddr(), false);
@@ -465,22 +460,20 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
 }
 
 void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
-                                   BBCond &Cond, TempSCoP &SCoP) {
+                                  BBCond &Cond, TempSCoP &SCoP) {
   DomTreeNode *BBNode = DT->getNode(BB), *EntryNode = DT->getNode(RegionEntry);
-  // FIXME: Would this happen?
   assert(BBNode && EntryNode && "Get null node while building condition!");
   DEBUG(dbgs() << "Build condition from " << RegionEntry->getName() << " to "
     << BB->getName() << ":  ");
 
-  // Find all Br condition on the path
+  // Find all Br conditions on the path.
   while (BBNode != EntryNode) {
     BasicBlock *CurBB = BBNode->getBlock();
-    // Move up
     BBNode = BBNode->getIDom();
     assert(BBNode && "BBNode should not reach the root node!");
 
-    // Do add any condition if BB post dominate IDomBB, because
-    // if we could reach IDomBB, we will always able to reach BB,
+    // Add any condition if BB post dominate IDomBB, because
+    // if we could reach IDomBB, we can reach BB,
     // that means there is no any condition constrains from IDomBB to BB
     if (PDT->dominates(CurBB, BBNode->getBlock()))
       continue;
@@ -488,12 +481,13 @@ void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
     BranchInst *Br = dyn_cast<BranchInst>(BBNode->getBlock()->getTerminator());
     assert(Br && "Valid SCoP should only contain br or ret at this moment");
 
-    // If br is unconditional, BB will post dominates Its IDom Block, or the
-    // BBNode should not be the immediately dominator of CurBB
+    // If Br is unconditional, BB post dominates it or the
+    // BBNode should not be the immediate dominator of CurBB.
     assert(Br->isConditional() && "Br should be conditional!");
 
-    // Is branching to the true side will reach CurBB?
+    // Is CurBB on the ELSE side of the branch?
     bool inverted = DT->dominates(Br->getSuccessor(1), CurBB);
+
     // Build the condition in SCEV form
     Cond.push_back(SCEVAffFunc());
     buildAffineCondition(*(Br->getCondition()), inverted, Cond.back(), SCoP);
@@ -511,46 +505,45 @@ TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
   AccFuncSetType AccFuncs;
   BBCond Cond;
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
-    I != E; ++I) {
-      Cond.clear();
-      // Build the condition
-      buildCondition(I->getEntry(), R.getEntry(), Cond, *SCoP);
-      // Remember it if there is any condition extracted
-      if (!Cond.empty()) {
-        // A same BB will be visit multiple time if we iterate on the
-        // element_iterator down the region tree and get the BB by "getEntry",
-        // if this BB is the entry block of some region.
-        // one time(s, because multiple region can share one entry block)
-        // is when BB is some regions entry block, and we get the region node
-        // from the region(The region that have BB as entry block)'s parent
-        // region, this time, we will build the condition from the parent's entry
-        // to the BB.
-        // another time is when we get the region node from the the smallest
-        // region that containing this BB, but now I->getEntry() and R.getEntry()
-        // are the same bb, so no condition expect to extract.
-        assert(!BBConds.count(I->getEntry())
-          && "Why we got more than one conditions for a BB?");
-        BBConds.insert(
-          std::make_pair<const BasicBlock*, BBCond>(I->getEntry(), Cond));
-      }
-      if (I->isSubRegion()) {
-        TempSCoP *SubSCoP = getTempSCoP(*I->getNodeAs<Region>());
+       I != E; ++I) {
+    Cond.clear();
+    buildCondition(I->getEntry(), R.getEntry(), Cond, *SCoP);
+    // Remember it if there is any condition extracted
+    if (!Cond.empty()) {
+      // A same BB will be visit multiple time if we iterate on the
+      // element_iterator down the region tree and get the BB by "getEntry",
+      // if this BB is the entry block of some region.
+      // one time(s, because multiple region can share one entry block)
+      // is when BB is some regions entry block, and we get the region node
+      // from the region(The region that have BB as entry block)'s parent
+      // region, this time, we will build the condition from the parent's entry
+      // to the BB.
+      // another time is when we get the region node from the the smallest
+      // region that containing this BB, but now I->getEntry() and R.getEntry()
+      // are the same bb, so no condition expect to extract.
+      assert(!BBConds.count(I->getEntry())
+             && "Why we got more than one conditions for a BB?");
+      BBConds.insert(
+        std::make_pair<const BasicBlock*, BBCond>(I->getEntry(), Cond));
+    }
+    if (I->isSubRegion()) {
+      TempSCoP *SubSCoP = getTempSCoP(*I->getNodeAs<Region>());
 
-        // Merge parameters from sub SCoPs.
-        mergeParams(R, SCoP->getParamSet(), SubSCoP->getParamSet());
-        // Update the loop depth.
-        if (SubSCoP->MaxLoopDepth > SCoP->MaxLoopDepth)
-          SCoP->MaxLoopDepth = SubSCoP->MaxLoopDepth;
-      } else {
-        // Extract access function of BasicBlocks.
-        BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-        AccFuncs.clear();
-        buildAccessFunctions(*SCoP, BB, AccFuncs);
-        if (!AccFuncs.empty()) {
-          AccFuncSetType &Accs = AccFuncMap[&BB];
-          Accs.insert(Accs.end(), AccFuncs.begin(), AccFuncs.end());
-        }
+      // Merge parameters from sub SCoPs.
+      mergeParams(R, SCoP->getParamSet(), SubSCoP->getParamSet());
+      // Update the loop depth.
+      if (SubSCoP->MaxLoopDepth > SCoP->MaxLoopDepth)
+        SCoP->MaxLoopDepth = SubSCoP->MaxLoopDepth;
+    } else {
+      // Extract access function of BasicBlocks.
+      BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
+      AccFuncs.clear();
+      buildAccessFunctions(*SCoP, BB, AccFuncs);
+      if (!AccFuncs.empty()) {
+        AccFuncSetType &Accs = AccFuncMap[&BB];
+        Accs.insert(Accs.end(), AccFuncs.begin(), AccFuncs.end());
       }
+    }
   }
   // Try to extract the loop bounds
   buildLoopBound(*SCoP);
