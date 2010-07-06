@@ -184,9 +184,9 @@ void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
     if (CurEntry != CurR->getEntry())
       if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
         for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end();
-            I != E; ++I) {
+             I != E; ++I) {
           polly_set *c = (*I).toConditionSet(Parent.getCtx(), dim,
-            IndVars, Parent.getParams());
+                                             IndVars, Parent.getParams());
           Domain = isl_set_intersect(Domain, c);
         }
     CurEntry = CurR->getEntry();
@@ -221,7 +221,7 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
   // Setup the induction variables.
   for (unsigned i = 0, e = NestLoops.size(); i < e; ++i) {
     PHINode *PN = NestLoops[i]->getCanonicalInductionVariable();
-    assert(PN && "SCoPDetect never allow loop without CanIV in SCoP!");
+    assert(PN && "Non canonical IV in SCoP!");
     IVS[i] = PN;
   }
 
@@ -293,31 +293,24 @@ void SCoPStmt::dump() const { print(dbgs()); }
 SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &SE)
            : R(tempSCoP.getMaxRegion()),
            MaxLoopDepth(tempSCoP.getMaxLoopDepth()) {
-  // Create the context
   ctx = isl_ctx_alloc();
 
   ParamSetType &Params = tempSCoP.getParamSet();
-  // Initialize parameters
-  for (ParamSetType::const_iterator I = Params.begin(), E = Params.end();
-      I != E ; ++I)
-    Parameters.push_back(*I);
+  Parameters.insert(Parameters.begin(), Params.begin(), Params.end());
 
-  // Create the dim with 0 output?
   polly_dim *dim = isl_dim_set_alloc(ctx, getNumParams(), 0);
-  // TODO: Handle the constrain of parameters.
-  // Take the dim.
+
+  // TODO: Insert relations between parameters.
+  // TODO: Insert constraints on parameters.
   Context = isl_set_universe (dim);
 
-  // Build the SCoP.
   SmallVector<Loop*, 8> NestLoops;
   SmallVector<unsigned, 8> Scatter;
 
-  unsigned numScatter = MaxLoopDepth + 1;
-  // Initialize the scattering function
-  Scatter.assign(numScatter, 0);
+  Scatter.assign(MaxLoopDepth + 1, 0);
 
   // Build the iteration domain, access functions and scattering functions
-  // by traverse the region tree.
+  // traversing the region tree.
   buildSCoP(tempSCoP, getRegion(), NestLoops, Scatter, LI, SE);
 
   assert(NestLoops.empty() && "NestLoops not empty at top level!");
@@ -357,10 +350,10 @@ void SCoP::printStatements(raw_ostream &OS) const {
 
 
 void SCoP::print(raw_ostream &OS) const {
+  // Parameters.
   OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
-  // Print Parameters.
   for (const_param_iterator PI = param_begin(), PE = param_end();
-      PI != PE; ++PI)
+        PI != PE; ++PI)
     OS << **PI << ", ";
 
   OS << "), Max Loop Depth: "<< MaxLoopDepth <<"\n";
@@ -411,8 +404,8 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
       // Add the new statement to statements list.
       Stmts.push_back(stmt);
 
-      // Increasing the Scattering function is OK for at the moment, because
-      // we are using a depth iterator and the program is linear
+      // Increasing the Scattering function is OK for the moment, because
+      // we are using a depth first iterator and the program is linear.
       ++Scatter[loopDepth];
     }
 
@@ -420,7 +413,7 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
     // Clear the scatter function when leaving the loop.
     Scatter[loopDepth] = 0;
     NestLoops.pop_back();
-    // To next loop
+    // To next loop.
     ++Scatter[loopDepth-1];
     // TODO: scattering function for non-linear CFG
   }
@@ -438,19 +431,18 @@ void SCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
-  // Only build the SCoP when the temporary SCoP information is avaliable.
-  if (TempSCoP *tempSCoP = getAnalysis<TempSCoPInfo>().getTempSCoP()) {
-    // A SCoP found
-    ++SCoPFound;
+  LoopInfo *LI = &getAnalysis<LoopInfo>();
+  ScalarEvolution *SE = &getAnalysis<ScalarEvolution>();
 
-    // The SCoP have loop inside
+  // Only build the SCoP, if the temporary SCoP information is available.
+  if (TempSCoP *tempSCoP = getAnalysis<TempSCoPInfo>().getTempSCoP()) {
+    // Statistics
+    ++SCoPFound;
     if (tempSCoP->getMaxLoopDepth() > 0) ++RichSCoPFound;
 
-    // Create the scop.
-    scop = new SCoP(*tempSCoP,
-                    getAnalysis<LoopInfo>(),
-                    getAnalysis<ScalarEvolution>());
-  }
+    scop = new SCoP(*tempSCoP, *LI, *SE);
+  } else
+    scop = 0;
 
   return false;
 }

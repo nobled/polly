@@ -64,13 +64,13 @@ SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
       const SCEVUnknown *Addr = dyn_cast<SCEVUnknown>(Var);
       assert(Addr && "Why we got a broken scev?");
       BaseAddr = Addr->getValue();
-    } else // Extract other affine component.
+    } else // Extract other affine components.
       LnrTrans.insert(*I);
   }
 }
 
 static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative) {
-  if (Coeff) { // If the coefficient exist
+  if (Coeff) { // If the coefficient exists.
     const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
     const APInt &CI = C->getValue()->getValue();
     // Convert i >= expr to i - expr >= 0
@@ -83,30 +83,30 @@ polly_constraint *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
                          polly_dim *dim,
                          const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
                          const SmallVectorImpl<const SCEV*> &Params) const {
-   unsigned num_in = IndVars.size(),
-     num_param = Params.size();
+   unsigned num_in = IndVars.size(), num_param = Params.size();
 
    polly_constraint *c = 0;
    if (getType() == GE)
      c = isl_inequality_alloc(isl_dim_copy(dim));
-   else // We alloc equality for "!= 0" and "== 0"
+   else // "!= 0" and "== 0".
      c = isl_equality_alloc(isl_dim_copy(dim));
 
    isl_int v;
    isl_int_init(v);
 
+   // Set the coefficient for induction variables.
    for (unsigned i = 0, e = num_in; i != e; ++i) {
      setCoefficient(getCoeff(IndVars[i]), v, false);
      isl_constraint_set_coefficient(c, isl_dim_set, i, v);
    }
 
-   // Setup the coefficient of parameters
+   // Set the coefficient of parameters
    for (unsigned i = 0, e = num_param; i != e; ++i) {
      setCoefficient(getCoeff(Params[i]), v, false);
      isl_constraint_set_coefficient(c, isl_dim_param, i, v);
    }
 
-   // Set the const.
+   // Set the constant.
    setCoefficient(TransComp, v, false);
    isl_constraint_set_constant(c, v);
    isl_int_clear(v);
@@ -122,8 +122,9 @@ polly_set *SCEVAffFunc::toConditionSet(polly_ctx *ctx,
    polly_constraint *c = toConditionConstrain(ctx, dim, IndVars, Params);
    bset = isl_basic_set_add_constraint(bset, c);
    polly_set *ret = isl_set_from_basic_set(bset);
+
    if (getType() == Ne) {
-     // Subtract the set from universe set to construct the inequality
+     // Subtract the set from the universe set to construct the inequality.
      polly_basic_set *uni = isl_basic_set_universe(isl_dim_copy(dim));
      polly_set *uni_set = isl_set_from_basic_set(uni);
      ret = isl_set_subtract(uni_set, ret);
@@ -196,7 +197,7 @@ void SCEVAffFunc::print(raw_ostream &OS, ScalarEvolution *SE) const {
 /// Helper function to print the condition
 static void printBBCond(raw_ostream &OS, const BBCond &Cond,
                         ScalarEvolution *SE) {
-  assert(!Cond.empty() && "Unexpect empty condition!");
+  assert(!Cond.empty() && "Unexpected empty condition!");
   Cond[0].print(OS, SE);
   for (unsigned i = 1, e = Cond.size(); i != e; ++i) {
     OS << " && ";
@@ -225,7 +226,7 @@ void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const {
 void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
                            LoopInfo *LI, const Region *CurR,
                            unsigned ind) const {
-  // Print the loopbounds if current region is a loop,
+  // Print the loop bounds,  if the current region is a loop.
   // In form of IV >= 0, LoopCount - IV >= 0.
   LoopBoundMapType::const_iterator at = LoopBounds.find(castToLoop(*CurR, *LI));
   if (at != LoopBounds.end()) {
