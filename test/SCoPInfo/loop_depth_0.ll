@@ -1,5 +1,5 @@
-; RUN: opt -polly-scop-extract  -analyze %s | FileCheck %s -check-prefix=NOCIV
-; RUN: opt -indvars -polly-scop-extract  -analyze %s | FileCheck %s
+; RUN: opt -polly-analyze-ir  -analyze %s | FileCheck %s -check-prefix=NOCIV
+; RUN: opt -indvars -polly-analyze-ir  -analyze %s | FileCheck %s
 ; XFAIL: *
 ;void f(long a[][128], long N, long M) {
 ;  long i, j, k;

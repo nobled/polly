@@ -307,7 +307,7 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
 char TempSCoPInfo::ID = 0;
 
 static RegisterPass<TempSCoPInfo>
-X("polly-scop-extract", "Polly - Extract TempSCoPs");
+X("polly-analyze-ir", "Polly - Analyse the LLVM-IR in the detected regions");
 
 void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
                                        TempSCoP &SCoP) const {
