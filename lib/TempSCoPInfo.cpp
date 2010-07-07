@@ -353,24 +353,10 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
   }
 }
 
-void TempSCoPInfo::buildScalarDataRef(Instruction &Inst,
-                                      AccFuncSetType &ScalarAccs) {
-  SmallVector<Value*, 4> Defs;
-  SDR->getAllUsing(Inst, Defs);
-  // Capture scalar read access.
-  for (SmallVector<Value*, 4>::iterator VI = Defs.begin(),
-    VE = Defs.end(); VI != VE; ++VI)
-      ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::ReadMem, *VI));
-  // And write access.
-  if (SDR->isDefExported(Inst))
-    ScalarAccs.push_back(SCEVAffFunc(SCEVAffFunc::WriteMem, &Inst));
-}
-
 void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
                                         AccFuncSetType &Functions) {
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
     Instruction &Inst = *I;
-    buildScalarDataRef(Inst, Functions);
     if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
       // Create the SCEVAffFunc.
       if (isa<LoadInst>(Inst))
@@ -626,7 +612,6 @@ bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   SD = &getAnalysis<SCoPDetection>();
-  SDR = &getAnalysis<ScalarDataRef>();
   CurR = R;
   return false;
 }
@@ -637,8 +622,6 @@ void TempSCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<LoopInfo>();
   AU.addRequiredTransitive<ScalarEvolution>();
   AU.addRequiredTransitive<SCoPDetection>();
-  // Request ScalarDataRef pass run
-  AU.addRequiredTransitive<ScalarDataRef>();
   AU.setPreservesAll();
 }
 

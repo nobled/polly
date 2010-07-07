@@ -1,4 +1,4 @@
-; RUN: opt -polly-print -S < %s | FileCheck %s
+; RUN: opt -polly-print -disable-output < %s | FileCheck %s
 ; RUN: opt < %s | lli
 ; RUN: opt -polly-codegen < %s | lli
 ; RUN: opt -polly-import -polly-import-dir=`dirname %s` -polly-codegen < %s | lli

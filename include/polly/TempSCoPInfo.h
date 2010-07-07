@@ -15,7 +15,6 @@
 #define POLLY_TEMP_SCOP_EXTRACTION_H
 
 #include "polly/PollyType.h"
-#include "polly/ScalarDataRef.h"
 #include "polly/SCoPDetection.h"
 #include "polly/Support/AffineSCEVIterator.h"
 
@@ -277,9 +276,6 @@ class TempSCoPInfo : public RegionPass {
   // Valid Regions for SCoP
   SCoPDetection *SD;
 
-  // Capture scalar data reference.
-  ScalarDataRef *SDR;
-
   // FIXME: This is only a temporary hack, we need a standalone condition
   // analysis and construction pass.
   // For simple condition extraction support
@@ -344,10 +340,6 @@ class TempSCoPInfo : public RegionPass {
   // Build the bounds of loop that corresponding to the outer most region of 
   // a given SCoP
   void buildLoopBound(TempSCoP &SCoP);
-
-  // Capture scalar data reference. Fill the scalar "memory access" to the
-  // access function map.
-  void buildScalarDataRef(Instruction &I, AccFuncSetType &ScalarAccs);
 
 public:
   static char ID;
