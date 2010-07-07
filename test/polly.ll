@@ -1,4 +1,4 @@
-; RUN: opt -polly-scop-info -S < %s | FileCheck %s
+; RUN: opt -polly-scops -S < %s | FileCheck %s
 define void @foo() nounwind {
 start:
   br label %end
