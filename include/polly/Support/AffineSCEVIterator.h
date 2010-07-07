@@ -15,6 +15,7 @@
 #ifndef AFFINE_SCEV_ITERATOR_H
 #define AFFINE_SCEV_ITERATOR_H
 
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 
@@ -168,27 +169,22 @@ private:
     const SCEV* nextS = visitStack.back();
 
     if (const SCEVAddRecExpr *ARec = dyn_cast<SCEVAddRecExpr>(nextS)){
-      // Visiting the AddRecExpr, check if its Affine;
-      if (ARec->isAffine()) {
+      // Visiting the AddRec, check if its Affine;
+      PHINode *IV = ARec->getLoop()->getCanonicalInductionVariable();
+      // Only decompose the AddRec, if the loop has a canonical induction
+      // variable.
+      if (ARec->isAffine() && IV != 0) {
         ret = visit(ARec->getStepRecurrence(*SE));
-        if (isa<SCEVConstant>(ret.first)) {// If the step is constant.
-          // Pop the AddRecExpr because we will decompose it.
-          //visitStack.pop_back();
-          // Handle start.
-          //visitStack.push_back(ARec->getStart());
+        if (isa<SCEVConstant>(ret.first)) { // If the step is constant.
           const SCEV *Start = ARec->getStart();
           visitStack.back() = Start;
 
-          // SomeTimes Step and IndVar will have difference type.
-          // E.g. %i.04 = trunc i64 %indvar to i32
-          // So do not get the affine component by SE->getMulExpr(Step, IndVar)
-          // Return Step * IndVar Now.
-          // Construct the Canonicalize Induction Variable, because the Start and
-          // Step part of the AddRec already been decompose.
-          ret.first =
-            SE->getAddRecExpr(SE->getConstant(Start->getType(), 0),
-                              SE->getConstant(ret.second->getType(), 1),
-                              ARec->getLoop());
+          // The AddRec is expect to be decomposed to
+          //
+          // | start + step * {1, +, 1}<loop>
+          //
+          // Now we get the {1, +, 1}<loop> part.
+          ret.first = SE->getSCEV(IV);
 
           // Push CouldNotCompute to take the place.
           visitStack.push_back(SE->getCouldNotCompute());
