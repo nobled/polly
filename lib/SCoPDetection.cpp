@@ -120,11 +120,14 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
       continue;
 
     // A bad SCEV found.
-    DEBUG(dbgs() << "Bad SCEV: " << *Var << " at loop"
-      << (Scope ? Scope->getHeader()->getName() : "Top Level")
-      << "Cur BB: " << CurBB->getName()
-      << "Ref Region: " << RefRegion.getNameStr()
-      << "\n");
+    DEBUG(dbgs() << "Bad SCEV: " << *Var << " at loop";
+          if (Scope)
+            WriteAsOperand(dbgs(), Scope->getHeader(), false);
+          else
+            dbgs() << "Top Level";
+          dbgs()  << "Cur BB: " << CurBB->getName()
+            << "Ref Region: " << RefRegion.getNameStr()
+            << "\n");
     return false;
   }
   return !isMemAcc || PtrExist;
@@ -196,7 +199,10 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
         && maxRegionExit(Br->getSuccessor(0)))
       return true;
 
-  DEBUG(dbgs() << "Bad BB in cfg: " << BB.getName() << "\n");
+  DEBUG(dbgs() << "Bad BB in cfg: ";
+        WriteAsOperand(dbgs(), &BB, false);
+        dbgs() << "\n");
+
   STATSCOP(CFG);
   return false;
 }
@@ -209,6 +215,7 @@ bool SCoPDetection::isValidCallInst(CallInst &CI) {
     return true;
 
   Function *CalledFunction = CI.getCalledFunction();
+
 
   // Indirect call is not support now.
   if (CalledFunction == 0)
@@ -288,8 +295,9 @@ bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
 
   // No canonical induction variable.
   if (!IndVar || !IndVarInc) {
-    DEBUG(dbgs() << "No canonical iv for loop : " << L->getHeader()->getName()
-          << "\n");
+    DEBUG(dbgs() << "No canonical iv for loop: ";
+          WriteAsOperand(dbgs(), L->getHeader(), false);
+          dbgs() << "\n");
     STATSCOP(IndVar);
     return false;
   }
@@ -349,7 +357,9 @@ bool SCoPDetection::isValidRegion(Region &RefRegion,
           && isValidBasicBlock(BB, RefRegion))
         continue;
 
-      DEBUG(dbgs() << "Bad BB found:" << BB.getName() << "\n");
+      DEBUG(dbgs() << "Bad BB found: ";
+            WriteAsOperand(dbgs(), &BB, false);
+            dbgs() << "\n");
       return false;
     }
   }
