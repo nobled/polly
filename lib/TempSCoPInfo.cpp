@@ -602,7 +602,7 @@ TempSCoP *TempSCoPInfo::getTempSCoP(Region& R) {
 
 
 TempSCoP *TempSCoPInfo::getTempSCoP() const {
-  // Only extract the TempSCoP infor for valid region
+  // Only extract the TempSCoP information for valid regions.
   if (!SD->isSCoP(*CurR)) return 0;
 
   // Only analyse the maximal SCoPs.
