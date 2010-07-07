@@ -7,14 +7,14 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Create LLVM IR code using the ClastParser.
+// Create LLVM IR code from CLooG AST.
 //
 //===----------------------------------------------------------------------===//
 //
 
 #define DEBUG_TYPE "polly-codegen"
 
-#include "polly/ClastParser.h"
+#include "polly/CodeGeneration.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/SCoPHelper.h"
 #include "polly/Support/BasicBlockEdge.h"
@@ -470,7 +470,7 @@ public:
 }
 
 namespace {
-class ClastCodeGeneration : public RegionPass {
+class CodeGeneration : public RegionPass {
   Region *region;
   SCoP *S;
   DominatorTree *DT;
@@ -481,7 +481,7 @@ class ClastCodeGeneration : public RegionPass {
   public:
   static char ID;
 
-  ClastCodeGeneration() : RegionPass(&ID) {
+  CodeGeneration() : RegionPass(&ID) {
     C = 0;
   }
 
@@ -698,12 +698,12 @@ class ClastCodeGeneration : public RegionPass {
 };
 }
 
-char ClastCodeGeneration::ID = 1;
+char CodeGeneration::ID = 1;
 
-static RegisterPass<ClastCodeGeneration>
+static RegisterPass<CodeGeneration>
 Z("polly-codegen", "Polly - Create LLVM-IR from the polyhedral "
                          "information");
 
-RegionPass* polly::createClastCodeGenerationPass() {
-	return new ClastCodeGeneration();
+RegionPass* polly::createCodeGenerationPass() {
+	return new CodeGeneration();
 }

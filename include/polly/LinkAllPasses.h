@@ -16,7 +16,7 @@
 #define POLLY_LINKALLPASSES_H
 
 #include "polly/Config/config.h"
-#include "polly/ClastParser.h"
+#include "polly/CodeGeneration.h"
 #include "polly/ScalarDataRef.h"
 #include "polly/SCoPExchange.h"
 #include "polly/SCoPInfo.h"
@@ -39,7 +39,7 @@ namespace {
       (void) polly::createSCoPInfoPass();
       (void) polly::createScopPrinterPass();
       (void) polly::createAffSCEVItTesterPass();
-      (void) polly::createClastCodeGenerationPass();
+      (void) polly::createCodeGenerationPass();
       (void) polly::createScalarDataRefPass();
       (void) polly::createCLooGExporterPass();
 
