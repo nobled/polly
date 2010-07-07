@@ -500,16 +500,24 @@ class CodeGeneration : public RegionPass {
     int i = 0;
     SCEVExpander Rewriter(*SE);
 
+    // Create an instruction that specifies the location that specifies
+    // the location where the parameters are expanded.
+    CastInst::CreateIntegerCast(ConstantInt::getTrue(Builder->getContext()),
+                                  Builder->getInt16Ty(), false, "insertInst",
+                                  Builder->GetInsertBlock());
+
     for (SCoP::param_iterator PI = S->param_begin(), PE = S->param_end();
          PI != PE; ++PI) {
       assert(i < names->nb_parameters && "Not enough parameter names");
+      Instruction *InsertLocation;
 
       const SCEV *Param = *PI;
       const Type *Ty = Param->getType();
-      Instruction *InsertInst = &(*Builder->GetInsertBlock()->begin());
 
-      VariableMap[names->parameters[i]] = Rewriter.expandCodeFor(Param, Ty,
-      InsertInst);
+      InsertLocation = --(Builder->GetInsertBlock()->end());
+      Value *V = Rewriter.expandCodeFor(Param, Ty, InsertLocation);
+      VariableMap[names->parameters[i]] = V;
+
       ++i;
     }
   }
