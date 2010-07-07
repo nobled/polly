@@ -561,7 +561,7 @@ void TempSCoPInfo::mergeParams(Region &R, ParamSetType &Params,
   for (ParamSetType::iterator I = SubParams.begin(),
     E = SubParams.end(); I != E; ++I) {
       const SCEV *Param = *I;
-      // The valid parameter in subregion may not valid in its parameter
+      // The valid parameter in subregion may not valid in its parameter.
       if (isParameter(Param, R, R.getEntry(), *LI, *SE)) {
         Params.insert(Param);
         continue;
@@ -581,7 +581,7 @@ void TempSCoPInfo::mergeParams(Region &R, ParamSetType &Params,
 
       DEBUG(dbgs() << "Bad parameter in parent: " << *Param
         << " in " << R.getNameStr() << " at "
-        << (L?L->getHeader()->getName():"Top Level")
+        << (L ? L->getHeader()->getName() : "Top Level")
         << "\n");
       llvm_unreachable("Unexpect bad parameter!");
   }
