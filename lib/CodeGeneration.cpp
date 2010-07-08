@@ -604,7 +604,8 @@ class CodeGeneration : public RegionPass {
 
         if (Op && R->contains(Op) && !(Op->getParent() == BB)
             && !isIV(Op)) {
-          DEBUG(dbgs() << "Instruction not independent:\n");
+          DEBUG(dbgs() << "Instruction in function '"
+                << BB->getParent()->getNameStr() << "' not independent:\n");
           DEBUG(dbgs() << "Uses invalid operator\n");
           DEBUG(Inst->print(dbgs()));
           DEBUG(dbgs() << "\n");
