@@ -1,5 +1,4 @@
-; RUN: opt -indvars -polly-analyze-ir  -analyze %s | not FileCheck %s
-; RUN: opt -polly-analyze-ir  -analyze %s | not FileCheck %s
+; RUN: opt -polly-print  -analyze %s | not FileCheck %s
 
 ;void f(long a[][128], long N, long M) {
 ;  long i, j;

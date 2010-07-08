@@ -64,6 +64,5 @@ declare i32 @fprintf(%struct._IO_FILE*, i8*, ...)
 
 ; CHECK:   for (s1=0;s1<=19;s1++) {
 ; CHECK:     S0(s1);
-; CHECK:     S1(s1);
 ; CHECK:   }
 

@@ -62,16 +62,11 @@ private:
   PointerIntPair<polly_map*, 1, AccessType> AccFunc;
 
   // Base address and access type.
-  // Value for Array access and SCEV for scalar access
-  PointerUnion<const Value*, const SCEV*> BaseAddr;
+  const Value* BaseAddr;
 
 public:
   DataRef(const Value *Base, AccessType AccType, polly_map *accFunc)
     : AccFunc(accFunc, AccType), BaseAddr(Base) {}
-
-  DataRef(const SCEV *Scalar, AccessType AccType, polly_map *accFunc)
-    : AccFunc(accFunc, AccType), BaseAddr(Scalar) {}
-
 
   ~DataRef();
 
@@ -80,17 +75,9 @@ public:
   polly_map *getAccessFunction() { return AccFunc.getPointer(); }
   polly_map *getAccessFunction() const { return AccFunc.getPointer(); }
 
-  const SCEV *getScalar() const {
-    assert(BaseAddr.is<const SCEV*>() && "This is not a scalar access!");
-    return BaseAddr.get<const SCEV*>();
-  }
-
   const Value *getBaseAddr() const {
-    assert(BaseAddr.is<const Value*>() && "This is not a array access!");
-    return BaseAddr.get<const Value*>();
+    return BaseAddr;
   }
-
-  bool isScalar() const { return BaseAddr.is<const SCEV*>(); }
 
   /// @brief Print the MemoryAccess.
   ///

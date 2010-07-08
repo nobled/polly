@@ -41,15 +41,11 @@ DataRef::~DataRef() {
 
 void DataRef::print(raw_ostream &OS) const {
   OS << (isRead() ? "Reads" : "Writes") << " ";
-  if (isScalar())
-    OS << *getScalar() << "\n";
-  else {
-    WriteAsOperand(OS, getBaseAddr(), false);
-    OS << " at:\n";
-    isl_map_print(getAccessFunction(), stderr, 20, ISL_FORMAT_ISL);
-    DEBUG(OS << "\n");
-    DEBUG(isl_map_dump(getAccessFunction(), stderr, 20));
-  }
+  WriteAsOperand(OS, getBaseAddr(), false);
+  OS << " at:\n";
+  isl_map_print(getAccessFunction(), stderr, 20, ISL_FORMAT_ISL);
+  DEBUG(OS << "\n");
+  DEBUG(isl_map_dump(getAccessFunction(), stderr, 20));
 }
 
 void DataRef::dump() const {
