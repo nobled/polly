@@ -349,9 +349,16 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
 
 bool SCoPDetection::hasScalarDependency(Instruction &Inst,
                                         Region &RefRegion) const {
-  const SCEV *scev = SE->getSCEV(&Inst);
   IndependentInstructionChecker Checker(RefRegion, LI);
-  return Checker.isIndependent(scev, Inst.getParent());
+
+  for (Instruction::op_iterator UI = Inst.op_begin(), UE = Inst.op_end();
+       UI != UE; ++UI)
+    if (Instruction *OpInst = dyn_cast<Instruction>((*UI).get())) {
+      const SCEV *scev = SE->getSCEV(OpInst);
+      if (!Checker.isIndependent(scev, Inst.getParent()))
+        return false;
+    }
+  return true;
 }
 
 bool SCoPDetection::isValidInstruction(Instruction &Inst,
