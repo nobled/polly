@@ -12,7 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/CLooG.h"
-#include "polly/CLooGExporter.h"
+#include "polly/LinkAllPasses.h"
 #include "polly/SCoPInfo.h"
 #include "cloog/cloog.h"
 #include "cloog/isl/domain.h"

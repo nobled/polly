@@ -287,8 +287,5 @@ inline static AffineSCEVIterator affine_end() {
   return AffineSCEVIterator();
 }
 
-/// ForceLink for tester pass.
-Pass *createAffSCEVItTesterPass();
-
 } // end namespace polly
 #endif

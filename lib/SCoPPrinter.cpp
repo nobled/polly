@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/CLooG.h"
+#include "polly/LinkAllPasses.h"
 #include "polly/Support/SCoPHelper.h"
 #include "llvm/Analysis/RegionPass.h"
 #include "llvm/Support/CFG.h"

@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/SCoPExchange.h"
+#include "polly/LinkAllPasses.h"
 #include "polly/SCoPInfo.h"
 #include "llvm/Support/CommandLine.h"
 

@@ -145,8 +145,6 @@ public:
 
 };
 
-Pass *createScalarDataRefPass();
-
 }
 
 #endif

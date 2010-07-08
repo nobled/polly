@@ -14,10 +14,9 @@
 
 #define DEBUG_TYPE "polly-codegen"
 
-#include "polly/CodeGeneration.h"
+#include "polly/LinkAllPasses.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/SCoPHelper.h"
-#include "polly/Support/BasicBlockEdge.h"
 #include "polly/CLooG.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
