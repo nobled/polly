@@ -356,8 +356,12 @@ bool SCoPDetection::hasScalarDependency(Instruction &Inst,
   for (Instruction::op_iterator UI = Inst.op_begin(), UE = Inst.op_end();
        UI != UE; ++UI)
     if (Instruction *OpInst = dyn_cast<Instruction>((*UI).get())) {
-      const SCEV *scev = SE->getSCEV(OpInst);
-      if (!Checker.isIndependent(scev, Inst.getParent()))
+      if (SE->isSCEVable(OpInst->getType())) {
+        const SCEV *scev = SE->getSCEV(OpInst);
+        if (!Checker.isIndependent(scev, Inst.getParent()))
+          return false;
+      } else
+        // TODO: Do we need to return false?
         return false;
     }
   return true;
