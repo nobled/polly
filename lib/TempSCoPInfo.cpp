@@ -400,7 +400,6 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
   }
 
   ICmpInst *ICmp = dyn_cast<ICmpInst>(&V);
-  // FIXME: we should check this in isValidSCoP
   assert(ICmp && "Only ICmpInst of constant as condition supported!");
   const SCEV *LHS = SE->getSCEV(ICmp->getOperand(0)),
              *RHS = SE->getSCEV(ICmp->getOperand(1));

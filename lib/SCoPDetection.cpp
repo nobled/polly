@@ -286,9 +286,11 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   if (!Br) return false;
   if (Br->isUnconditional()) return true;
 
+  Value *Condition = Br->getCondition();
+
   // Only instructions and constant expressions are valid branch conditions.
-  if (!(isa<Constant>(Br->getCondition())
-        || isa<Instruction>(Br->getCondition())))
+  if (!((isa<Constant>(Condition) && !isa<UndefValue>(Condition))
+         || isa<ICmpInst>(Condition)))
     return false;
 
   // Allow loop exit conditions.
