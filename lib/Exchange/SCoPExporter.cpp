@@ -525,18 +525,7 @@ std::string SCoPExporter::getFileName(Region *R) const {
   return FileName;
 }
 
-void SCoPExporter::print(raw_ostream &OS, const Module *) const {
-  if (S) {
-    Region *R = const_cast<Region*>(&S->getRegion());
-    std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-    std::string FileName = getFileName(R);
-
-    OS << "Writing SCoP '" << R->getNameStr() << "' in function '"
-      << FunctionName << "' to '" << FileName << "'...\n";
-  } else {
-    OS << "Invalid SCoP!\n";
-  }
-}
+void SCoPExporter::print(raw_ostream &OS, const Module *) const {}
 
 bool SCoPExporter::runOnRegion(Region *R, RGPassManager &RGM) {
   S = getAnalysis<SCoPInfo>().getSCoP();
@@ -556,6 +545,10 @@ bool SCoPExporter::runOnRegion(Region *R, RGPassManager &RGM) {
   OpenSCoP openscop(S);
   openscop.print(F);
   fclose(F);
+
+  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
+  errs() << "Writing SCoP '" << R->getNameStr() << "' in function '"
+    << FunctionName << "' to '" << FileName << "'.\n";
 
   return false;
 }
