@@ -250,10 +250,10 @@ BasicBlock *SCoPDetection::maxRegionExit(BasicBlock *BB) const {
       Exit = R->getExit();
     else if (++succ_begin(BB) == succ_end(BB))
       Exit = *succ_begin(BB);
-    else
+    else // No single exit exists.
       return Exit;
 
-    // Get largest region that starts at BB.
+    // Get largest region that starts at Exit.
     Region *ExitR = RI->getRegionFor(Exit);
     while (ExitR && ExitR->getParent()
            && ExitR->getParent()->getEntry() == Exit)
@@ -263,6 +263,10 @@ BasicBlock *SCoPDetection::maxRegionExit(BasicBlock *BB) const {
          ++PI)
       if (!R->contains(*PI) && !ExitR->contains(*PI))
         break;
+
+    // This stops infinite cycles.
+    if (DT->dominates(Exit, BB))
+      break;
 
     BB = Exit;
   }
