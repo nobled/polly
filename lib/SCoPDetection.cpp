@@ -54,12 +54,113 @@ BADSCOP_STAT(IndVar,      "Non canonical induction variable in loop");
 BADSCOP_STAT(LoopBound,   "Loop bounds can not be computed");
 BADSCOP_STAT(FuncCall,    "Function call with side effects appeared");
 BADSCOP_STAT(AffFunc,     "Expression not affine");
+BADSCOP_STAT(Scalar,      "Found scalar dependency");
 BADSCOP_STAT(Other,       "Others");
 
 static cl::opt<bool>
 AllowConditions("polly-detect-conditions",
                 cl::desc("Allow conditions in SCoPs."),
                 cl::Hidden,  cl::init(false));
+
+// Checks if a SCEV is independent.
+// This means it only references Instructions that are either
+//   * defined in the same BasicBlock
+//   * defined outside the Region
+//   * canonical induction variables.
+class IndependentInstructionChecker:
+                            SCEVVisitor<IndependentInstructionChecker, bool> {
+  Region &R;
+  LoopInfo *LI;
+  BasicBlock *BB;
+
+public:
+  bool visitConstant(const SCEVConstant *S) {
+    return true;
+  }
+
+  bool visitUnknown(const SCEVUnknown* S) {
+    Value *V = S->getValue();
+
+    if (Instruction *I = dyn_cast<Instruction>(V)) {
+      Loop *L = LI->getLoopFor(I->getParent());
+
+      if (!R.contains(I))
+        return true;
+
+      if (L && L->getCanonicalInductionVariable() == I)
+        return true;
+
+      if (I->getParent() == BB)
+        return true;
+
+      return false;
+    }
+
+    return true;
+  }
+
+  bool visitNAryExpr(const SCEVNAryExpr *S) {
+    for (SCEVNAryExpr::op_iterator OI = S->op_begin(), OE = S->op_end();
+         OI != OE; ++OI)
+      if(!visit(*OI))
+        return false;
+
+    return true;
+  }
+
+  bool visitMulExpr(const SCEVMulExpr* S) {
+    return visitNAryExpr(S);
+  }
+
+  bool visitCastExpr(const SCEVCastExpr *S) {
+    return visit(S->getOperand());
+  }
+
+  bool visitTruncateExpr(const SCEVTruncateExpr *S) {
+    return visit(S->getOperand());
+  }
+
+  bool visitZeroExtendExpr(const SCEVZeroExtendExpr *S) {
+    return visit(S->getOperand());
+  }
+
+  bool visitSignExtendExpr(const SCEVSignExtendExpr *S) {
+    return visit(S->getOperand());
+  }
+
+  bool visitAddExpr(const SCEVAddExpr *S) {
+    return visitNAryExpr(S);
+  }
+
+  bool visitAddRecExpr(const SCEVAddRecExpr *S) {
+    return visitNAryExpr(S);
+  }
+
+  bool visitUDivExpr(const SCEVUDivExpr *S) {
+    return visit(S->getLHS()) && visit(S->getRHS());
+  }
+
+  bool visitSMaxExpr(const SCEVSMaxExpr *S) {
+    return visitNAryExpr(S);
+  }
+
+  bool visitUMaxExpr(const SCEVUMaxExpr *S) {
+    return visitNAryExpr(S);
+  }
+
+  bool visitCouldNotCompute(const SCEVCouldNotCompute *S) {
+    llvm_unreachable("SCEV cannot be checked");
+  }
+
+public:
+  IndependentInstructionChecker(Region &RefRegion, LoopInfo *LInfo)
+    : R(RefRegion), LI(LInfo) {}
+
+  bool isIndependent(const SCEV *S, BasicBlock *Block) {
+    BB = Block;
+    return visit(S);
+  }
+};
 
 //===----------------------------------------------------------------------===//
 // SCoPDetection Implementation.
@@ -241,6 +342,14 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
   return true;
 }
 
+
+bool SCoPDetection::hasScalarDependency(Instruction &Inst,
+                                        Region &RefRegion) const {
+  const SCEV *scev = SE->getSCEV(&Inst);
+  IndependentInstructionChecker Checker(RefRegion, LI);
+  return Checker.isIndependent(scev, Inst.getParent());
+}
+
 bool SCoPDetection::isValidInstruction(Instruction &Inst,
                                        Region &RefRegion) const {
   // Only canonical IVs are allowed.
@@ -260,6 +369,16 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
     return false;
   }
 
+  // Scalar dependencies are not allowed.
+  if (SE->isSCEVable(Inst.getType())
+    && !hasScalarDependency(Inst, RefRegion)) {
+    DEBUG(dbgs() << "Scalar dependency found: ";
+          WriteAsOperand(dbgs(), &Inst, false);
+          dbgs() << "\n");
+    STATSCOP(Scalar);
+    return false;
+  }
+
   if (!Inst.mayWriteToMemory() && !Inst.mayReadFromMemory()) {
     // Handle cast instruction.
     if (isa<IntToPtrInst>(Inst) || isa<BitCastInst>(Inst)) {
@@ -270,6 +389,7 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
 
     return true;
   }
+
   // Check the access function.
   if (isa<LoadInst>(Inst) || isa<StoreInst>(Inst))
     return isValidMemoryAccess(Inst, RefRegion);

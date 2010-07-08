@@ -108,6 +108,8 @@ class SCoPDetection : public FunctionPass {
   void mergeParams(Region &R, ParamSetType &Params,
                    ParamSetType &SubParams) const;
 
+  bool hasScalarDependency(Instruction &Inst, Region &RefRegion) const;
+
   // Check if the Instruction is a valid part of SCoP, return true and extract
   // the corresponding information, return false otherwise.
   bool isValidInstruction(Instruction &I, Region &RefRegion) const;
