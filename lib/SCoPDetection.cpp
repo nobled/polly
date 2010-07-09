@@ -287,11 +287,13 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
 
   Value *Condition = Br->getCondition();
 
-  // UndefValue is not alow as condition
-  if (isa<UndefValue>(Condition))
+  // UndefValue is not allowed as condition.
+  if (isa<UndefValue>(Condition)) {
+    STATSCOP(AffFunc);
     return false;
+  }
 
-  // Only Constant and ICmpInst are allow as condition
+  // Only Constant and ICmpInst are allowed as condition.
   if (!(isa<Constant>(Condition) || isa<ICmpInst>(Condition))) {
     STATSCOP(AffFunc);
     return false;
@@ -305,7 +307,7 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   // Allow perfectly nested conditions.
   assert(Br->getNumSuccessors() == 2 && "Unexpected number of successors");
 
-  // So there is a condition if we reach here.
+  // There is a condition, if we reach this place.
   if (!AllowConditions) {
     STATSCOP(CFG);
     return false;
@@ -318,7 +320,7 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
     return false;
   }
 
-  // We need to check if both operand of the ICmp is affine.
+  // We need to check if both operands of the ICmp are affine.
   if (ICmpInst *ICmp = dyn_cast<ICmpInst>(Condition)) {
     if (isa<UndefValue>(ICmp->getOperand(0))
         || isa<UndefValue>(ICmp->getOperand(1))) {
