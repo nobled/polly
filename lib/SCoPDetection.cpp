@@ -279,13 +279,23 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
 
   BranchInst *Br = dyn_cast<BranchInst>(TI);
 
-  if (!Br) return false;
+  if (!Br) {
+    STATSCOP(CFG);
+    return false;
+  }
   if (Br->isUnconditional()) return true;
 
-  // Only instructions and constant expressions are valid branch conditions.
-  if (!(isa<Constant>(Br->getCondition())
-        || isa<Instruction>(Br->getCondition())))
+  Value *Condition = Br->getCondition();
+
+  // UndefValue is not alow as condition
+  if (isa<UndefValue>(Condition))
     return false;
+
+  // Only Constant and ICmpInst are allow as condition
+  if (!(isa<Constant>(Condition) || isa<ICmpInst>(Condition))) {
+    STATSCOP(AffFunc);
+    return false;
+  }
 
   // Allow loop exit conditions.
   Loop *L = LI->getLoopFor(&BB);
@@ -295,17 +305,40 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   // Allow perfectly nested conditions.
   assert(Br->getNumSuccessors() == 2 && "Unexpected number of successors");
 
-  if (AllowConditions)
-    if (maxRegionExit(Br->getSuccessor(0)) == maxRegionExit(Br->getSuccessor(1))
-        && maxRegionExit(Br->getSuccessor(0)))
-      return true;
+  // So there is a condition if we reach here.
+  if (!AllowConditions) {
+    STATSCOP(CFG);
+    return false;
+  }
 
-  DEBUG(dbgs() << "Bad BB in cfg: ";
-        WriteAsOperand(dbgs(), &BB, false);
-        dbgs() << "\n");
+  // Only well structured conditions.
+  if (!(maxRegionExit(Br->getSuccessor(0)) == maxRegionExit(Br->getSuccessor(1))
+        && maxRegionExit(Br->getSuccessor(0)))) {
+    STATSCOP(CFG);
+    return false;
+  }
 
-  STATSCOP(CFG);
-  return false;
+  // We need to check if both operand of the ICmp is affine.
+  if (ICmpInst *ICmp = dyn_cast<ICmpInst>(Condition)) {
+    if (isa<UndefValue>(ICmp->getOperand(0))
+        || isa<UndefValue>(ICmp->getOperand(1))) {
+      STATSCOP(AffFunc);
+      return false;
+    }
+
+    bool affineLHS = isValidAffineFunction(SE->getSCEV(ICmp->getOperand(0)),
+                                            RefRegion, &BB, false);
+    bool affineRHS = isValidAffineFunction(SE->getSCEV(ICmp->getOperand(1)),
+                                            RefRegion, &BB, false);
+
+    if (!(affineLHS && affineRHS)) {
+      STATSCOP(AffFunc);
+      return false;
+    }
+  }
+
+  // Everything is ok if we reach here.
+  return true;
 }
 
 bool SCoPDetection::isValidCallInst(CallInst &CI) {
