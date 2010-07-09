@@ -250,10 +250,10 @@ BasicBlock *SCoPDetection::maxRegionExit(BasicBlock *BB) const {
       Exit = R->getExit();
     else if (++succ_begin(BB) == succ_end(BB))
       Exit = *succ_begin(BB);
-    else
+    else // No single exit exists.
       return Exit;
 
-    // Get largest region that starts at BB.
+    // Get largest region that starts at Exit.
     Region *ExitR = RI->getRegionFor(Exit);
     while (ExitR && ExitR->getParent()
            && ExitR->getParent()->getEntry() == Exit)
@@ -263,6 +263,10 @@ BasicBlock *SCoPDetection::maxRegionExit(BasicBlock *BB) const {
          ++PI)
       if (!R->contains(*PI) && !ExitR->contains(*PI))
         break;
+
+    // This stops infinite cycles.
+    if (DT->dominates(Exit, BB))
+      break;
 
     BB = Exit;
   }
@@ -380,9 +384,20 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
 
 bool SCoPDetection::hasScalarDependency(Instruction &Inst,
                                         Region &RefRegion) const {
-  const SCEV *scev = SE->getSCEV(&Inst);
   IndependentInstructionChecker Checker(RefRegion, LI);
-  return Checker.isIndependent(scev, Inst.getParent());
+
+  for (Instruction::op_iterator UI = Inst.op_begin(), UE = Inst.op_end();
+       UI != UE; ++UI)
+    if (Instruction *OpInst = dyn_cast<Instruction>((*UI).get())) {
+      if (SE->isSCEVable(OpInst->getType())) {
+        const SCEV *scev = SE->getSCEV(OpInst);
+        if (!Checker.isIndependent(scev, Inst.getParent()))
+          return false;
+      } else
+        // TODO: Do we need to return false?
+        return false;
+    }
+  return true;
 }
 
 bool SCoPDetection::isValidInstruction(Instruction &Inst,

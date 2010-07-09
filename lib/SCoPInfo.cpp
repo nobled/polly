@@ -13,6 +13,7 @@
 
 #include "polly/TempSCoPInfo.h"
 #include "polly/SCoPInfo.h"
+#include "polly/LinkAllPasses.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/SCoPHelper.h"
 

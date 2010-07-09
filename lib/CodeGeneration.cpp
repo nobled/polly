@@ -14,10 +14,9 @@
 
 #define DEBUG_TYPE "polly-codegen"
 
-#include "polly/CodeGeneration.h"
+#include "polly/LinkAllPasses.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/SCoPHelper.h"
-#include "polly/Support/BasicBlockEdge.h"
 #include "polly/CLooG.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -542,8 +541,7 @@ class CodeGeneration : public RegionPass {
          II != IE; ++II) {
         Instruction *Inst = &*II;
 
-        if (!SE->isSCEVable(Inst->getType()) || isa<StoreInst>(Inst)
-            || isa<LoadInst>(Inst))
+        if (!isa<PHINode>(Inst))
           work.push_back(Inst);
       }
 
@@ -643,6 +641,7 @@ class CodeGeneration : public RegionPass {
     if (!hasIndependentBlocks(S)) {
       errs() << "Code generation for SCoP " << S->getRegion().getNameStr()
         << " failed. Could not generate independent blocks.\n";
+      llvm_unreachable("Found non independent block.");
       return false;
     }
 

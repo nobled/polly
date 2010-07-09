@@ -16,15 +16,24 @@
 #define POLLY_LINKALLPASSES_H
 
 #include "polly/Config/config.h"
-#include "polly/CodeGeneration.h"
-#include "polly/ScalarDataRef.h"
-#include "polly/SCoPExchange.h"
-#include "polly/SCoPInfo.h"
-#include "polly/Support/AffineSCEVIterator.h"
-#include "polly/CLooGExporter.h"
-/// TODO: Place the headers that containing pass you want to force link here.
-
 #include <cstdlib>
+
+namespace llvm {
+  class Pass;
+  class RegionPass;
+}
+
+namespace polly {
+  llvm::Pass *createScalarDataRefPass();
+  llvm::Pass *createAffSCEVItTesterPass();
+  llvm::Pass *createSCoPInfoPass();
+  llvm::Pass *createScopPrinterPass();
+  llvm::Pass *createScopCodeGenPass();
+  llvm::Pass *createSCoPExporterPass();
+  llvm::Pass *createSCoPImporterPass();
+  llvm::RegionPass* createCLooGExporterPass();
+  llvm::RegionPass* createCodeGenerationPass();
+}
 
 namespace {
   struct PollyForcePassLinking {

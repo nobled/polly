@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/SCoPExchange.h"
+#include "polly/LinkAllPasses.h"
 #include "polly/SCoPInfo.h"
 #include "llvm/Support/CommandLine.h"
 
@@ -176,20 +176,7 @@ std::string SCoPImporter::getFileName(Region *R) const {
   return FileName;
 }
 
-void SCoPImporter::print(raw_ostream &OS, const Module *) const {
-  if (S) {
-    Region *R = const_cast<Region*>(&S->getRegion());
-    std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-    std::string FileName = getFileName(R);
-
-    OS << "Reading SCoP '" << R->getNameStr() << "' in function '"
-      << FunctionName << "' from '" << FileName << ImportPostfix << "'...\n\n";
-
-    S->print(OS);
-  } else {
-    OS << "Invalid SCoP!\n";
-  }
-}
+void SCoPImporter::print(raw_ostream &OS, const Module *) const {}
 
 bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
   S = getAnalysis<SCoPInfo>().getSCoP();
@@ -208,6 +195,10 @@ bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
 
   openscop_scop_p scop = openscop_scop_read(F);
   fclose(F);
+
+  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
+  errs() << "Reading SCoP '" << R->getNameStr() << "' in function '"
+    << FunctionName << "' from '" << FileName << ImportPostfix << "'.\n";
 
   bool UpdateSuccessfull = updateScattering(S, scop);
 

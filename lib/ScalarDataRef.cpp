@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "polly/LinkAllPasses.h"
 #include "polly/ScalarDataRef.h"
 #include "polly/Support/SCoPHelper.h"
 
