@@ -1,5 +1,4 @@
-; RUN: opt -O3 -indvars -polly-analyze-ir -polly-print-temp-scop-in-detail -print-top-scop-only  -analyze %s | FileCheck %s
-; XFAIL: *
+; RUN: opt -polly-scalar-data-ref -polly-analyze-ir -polly-print-temp-scop-in-detail -analyze %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-linux-gnu"
@@ -41,10 +40,10 @@ bb2:                                              ; preds = %bb, %entry
   ret i64 %k.0.lcssa
 }
 
-; CHECK: SCoP: bb => bb2.loopexit       Parameters: (%n, ), Max Loop Depth: 1
 ; CHECK: Bounds of Loop: bb:    { 1 * {0,+,1}<%bb> + 0 >= 0, -1 * {0,+,1}<%bb> + 1 * %n + -2 >= 0}
 ; CHECK:   BB: bb{
-; CHECK:     Reads %2[]
+; CHECK:     Reads %k.05.reg2mem[0]
 ; CHECK:     Reads %a[8 * {0,+,1}<%bb> + 8]
-; CHECK:     Writes %2[]
+; CHECK:     Writes %k.0.lcssa.reg2mem[0]
+; CHECK:     Writes %k.05.reg2mem[0]
 ; CHECK:   }
