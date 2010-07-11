@@ -104,14 +104,9 @@ bool polly::isParameter(const SCEV *Var, Region &RefRegion, BasicBlock *CurBB,
     return true;
   } else if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(Var)) {
     // Some SCEVUnknown will depend on loop variant or conditions:
-    // 1. Phi node depend on conditions
-    if (PHINode *phi = dyn_cast<PHINode>(U->getValue())) {
-      // If the phinode contained in the non-entry block of current region,
-      // it is not invariant but depend on conditions.
-      // TODO: maybe we need special analysis for phi node?
-      if (RefRegion.contains(phi) && (RefRegion.getEntry() != phi->getParent()))
+    // 1. Phi node as SCEVUnknown is not allow.
+    if (isa<PHINode>(U->getValue()))
         return false;
-    }
     // UndefValue are not a valid parameter.
     else if(isa<UndefValue>(U->getValue()))
       return false;
