@@ -20,6 +20,7 @@
 #include "polly/CLooG.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/IRBuilder.h"
@@ -45,6 +46,12 @@ namespace polly {
 
 typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
+
+static cl::opt<bool>
+OnlyIndependentBlocks("polly-codegen-only-independent-blocks",
+                cl::desc("Only generate the independent blocks, but not create "
+                         "the new loops."),
+                cl::Hidden,  cl::init(false));
 
 // Create a new loop.
 //
@@ -644,6 +651,9 @@ class CodeGeneration : public RegionPass {
       llvm_unreachable("Found non independent block.");
       return false;
     }
+
+    if (OnlyIndependentBlocks)
+      return false;
 
     createSeSeEdges(R);
 
