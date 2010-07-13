@@ -38,12 +38,12 @@ namespace {
 /// element array access.
 ///
 class ScalarDataRef : public FunctionPass {
-  // DO NOT IMPLEMENT
+  // DO NOT IMPLEMENT.
   ScalarDataRef(const ScalarDataRef &);
-  // DO NOT IMPLEMENT
+  // DO NOT IMPLEMENT.
   const ScalarDataRef &operator=(const ScalarDataRef &);
 
-  // LoopInfo to compute canonical induction variable
+  // LoopInfo to compute canonical induction variable.
   LoopInfo *LI;
   //
   ScalarEvolution *SE;
@@ -59,7 +59,7 @@ public:
   explicit ScalarDataRef() : FunctionPass(&ID) {}
   ~ScalarDataRef();
 
-  /// @name FunctionPass interface
+  /// @name FunctionPass interface.
   //@{
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
   virtual void releaseMemory();
@@ -71,7 +71,7 @@ public:
 }
 
 //===----------------------------------------------------------------------===//
-/// ScalarDataRef implement
+/// ScalarDataRef implement.
 
 void ScalarDataRef::clear() {
 }
@@ -103,7 +103,7 @@ bool ScalarDataRef::eliminatePHINodes(Function &F) {
   if (PNtoDel.empty())
     return false;
 
-  // Eliminate
+  // Eliminate PHI Node.
   while (!PNtoDel.empty()) {
     PHINode *PN = PNtoDel.back();
     PNtoDel.pop_back();
