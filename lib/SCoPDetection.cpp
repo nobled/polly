@@ -393,8 +393,10 @@ bool SCoPDetection::hasScalarDependency(Instruction &Inst,
         const SCEV *scev = SE->getSCEV(OpInst);
         if (!Checker.isIndependent(scev, Inst.getParent()))
           return false;
-      } else
-        // TODO: Do we need to return false?
+      } else if (OpInst->getParent() == Inst.getParent()
+                 || !RefRegion.contains(OpInst))
+          continue;
+      else
         return false;
     }
   return true;
@@ -420,8 +422,7 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
   }
 
   // Scalar dependencies are not allowed.
-  if (SE->isSCEVable(Inst.getType())
-    && !hasScalarDependency(Inst, RefRegion)) {
+  if (!hasScalarDependency(Inst, RefRegion)) {
     DEBUG(dbgs() << "Scalar dependency found: ";
           WriteAsOperand(dbgs(), &Inst, false);
           dbgs() << "\n");
