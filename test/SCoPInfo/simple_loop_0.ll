@@ -33,7 +33,7 @@ return:                                           ; preds = %bb
 
 ; CHECK: SCoP: bb => return        Parameters: ()
 ; WITHAF: SCoP: bb => return      Parameters: (), Max Loop Depth: 1
-; WITHAF: Bounds of Loop: bb:   { 1 * {0,+,1}<%bb> + 0 >= 0, -1 * {0,+,1}<%bb> + 127 >= 0}
+; WITHAF: Bounds of Loop: bb:   { 127 }
 ; WITHAF:   BB: bb{
 ; WITHAF:     Reads %a[8 * {0,+,1}<%bb> + 0]
 ; WITHAF:     Reads %a[8 * {0,+,1}<%bb> + 16]

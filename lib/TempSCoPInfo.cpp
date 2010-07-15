@@ -168,7 +168,7 @@ polly_constraint *SCEVAffFunc::toAccessFunction(polly_dim* dim,
   return c;
 }
 
-void SCEVAffFunc::print(raw_ostream &OS) const {
+void SCEVAffFunc::print(raw_ostream &OS, bool PrintInequality) const {
   // Print BaseAddr.
   if (isDataRef()) {
     OS << (isRead() ? "Reads" : "Writes") << " ";
@@ -185,6 +185,9 @@ void SCEVAffFunc::print(raw_ostream &OS) const {
 
   if (isDataRef())
     OS << "]";
+
+  if (!PrintInequality)
+    return;
 
   if (getType() == GE)
     OS << " >= 0";
@@ -233,34 +236,10 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
   // In form of IV >= 0, LoopCount - IV >= 0.
   LoopBoundMapType::const_iterator at = LoopBounds.find(castToLoop(*CurR, *LI));
   if (at != LoopBounds.end()) {
-    const Loop *L = at->first;
-    PHINode *IV = L->getCanonicalInductionVariable();
-    const SCEV *SIV = SE->getSCEV(IV);
-    // IV >= LB ==> IV - LB >= 0 and LB is 0 in canonical loop.
-    const SCEV *LB = SIV;
-    const SCEV *UB = SE->getBackedgeTakenCount(L);
-    // Match the type, the type of BackedgeTakenCount mismatch when we have
-    // something like this in loop exit:
-    //
-    //    br i1 false, label %for.body, label %for.end
-    //
-    // In fact, we could do some optimization before SCoPDetecion, so we do not
-    // need to worry about this.
-    // Be careful of the sign of the upper bounds, if we meet iv <= -1
-    // this means the iteration domain is empty since iv >= 0
-    // but if we do a zero extend, this will make a non-empty domain
-    UB = SE->getTruncateOrSignExtend(UB, SIV->getType());
-    // IV <= UB ==> UB - IV >= 0
-    UB = SE->getMinusSCEV(UB, SIV);
-    //
-    SCEVAffFunc lb(LB, SCEVAffFunc::GE, SE), ub(UB, SCEVAffFunc::GE, SE);
-
     OS.indent(ind) << "Bounds of Loop: " << at->first->getHeader()->getName()
       << ":\t{ ";
-    lb.print(OS);
-    OS << ", ";
-    ub.print(OS);
-    OS << "}\n";
+    at->second.print(OS, false);
+    OS << " }\n";
     // Increase the indent
     ind += 2;
   }

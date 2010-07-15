@@ -127,7 +127,7 @@ public:
   /// @brief Print the affine function.
   ///
   /// @param OS The output stream the affine function is printed to.
-  void print(raw_ostream &OS) const;
+  void print(raw_ostream &OS, bool PrintInequality = true) const;
   void dump() const;
 };
 

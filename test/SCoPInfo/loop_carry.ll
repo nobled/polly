@@ -47,7 +47,7 @@ bb2:                                              ; preds = %bb, %entry
 }
 
 ; CHECK: SCoP: bb => bb2        Parameters: (%n, ), Max Loop Depth: 1
-; CHECK: Bounds of Loop: bb:    { 1 * {0,+,1}<%bb> + 0 >= 0, -1 * {0,+,1}<%bb> + 1 * %n + -2 >= 0}
+; CHECK: Bounds of Loop: bb:    { 1 * %n + -2 }
 ; CHECK:   BB: bb{
 ; CHECK:     Reads %.reg2mem[0]
 ; CHECK:     Reads %k.05.reg2mem[0]
