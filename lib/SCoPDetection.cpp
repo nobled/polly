@@ -216,7 +216,7 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
 
     // Check if it is the parameter of reference region.
     // Or it is some induction variable
-    if (isParameter(Var, RefRegion, CurBB, *LI, *SE)
+    if (isParameter(Var, RefRegion, *LI, *SE)
       || isIndVar(Var, RefRegion, CurBB, *LI, *SE))
       continue;
 

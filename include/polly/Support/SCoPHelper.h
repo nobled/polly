@@ -16,9 +16,9 @@
 
 namespace llvm {
   class Instruction;
-  class ScalarEvolution;
   class LoopInfo;
   class Loop;
+  class ScalarEvolution;
   class SCEV;
   class Value;
   class Region;
@@ -54,9 +54,10 @@ namespace polly {
 
   //===----------------------------------------------------------------------===//
   // Functions for checking affine functions.
+  bool isInvariant(const llvm::SCEV *S, llvm::Region &R);
 
   bool isParameter(const llvm::SCEV *Var, llvm::Region &RefRegion,
-    llvm::BasicBlock *CurBB, llvm::LoopInfo &LI, llvm::ScalarEvolution &SE);
+    llvm::LoopInfo &LI, llvm::ScalarEvolution &SE);
 
   bool isIndVar(const llvm::SCEV *Var, llvm::Region &RefRegion,
     llvm::BasicBlock *CurBB, llvm::LoopInfo &LI, llvm::ScalarEvolution &SE);
