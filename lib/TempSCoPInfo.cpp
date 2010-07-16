@@ -345,7 +345,7 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
       // Do not add the indvar to the parameter list.
       if (!isIndVar(Var, CurRegion, CurBB, *LI, *SE)) {
         DEBUG(dbgs() << "Non indvar: "<< *Var << '\n');
-        assert(isParameter(Var, CurRegion, CurBB, *LI, *SE)
+        assert(isParameter(Var, CurRegion, *LI, *SE)
                && "Find non affine function in scop!");
         SCoP.getParamSet().insert(Var);
       }
@@ -540,14 +540,15 @@ TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
 }
 
 void TempSCoPInfo::mergeParams(Region &R, ParamSetType &Params,
-                                   ParamSetType &SubParams) const {
+                               ParamSetType &SubParams) const {
   Loop *L = castToLoop(R, *LI);
   // Merge the parameters.
   for (ParamSetType::iterator I = SubParams.begin(),
     E = SubParams.end(); I != E; ++I) {
       const SCEV *Param = *I;
+      DEBUG(dbgs() << "Check param " << *Param << '\n');
       // The valid parameter in subregion may not valid in its parameter.
-      if (isParameter(Param, R, R.getEntry(), *LI, *SE)) {
+      if (isParameter(Param, R, *LI, *SE)) {
         Params.insert(Param);
         continue;
       }

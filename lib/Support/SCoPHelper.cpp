@@ -25,6 +25,97 @@
 
 using namespace llvm;
 
+
+namespace {
+// Checks if a SCEV is invariant in a region. This is if all
+// Values are referenced in this SCEV are defined outside the
+// region.
+class InvariantChecker: SCEVVisitor<InvariantChecker, bool> {
+  Region &R;
+
+public:
+  bool visitConstant(const SCEVConstant *S) {
+    return true;
+  }
+
+  bool visitUnknown(const SCEVUnknown* S) {
+    Value *V = S->getValue();
+
+    // An Instruction defined outside the region is invariant.
+    if (Instruction *I = dyn_cast<Instruction>(V))
+      return !R.contains(I);
+
+    // A constant is invariant.
+    return true;
+  }
+
+  bool visitNAryExpr(const SCEVNAryExpr *S) {
+    for (SCEVNAryExpr::op_iterator OI = S->op_begin(), OE = S->op_end();
+         OI != OE; ++OI)
+      if (!visit(*OI))
+        return false;
+
+    return true;
+  }
+
+  bool visitMulExpr(const SCEVMulExpr* S) {
+    return visitNAryExpr(S);
+  }
+
+  bool visitCastExpr(const SCEVCastExpr *S) {
+    return visit(S->getOperand());
+  }
+
+  bool visitTruncateExpr(const SCEVTruncateExpr *S) {
+    return visit(S->getOperand());
+  }
+
+  bool visitZeroExtendExpr(const SCEVZeroExtendExpr *S) {
+    return visit(S->getOperand());
+  }
+
+  bool visitSignExtendExpr(const SCEVSignExtendExpr *S) {
+    return visit(S->getOperand());
+  }
+
+  bool visitAddExpr(const SCEVAddExpr *S) {
+    return visitNAryExpr(S);
+  }
+
+  bool visitAddRecExpr(const SCEVAddRecExpr *S) {
+    // Check if the addrec contains in the region.
+    if (R.contains(S->getLoop()))
+      return false;
+
+    return visitNAryExpr(S);
+  }
+
+  bool visitUDivExpr(const SCEVUDivExpr *S) {
+    return visit(S->getLHS()) && visit(S->getRHS());
+  }
+
+  bool visitSMaxExpr(const SCEVSMaxExpr *S) {
+    return visitNAryExpr(S);
+  }
+
+  bool visitUMaxExpr(const SCEVUMaxExpr *S) {
+    return visitNAryExpr(S);
+  }
+
+  bool visitCouldNotCompute(const SCEVCouldNotCompute *S) {
+    llvm_unreachable("SCEV cannot be checked");
+  }
+
+  InvariantChecker(Region &RefRegion)
+    : R(RefRegion) {}
+
+  static bool isInvariantInRegion(const SCEV *S, Region &R) {
+    InvariantChecker Checker(R);
+    return Checker.visit(S);
+  }
+};
+}
+
 // Helper function for SCoP
 // TODO: Add assertion to not allow parameter to be null
 //===----------------------------------------------------------------------===//
@@ -81,20 +172,20 @@ Value *polly::getPointerOperand(Instruction &Inst) {
 //===----------------------------------------------------------------------===//
 // Helper functions
 
-// Helper function to check parameter
-bool polly::isParameter(const SCEV *Var, Region &RefRegion, BasicBlock *CurBB,
-                        LoopInfo &LI, ScalarEvolution &SE) {
-  assert(Var && CurBB && "Var and CurBB can not be null!");
-  // Find the biggest loop that is contained by RefR.
-  Loop *topL =  RefRegion.outermostLoopInRegion(&LI, CurBB);
+bool polly::isInvariant(const SCEV *S, Region &R) {
+  return InvariantChecker::isInvariantInRegion(S, R);
+}
 
-  // The parameter is always loop invariant.
-  if (!Var->isLoopInvariant(topL))
+// Helper function to check parameter
+bool polly::isParameter(const SCEV *Var, Region &RefRegion,
+                        LoopInfo &LI, ScalarEvolution &SE) {
+  assert(Var && "Var can not be null!");
+  if (!isInvariant(Var, RefRegion))
       return false;
 
   if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var)) {
     DEBUG(dbgs() << "Find AddRec: " << *AddRec
-      << " at region: " << RefRegion.getNameStr() << "\n");
+      << " at region: " << RefRegion.getNameStr() << "as param\n");
     // The indvar only expect come from outer loop
     // Or from a loop whose backend taken count could not compute.
     assert((AddRec->getLoop()->contains(getScopeLoop(RefRegion, LI))
@@ -115,7 +206,7 @@ bool polly::isParameter(const SCEV *Var, Region &RefRegion, BasicBlock *CurBB,
   }
   // FIXME: Should we accept casts?
   else if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var))
-    return isParameter(Cast->getOperand(), RefRegion, CurBB, LI, SE);
+    return isParameter(Cast->getOperand(), RefRegion, LI, SE);
   // Not a SCEVUnknown.
   return false;
 }
@@ -130,12 +221,12 @@ bool polly::isIndVar(const SCEV *Var, Region &RefRegion, BasicBlock *CurBB,
 
   // If the addrec is the indvar of any loop that containing current region
   Loop *curL = LI.getLoopFor(CurBB),
-       *topL = RefRegion.outermostLoopInRegion(curL),
        *recL = const_cast<Loop*>(AddRec->getLoop());
-  // If recL contains curL, that means curL will not be null, so topL will not
-  // be null because topL will at least contains curL.
-  if (recL->contains(curL) && topL->contains(recL))
+  if (recL->contains(curL) && RefRegion.contains(recL)) {
+    DEBUG(dbgs() << "Find AddRec: " << *AddRec
+          << " at region: " << RefRegion.getNameStr() << " as indvar\n");
     return true;
+  }
 
   // If the loop of addrec is not containing current region, that maybe:
   // 1. The loop is containing reference region and this expect to
