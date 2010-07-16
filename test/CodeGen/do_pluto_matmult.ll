@@ -1,5 +1,5 @@
 ; RUN: opt -polly-print -S < %s | FileCheck %s
-; RUN: opt -polly-codegen < %s
+; RUN: opt -polly-codegen -disable-output < %s
 ; RUN: opt -polly-import -polly-import-dir=`dirname %s` -polly-print -S < %s | FileCheck -check-prefix=IMPORT %s
 ; RUN: opt -polly-import -polly-import-dir=`dirname %s` -polly-codegen < %s | lli | diff %s.result -
 
