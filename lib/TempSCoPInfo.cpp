@@ -345,7 +345,8 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
 }
 
 void TempSCoPInfo::buildAccessFunctions(Region &R, ParamSetType &Params,
-                                        BasicBlock &BB, AccFuncSetType &Functions) {
+                                        BasicBlock &BB) {
+  AccFuncSetType Functions;
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
     Instruction &Inst = *I;
     if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
@@ -359,6 +360,12 @@ void TempSCoPInfo::buildAccessFunctions(Region &R, ParamSetType &Params,
       buildAffineFunction(SE->getSCEV(Ptr), Functions.back(), R, Params);
     }
   }
+
+  if (Functions.empty())
+    return;
+
+  AccFuncSetType &Accs = AccFuncMap[&BB];
+  Accs.insert(Accs.end(), Functions.begin(), Functions.end());
 }
 
 void TempSCoPInfo::buildLoopBound(TempSCoP &SCoP) {
@@ -489,7 +496,6 @@ TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
 
 TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R, Region &RefRegion) {
   TempSCoP *SCoP = new TempSCoP(R, LoopBounds, BBConds, AccFuncMap);
-  AccFuncSetType AccFuncs;
   BBCond Cond;
   for (Region::element_iterator I = R.element_begin(), E = R.element_end();
        I != E; ++I) {
@@ -521,16 +527,9 @@ TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R, Region &RefRegion) {
       // Update the loop depth.
       if (SubSCoP->MaxLoopDepth > SCoP->MaxLoopDepth)
         SCoP->MaxLoopDepth = SubSCoP->MaxLoopDepth;
-    } else {
-      // Extract access function of BasicBlocks.
-      BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-      AccFuncs.clear();
-      buildAccessFunctions(RefRegion, SCoP->getParamSet(), BB, AccFuncs);
-      if (!AccFuncs.empty()) {
-        AccFuncSetType &Accs = AccFuncMap[&BB];
-        Accs.insert(Accs.end(), AccFuncs.begin(), AccFuncs.end());
-      }
-    }
+    } else
+      buildAccessFunctions(RefRegion, SCoP->getParamSet(),
+                           *(I->getNodeAs<BasicBlock>()));
   }
   // Try to extract the loop bounds
   buildLoopBound(*SCoP);
