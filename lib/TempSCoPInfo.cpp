@@ -368,18 +368,33 @@ void TempSCoPInfo::buildAccessFunctions(Region &R, ParamSetType &Params,
   Accs.insert(Accs.end(), Functions.begin(), Functions.end());
 }
 
-void TempSCoPInfo::buildLoopBound(TempSCoP &SCoP) {
-  if (Loop *L = castToLoop(SCoP.getMaxRegion(), *LI)) {
+void TempSCoPInfo::buildLoopBounds(TempSCoP &SCoP) {
+  Region &R = SCoP.getMaxRegion();
+  unsigned MaxLoopDepth = 0;
+
+  for (Region::block_iterator I = R.block_begin(), E = R.block_end();
+       I != E; ++I) {
+    Loop *L = LI->getLoopFor(I->getNodeAs<BasicBlock>());
+
+    if (!L || !R.contains(L))
+      continue;
+
+    if (LoopBounds.find(L) != LoopBounds.end())
+      continue;
+
+    LoopBounds[L] = SCEVAffFunc(SCEVAffFunc::GE);
     const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
-    std::pair<LoopBoundMapType::iterator, bool> at =
-            LoopBounds.insert(std::make_pair(L, SCEVAffFunc(SCEVAffFunc::GE)));
-    // Build the affine function for loop count.
-    buildAffineFunction(LoopCount, at.first->second, SCoP.getMaxRegion(),
+    buildAffineFunction(LoopCount, LoopBounds[L], SCoP.getMaxRegion(),
                         SCoP.getParamSet());
 
-    // Increase the loop depth because we found a loop.
-    ++SCoP.MaxLoopDepth;
+    Loop *OL = R.outermostLoopInRegion(L);
+    unsigned LoopDepth = L->getLoopDepth() - OL->getLoopDepth() + 1;
+
+    if (LoopDepth > MaxLoopDepth)
+      MaxLoopDepth = LoopDepth;
   }
+
+  SCoP.MaxLoopDepth = MaxLoopDepth;
 }
 
 void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
@@ -491,7 +506,9 @@ void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
 
 
 TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
-  return buildTempSCoP(R,R);
+  TempSCoP *TSCoP = buildTempSCoP(R,R);
+  buildLoopBounds(*TSCoP);
+  return TSCoP;
 }
 
 TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R, Region &RefRegion) {
@@ -524,15 +541,10 @@ TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R, Region &RefRegion) {
 
       // Merge parameters from sub SCoPs.
       mergeParams(R, SCoP->getParamSet(), SubSCoP->getParamSet());
-      // Update the loop depth.
-      if (SubSCoP->MaxLoopDepth > SCoP->MaxLoopDepth)
-        SCoP->MaxLoopDepth = SubSCoP->MaxLoopDepth;
     } else
       buildAccessFunctions(RefRegion, SCoP->getParamSet(),
                            *(I->getNodeAs<BasicBlock>()));
   }
-  // Try to extract the loop bounds
-  buildLoopBound(*SCoP);
   return SCoP;
 }
 
