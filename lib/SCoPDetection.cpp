@@ -301,26 +301,8 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
     return false;
   }
 
-  // Allow loop exit conditions.
-  Loop *L = LI->getLoopFor(&BB);
-  if (L && L->getExitingBlock() == &BB)
-    return true;
-
   // Allow perfectly nested conditions.
   assert(Br->getNumSuccessors() == 2 && "Unexpected number of successors");
-
-  // There is a condition, if we reach this place.
-  if (!AllowConditions) {
-    STATSCOP(CFG);
-    return false;
-  }
-
-  // Only well structured conditions.
-  if (!(maxRegionExit(Br->getSuccessor(0)) == maxRegionExit(Br->getSuccessor(1))
-        && maxRegionExit(Br->getSuccessor(0)))) {
-    STATSCOP(CFG);
-    return false;
-  }
 
   // We need to check if both operands of the ICmp are affine.
   if (ICmpInst *ICmp = dyn_cast<ICmpInst>(Condition)) {
@@ -339,6 +321,24 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
       STATSCOP(AffFunc);
       return false;
     }
+  }
+
+  // Allow loop exit conditions.
+  Loop *L = LI->getLoopFor(&BB);
+  if (L && L->getExitingBlock() == &BB)
+    return true;
+
+  // Only well structured conditions.
+  if (!(maxRegionExit(Br->getSuccessor(0)) == maxRegionExit(Br->getSuccessor(1))
+        && maxRegionExit(Br->getSuccessor(0)))) {
+    STATSCOP(CFG);
+    return false;
+  }
+
+  // There is a condition, if we reach this place.
+  if (!AllowConditions) {
+    STATSCOP(CFG);
+    return false;
   }
 
   // Everything is ok if we reach here.

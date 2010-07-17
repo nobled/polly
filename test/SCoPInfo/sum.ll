@@ -40,7 +40,7 @@ bb2:                                              ; preds = %bb, %entry
   ret i64 %k.0.lcssa
 }
 
-; CHECK: Bounds of Loop: bb:    { 1 * {0,+,1}<%bb> + 0 >= 0, -1 * {0,+,1}<%bb> + 1 * %n + -2 >= 0}
+; CHECK: Bounds of Loop: bb:     { 1 * {0,+,1}<%bb> + 0 >= 0, 1 * %n + -1 * {0,+,1}<%bb> + -2 >= 0}
 ; CHECK:   BB: bb{
 ; CHECK:     Reads %k.05.reg2mem[0]
 ; CHECK:     Reads %a[8 * {0,+,1}<%bb> + 8]

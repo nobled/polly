@@ -425,8 +425,6 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
   if (inverted)
     Pred = ICmpInst::getInversePredicate(Pred);
 
-  // FIXME: In fact, this is only loop exit condition, try to use
-  // getBackedgeTakenCount.
   switch (Pred) {
   case ICmpInst::ICMP_EQ:
     FuncToBuild.FuncType = SCEVAffFunc::Eq;
@@ -458,7 +456,7 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
   default:
     llvm_unreachable("Unknown Predicate!");
   }
-  // Build the condition with FuncType
+
   // Transform A >= B to A - B >= 0
   buildAffineFunction(SE->getMinusSCEV(LHS, RHS), FuncToBuild,
                       SCoP.getMaxRegion(), SCoP.getParamSet());
