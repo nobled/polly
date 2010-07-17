@@ -469,44 +469,33 @@ void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
   BBCond Cond;
   DomTreeNode *BBNode = DT->getNode(BB), *EntryNode = DT->getNode(RegionEntry);
   assert(BBNode && EntryNode && "Get null node while building condition!");
-  DEBUG(dbgs() << "Build condition from " << RegionEntry->getName() << " to "
-    << BB->getName() << ":  ");
 
-  // Find all Br conditions on the path.
+  // Walk up the dominance tree until reaching the entry node. Add all
+  // conditions on the path to BB except if BB postdominates the block
+  // containing the condition.
   while (BBNode != EntryNode) {
-    BasicBlock *CurBB = BBNode->getBlock();
     BBNode = BBNode->getIDom();
     assert(BBNode && "BBNode should not reach the root node!");
 
-    // Add any condition if BB post dominate IDomBB, because
-    // if we could reach IDomBB, we can reach BB,
-    // that means there is no any condition constrains from IDomBB to BB
-    if (PDT->dominates(CurBB, BBNode->getBlock()))
+    if (PDT->dominates(BB, BBNode->getBlock()))
       continue;
 
     BranchInst *Br = dyn_cast<BranchInst>(BBNode->getBlock()->getTerminator());
-    assert(Br && "Valid SCoP should only contain br or ret at this moment");
+    assert(Br && "A Valid SCoP should only contain branch instruction");
 
-    // If Br is unconditional, BB post dominates it or the
-    // BBNode should not be the immediate dominator of CurBB.
-    assert(Br->isConditional() && "Br should be conditional!");
+    if (Br->isUnconditional())
+      continue;
 
-    // Is CurBB on the ELSE side of the branch?
-    bool inverted = DT->dominates(Br->getSuccessor(1), CurBB);
+    // Is BB on the ELSE side of the branch?
+    bool inverted = DT->dominates(Br->getSuccessor(1), BB);
 
-    // Build the condition in SCEV form
     Cond.push_back(SCEVAffFunc());
     buildAffineCondition(*(Br->getCondition()), inverted, Cond.back(), SCoP);
-    DEBUG(
-      Cond.back().print(dbgs());
-      dbgs() << " && ";
-    );
   }
-  DEBUG(dbgs() << '\n');
+
   if (!Cond.empty())
     BBConds[BB] = Cond;
 }
-
 
 TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
   TempSCoP *TSCoP = new TempSCoP(R, LoopBounds, BBConds, AccFuncMap);
