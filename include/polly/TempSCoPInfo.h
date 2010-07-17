@@ -291,8 +291,8 @@ class TempSCoPInfo : public RegionPass {
   // Access function of bbs.
   AccFuncMapType AccFuncMap;
 
-  // SCoPs in the function
-  TempSCoPMapType RegionToSCoPs;
+  // SCoP for the current region.
+  TempSCoP *TSCoP;
 
   // Clear the context.
   void clear();
@@ -343,7 +343,7 @@ class TempSCoPInfo : public RegionPass {
 
 public:
   static char ID;
-  explicit TempSCoPInfo() : RegionPass(&ID) {}
+  explicit TempSCoPInfo() : RegionPass(&ID) {TSCoP = 0;}
   ~TempSCoPInfo();
 
   /// @brief Get the temporay SCoP information in LLVM IR represent
@@ -355,7 +355,7 @@ public:
   /// @name FunctionPass interface
   //@{
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-  //virtual void releaseMemory() { clear(); }
+  virtual void releaseMemory() { clear(); }
   virtual bool doFinalization() { clear(); return false; }
   virtual bool runOnRegion(Region *R, RGPassManager &RGM);
   virtual void print(raw_ostream &OS, const Module *) const;

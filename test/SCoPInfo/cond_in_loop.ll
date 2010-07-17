@@ -1,5 +1,4 @@
-; RUN: opt -indvars -polly-analyze-ir  -analyze %s | FileCheck %s
-; RUN: opt -polly-analyze-ir  -analyze %s | FileCheck %s
+; RUN: opt -polly-analyze-ir  -analyze %s | not FileCheck %s
 
 ;void f(long a[], long N, long M) {
 ;  long i, j, k;
@@ -46,5 +45,4 @@ return:                                           ; preds = %bb3, %entry
   ret void
 }
 
-; CHECK-NOT: SCoP:
-; CHECK: Not Valid SCoP!
+; CHECK: SCoP!

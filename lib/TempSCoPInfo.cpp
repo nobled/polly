@@ -511,7 +511,7 @@ TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
         std::make_pair<const BasicBlock*, BBCond>(I->getEntry(), Cond));
     }
     if (I->isSubRegion()) {
-      TempSCoP *SubSCoP = getTempSCoP(*I->getNodeAs<Region>());
+      TempSCoP *SubSCoP = buildTempSCoP(*I->getNodeAs<Region>());
 
       // Merge parameters from sub SCoPs.
       mergeParams(R, SCoP->getParamSet(), SubSCoP->getParamSet());
@@ -568,38 +568,14 @@ void TempSCoPInfo::mergeParams(Region &R, ParamSetType &Params,
   }
 }
 
-TempSCoP *TempSCoPInfo::getTempSCoP(Region& R) {
-  assert(SD->isSCoP(R) && "R is expect to be found!");
-  // Did we already compute the SCoP for R?
-  TempSCoPMapType::const_iterator at = RegionToSCoPs.find(&R);
-  if (at != RegionToSCoPs.end())
-    return at->second;
-
-  // Otherwise, we had to extract the temporary SCoP information.
-  TempSCoP *tempSCoP = buildTempSCoP(R);
-  RegionToSCoPs[&R] = tempSCoP;
-  return tempSCoP;
-}
-
-
 TempSCoP *TempSCoPInfo::getTempSCoP() const {
-  // Only extract the TempSCoP information for valid regions.
-  if (!SD->isSCoP(*CurR)) return 0;
-
-  // Only analyse the maximal SCoPs.
-  if (!SD->isMaxRegionInSCoP(*CurR)) return 0;
-
-  // Recalculate the temporary SCoP info.
-  return const_cast<TempSCoPInfo*>(this)->getTempSCoP(*CurR);
+  return TSCoP;
 }
 
 void TempSCoPInfo::print(raw_ostream &OS, const Module *) const {
-  if (TempSCoP *TS = getTempSCoP())
-      TS->print(OS, SE, LI);
-  else
-    OS << "Region: " << CurR->getNameStr() << " is Not Valid SCoP!\n";
+  if (TSCoP)
+    TSCoP->print(OS, SE, LI);
 }
-
 
 bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   DT = &getAnalysis<DominatorTree>();
@@ -607,7 +583,15 @@ bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   SD = &getAnalysis<SCoPDetection>();
-  CurR = R;
+
+  // Only extract the TempSCoP information for valid regions.
+  if (!SD->isSCoP(*R)) return false;
+
+  // Only analyse the maximal SCoPs.
+  if (!SD->isMaxRegionInSCoP(*R)) return false;
+
+  TSCoP = buildTempSCoP(*R);
+
   return false;
 }
 
@@ -628,12 +612,7 @@ void TempSCoPInfo::clear() {
   BBConds.clear();
   LoopBounds.clear();
   AccFuncMap.clear();
-
-  // Delete all tempSCoP entry in the maps.
-  while (!RegionToSCoPs.empty()) {
-    TempSCoPMapType::iterator I = RegionToSCoPs.begin();
-    if (I->second) delete I->second;
-
-    RegionToSCoPs.erase(I);
-  }
+  if (TSCoP)
+    delete TSCoP;
+  TSCoP = 0;
 }
