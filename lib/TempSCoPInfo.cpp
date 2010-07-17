@@ -317,11 +317,6 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
     && "Un Expect broken affine function in SCoP!");
 
   Region &CurRegion = SCoP.getMaxRegion();
-  Loop *Scope = getScopeLoop(SCoP.getMaxRegion(), *LI);
-
-  // Compute S at the smallest loop so the addrec from other loops may
-  // evaluate to constant.
-  S = SE->getSCEVAtScope(S, Scope);
 
   for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
       I != E; ++I) {
@@ -338,7 +333,7 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
       const SCEVUnknown *BaseAddr = dyn_cast<SCEVUnknown>(Var);
       assert(BaseAddr && "Why we got a broken scev?");
       FuncToBuild.BaseAddr = BaseAddr->getValue();
-    } else { // Extract others affine component
+    } else { // Extract other affine components.
       FuncToBuild.LnrTrans.insert(*I);
       // Do not add the indvar to the parameter list.
       if (!isIndVar(Var, CurRegion, *LI, *SE)) {
