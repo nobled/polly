@@ -332,6 +332,7 @@ class TempSCoPInfo : public RegionPass {
   // Build the temprory information of Region R, where R must be a valid part
   // of SCoP.
   TempSCoP *buildTempSCoP(Region &R);
+  TempSCoP *buildTempSCoP(Region &R, Region &RefRegion);
 
   // Extract the access functions from a BasicBlock to ScalarAccs
   void buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,

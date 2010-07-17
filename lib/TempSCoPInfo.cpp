@@ -485,6 +485,10 @@ void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
 
 
 TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
+  return buildTempSCoP(R,R);
+}
+
+TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R, Region &RefRegion) {
   TempSCoP *SCoP = new TempSCoP(R, LoopBounds, BBConds, AccFuncMap);
   AccFuncSetType AccFuncs;
   BBCond Cond;
@@ -511,7 +515,7 @@ TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
         std::make_pair<const BasicBlock*, BBCond>(I->getEntry(), Cond));
     }
     if (I->isSubRegion()) {
-      TempSCoP *SubSCoP = buildTempSCoP(*I->getNodeAs<Region>());
+      TempSCoP *SubSCoP = buildTempSCoP(*I->getNodeAs<Region>(), RefRegion);
 
       // Merge parameters from sub SCoPs.
       mergeParams(R, SCoP->getParamSet(), SubSCoP->getParamSet());
