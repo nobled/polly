@@ -344,8 +344,8 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
   }
 }
 
-void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
-                                        AccFuncSetType &Functions) {
+void TempSCoPInfo::buildAccessFunctions(Region &R, ParamSetType &Params,
+                                        BasicBlock &BB, AccFuncSetType &Functions) {
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
     Instruction &Inst = *I;
     if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
@@ -356,8 +356,7 @@ void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
         Functions.push_back(SCEVAffFunc(SCEVAffFunc::WriteMem));
 
       Value *Ptr = getPointerOperand(Inst);
-      buildAffineFunction(SE->getSCEV(Ptr), Functions.back(),
-                          SCoP.getMaxRegion(), SCoP.getParamSet());
+      buildAffineFunction(SE->getSCEV(Ptr), Functions.back(), R, Params);
     }
   }
 }
@@ -526,7 +525,7 @@ TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R, Region &RefRegion) {
       // Extract access function of BasicBlocks.
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
       AccFuncs.clear();
-      buildAccessFunctions(*SCoP, BB, AccFuncs);
+      buildAccessFunctions(RefRegion, SCoP->getParamSet(), BB, AccFuncs);
       if (!AccFuncs.empty()) {
         AccFuncSetType &Accs = AccFuncMap[&BB];
         Accs.insert(Accs.end(), AccFuncs.begin(), AccFuncs.end());
