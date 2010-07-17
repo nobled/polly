@@ -309,7 +309,7 @@ class TempSCoPInfo : public RegionPass {
   /// @param FuncToBuild  The SCEVAffFunc to hold the result.
   ///
   void buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
-                           TempSCoP &SCoP) const;
+                           Region &R, ParamSetType &Params) const;
 
 
   /// @brief Build condition constrains to BBs in a valid SCoP.

@@ -310,13 +310,11 @@ static RegisterPass<TempSCoPInfo>
 X("polly-analyze-ir", "Polly - Analyse the LLVM-IR in the detected regions");
 
 void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
-                                       TempSCoP &SCoP) const {
+                                       Region &R, ParamSetType &Params) const {
   assert(S && "S can not be null!");
 
   assert(!isa<SCEVCouldNotCompute>(S)
     && "Un Expect broken affine function in SCoP!");
-
-  Region &CurRegion = SCoP.getMaxRegion();
 
   for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
       I != E; ++I) {
@@ -336,11 +334,11 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
     } else { // Extract other affine components.
       FuncToBuild.LnrTrans.insert(*I);
       // Do not add the indvar to the parameter list.
-      if (!isIndVar(Var, CurRegion, *LI, *SE)) {
+      if (!isIndVar(Var, R, *LI, *SE)) {
         DEBUG(dbgs() << "Non indvar: "<< *Var << '\n');
-        assert(isParameter(Var, CurRegion, *LI, *SE)
+        assert(isParameter(Var, R, *LI, *SE)
                && "Find non affine function in scop!");
-        SCoP.getParamSet().insert(Var);
+        Params.insert(Var);
       }
     }
   }
@@ -358,7 +356,8 @@ void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
         Functions.push_back(SCEVAffFunc(SCEVAffFunc::WriteMem));
 
       Value *Ptr = getPointerOperand(Inst);
-      buildAffineFunction(SE->getSCEV(Ptr), Functions.back(), SCoP);
+      buildAffineFunction(SE->getSCEV(Ptr), Functions.back(),
+                          SCoP.getMaxRegion(), SCoP.getParamSet());
     }
   }
 }
@@ -369,7 +368,8 @@ void TempSCoPInfo::buildLoopBound(TempSCoP &SCoP) {
     std::pair<LoopBoundMapType::iterator, bool> at =
             LoopBounds.insert(std::make_pair(L, SCEVAffFunc(SCEVAffFunc::GE)));
     // Build the affine function for loop count.
-    buildAffineFunction(LoopCount, at.first->second, SCoP);
+    buildAffineFunction(LoopCount, at.first->second, SCoP.getMaxRegion(),
+                        SCoP.getParamSet());
 
     // Increase the loop depth because we found a loop.
     ++SCoP.MaxLoopDepth;
@@ -387,7 +387,8 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
     else
       FuncToBuild.FuncType = SCEVAffFunc::GE;
 
-    buildAffineFunction(SE->getConstant(C->getType(), 1), FuncToBuild, SCoP);
+    buildAffineFunction(SE->getConstant(C->getType(), 1), FuncToBuild,
+                        SCoP.getMaxRegion(), SCoP.getParamSet());
 
     return;
   }
@@ -438,7 +439,8 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
   }
   // Build the condition with FuncType
   // Transform A >= B to A - B >= 0
-  buildAffineFunction(SE->getMinusSCEV(LHS, RHS), FuncToBuild, SCoP);
+  buildAffineFunction(SE->getMinusSCEV(LHS, RHS), FuncToBuild,
+                      SCoP.getMaxRegion(), SCoP.getParamSet());
 }
 
 void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
