@@ -215,7 +215,7 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
     }
 
     if (isParameter(Var, RefRegion, *LI, *SE)
-        || isIndVar(Var, RefRegion, CurBB, *LI, *SE))
+        || isIndVar(Var, RefRegion, *LI, *SE))
       continue;
 
     // A bad SCEV found.

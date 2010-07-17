@@ -317,8 +317,6 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
     && "Un Expect broken affine function in SCoP!");
 
   Region &CurRegion = SCoP.getMaxRegion();
-  BasicBlock *CurBB = CurRegion.getEntry();
-
   Loop *Scope = getScopeLoop(SCoP.getMaxRegion(), *LI);
 
   // Compute S at the smallest loop so the addrec from other loops may
@@ -343,7 +341,7 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
     } else { // Extract others affine component
       FuncToBuild.LnrTrans.insert(*I);
       // Do not add the indvar to the parameter list.
-      if (!isIndVar(Var, CurRegion, CurBB, *LI, *SE)) {
+      if (!isIndVar(Var, CurRegion, *LI, *SE)) {
         DEBUG(dbgs() << "Non indvar: "<< *Var << '\n');
         assert(isParameter(Var, CurRegion, *LI, *SE)
                && "Find non affine function in scop!");

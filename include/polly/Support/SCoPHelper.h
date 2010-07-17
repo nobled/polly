@@ -61,7 +61,7 @@ namespace polly {
     llvm::LoopInfo &LI, llvm::ScalarEvolution &SE);
 
   bool isIndVar(const llvm::SCEV *Var, llvm::Region &RefRegion,
-    llvm::BasicBlock *CurBB, llvm::LoopInfo &LI, llvm::ScalarEvolution &SE);
+                llvm::LoopInfo &LI, llvm::ScalarEvolution &SE);
 
   llvm::Value *getPointerOperand(llvm::Instruction &Inst);
 

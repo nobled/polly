@@ -211,35 +211,23 @@ bool polly::isParameter(const SCEV *Var, Region &RefRegion,
   return false;
 }
 
-bool polly::isIndVar(const SCEV *Var, Region &RefRegion, BasicBlock *CurBB,
+bool polly::isIndVar(const SCEV *Var, Region &RefRegion,
                      LoopInfo &LI, ScalarEvolution &SE) {
-  assert(RefRegion.contains(CurBB)
-         && "Expect reference region contain current region!");
   const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Var);
-  // Not an Induction variable
+
+  // AddRecExprs are no induction variables.
   if (!AddRec) return false;
 
-  // If the addrec is the indvar of any loop that containing current region
-  Loop *curL = LI.getLoopFor(CurBB),
-       *recL = const_cast<Loop*>(AddRec->getLoop());
-  if (recL->contains(curL) && RefRegion.contains(recL)) {
-    DEBUG(dbgs() << "Find AddRec: " << *AddRec
-          << " at region: " << RefRegion.getNameStr() << " as indvar\n");
-    return true;
-  }
+  Loop *L = const_cast<Loop*>(AddRec->getLoop());
 
-  // If the loop of addrec is not containing current region, that maybe:
-  // 1. The loop is containing reference region and this expect to
-  //    recognize as parameter
-  // 2. The loop is containing by reference region, but not containing the
-  //    current region, this because the loop backedge taken count is could
-  //    not compute because Var is expect to get by "getSCEVAtScope", and
-  //    this means reference region is not valid
-  assert((AddRec->getLoop()->contains(getScopeLoop(RefRegion, LI))
-          || isa<SCEVCouldNotCompute>(
-            SE.getBackedgeTakenCount(AddRec->getLoop())))
-        && "getAtScope not work?");
-  return false;
+  // Is the addrec an induction variable of a loop contained in the current
+  // region.
+  if (!RefRegion.contains(L))
+    return false;
+
+  DEBUG(dbgs() << "Find AddRec: " << *AddRec
+        << " at region: " << RefRegion.getNameStr() << " as indvar\n");
+  return true;
 }
 
 // Helper function for LLVM-IR about SCoP
