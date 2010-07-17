@@ -465,7 +465,8 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
 }
 
 void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
-                                  BBCond &Cond, TempSCoP &SCoP) {
+                                  TempSCoP &SCoP) {
+  BBCond Cond;
   DomTreeNode *BBNode = DT->getNode(BB), *EntryNode = DT->getNode(RegionEntry);
   assert(BBNode && EntryNode && "Get null node while building condition!");
   DEBUG(dbgs() << "Build condition from " << RegionEntry->getName() << " to "
@@ -502,84 +503,23 @@ void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
     );
   }
   DEBUG(dbgs() << '\n');
+  if (!Cond.empty())
+    BBConds[BB] = Cond;
 }
 
 
 TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
-  TempSCoP *TSCoP = buildTempSCoP(R,R);
+  TempSCoP *TSCoP = new TempSCoP(R, LoopBounds, BBConds, AccFuncMap);
+
+  for (Region::block_iterator I = R.block_begin(), E = R.block_end();
+       I != E; ++I) {
+    BasicBlock *BB =  I->getNodeAs<BasicBlock>();
+    buildAccessFunctions(R, TSCoP->getParamSet(), *BB);
+    buildCondition(BB, R.getEntry(), *TSCoP);
+  }
+
   buildLoopBounds(*TSCoP);
   return TSCoP;
-}
-
-TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R, Region &RefRegion) {
-  TempSCoP *SCoP = new TempSCoP(R, LoopBounds, BBConds, AccFuncMap);
-  BBCond Cond;
-  for (Region::element_iterator I = R.element_begin(), E = R.element_end();
-       I != E; ++I) {
-    Cond.clear();
-    buildCondition(I->getEntry(), R.getEntry(), Cond, *SCoP);
-    // Remember it if there is any condition extracted
-    if (!Cond.empty()) {
-      // A same BB will be visit multiple time if we iterate on the
-      // element_iterator down the region tree and get the BB by "getEntry",
-      // if this BB is the entry block of some region.
-      // one time(s, because multiple region can share one entry block)
-      // is when BB is some regions entry block, and we get the region node
-      // from the region(The region that have BB as entry block)'s parent
-      // region, this time, we will build the condition from the parent's entry
-      // to the BB.
-      // another time is when we get the region node from the the smallest
-      // region that containing this BB, but now I->getEntry() and R.getEntry()
-      // are the same bb, so no condition expect to extract.
-      assert(!BBConds.count(I->getEntry())
-             && "Why we got more than one conditions for a BB?");
-      BBConds.insert(
-        std::make_pair<const BasicBlock*, BBCond>(I->getEntry(), Cond));
-    }
-    if (I->isSubRegion()) {
-      TempSCoP *SubSCoP = buildTempSCoP(*I->getNodeAs<Region>(), RefRegion);
-
-      // Merge parameters from sub SCoPs.
-      mergeParams(R, SCoP->getParamSet(), SubSCoP->getParamSet());
-    } else
-      buildAccessFunctions(RefRegion, SCoP->getParamSet(),
-                           *(I->getNodeAs<BasicBlock>()));
-  }
-  return SCoP;
-}
-
-void TempSCoPInfo::mergeParams(Region &R, ParamSetType &Params,
-                               ParamSetType &SubParams) const {
-  Loop *L = castToLoop(R, *LI);
-  // Merge the parameters.
-  for (ParamSetType::iterator I = SubParams.begin(),
-    E = SubParams.end(); I != E; ++I) {
-      const SCEV *Param = *I;
-      DEBUG(dbgs() << "Check param " << *Param << '\n');
-      // The valid parameter in subregion may not valid in its parameter.
-      if (isParameter(Param, R, *LI, *SE)) {
-        Params.insert(Param);
-        continue;
-      }
-      // Param maybe the indvar of the loop at current level.
-      else if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Param)) {
-        DEBUG(dbgs() << "Find AddRec: " << *AddRec
-          << " at region: " << R.getNameStr() << "\n");
-        if ( L == AddRec->getLoop())
-          continue;
-        // Else it is a invalid parameter.
-        assert((!L || AddRec->getLoop()->contains(L) ||
-          isa<SCEVCouldNotCompute>(
-          SE->getBackedgeTakenCount(AddRec->getLoop())))
-          && "Where comes the indvar?");
-      }
-
-      DEBUG(dbgs() << "Bad parameter in parent: " << *Param
-        << " in " << R.getNameStr() << " at "
-        << (L ? L->getHeader()->getName() : "Top Level")
-        << "\n");
-      llvm_unreachable("Unexpect bad parameter!");
-  }
 }
 
 TempSCoP *TempSCoPInfo::getTempSCoP() const {

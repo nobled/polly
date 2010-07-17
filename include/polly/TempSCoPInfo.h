@@ -297,10 +297,6 @@ class TempSCoPInfo : public RegionPass {
   // Clear the context.
   void clear();
 
-  // Check if all parameters in Params valid in Region R.
-  void mergeParams(Region &R, ParamSetType &Params,
-                   ParamSetType &SubParams) const;
-
   /// @brief Build an affine function from a SCEV expression.
   ///
   /// @param S            The SCEV expression to be converted to affine
@@ -318,8 +314,7 @@ class TempSCoPInfo : public RegionPass {
   /// @param RegionEntry  The entry block of the Smallest Region that containing
   ///                     BB
   /// @param Cond         The built condition
-  void buildCondition(BasicBlock *BB, BasicBlock *RegionEntry, BBCond &Cond,
-                      TempSCoP &SCoP);
+  void buildCondition(BasicBlock *BB, BasicBlock *RegionEntry, TempSCoP &SCoP);
 
   // Build the affine function of the given condition
   void buildAffineCondition(Value &V, bool inverted,  SCEVAffFunc &FuncToBuild,
@@ -332,7 +327,6 @@ class TempSCoPInfo : public RegionPass {
   // Build the temprory information of Region R, where R must be a valid part
   // of SCoP.
   TempSCoP *buildTempSCoP(Region &R);
-  TempSCoP *buildTempSCoP(Region &R, Region &RefRegion);
 
   void buildAccessFunctions(Region &RefRegion, ParamSetType &Params,
                             BasicBlock &BB);
