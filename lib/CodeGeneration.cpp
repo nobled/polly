@@ -691,12 +691,37 @@ class CodeGeneration : public RegionPass {
         PN->removeIncomingValue(R->getEntry());
       }
 
-    if (DT->dominates(R->getEntry(), R->getExit()))
-      DT->changeImmediateDominator(AfterSCoP, Builder.GetInsertBlock());
+    DT->changeImmediateDominator(AfterSCoP, Builder.GetInsertBlock());
+
+    BasicBlock *OldRegionEntry = *succ_begin(R->getEntry());
 
     // Enable the new polly code.
     R->getEntry()->getTerminator()->setSuccessor(0, PollyBB);
 
+    // Remove old SCoP nodes from dominator tree.
+    std::vector<DomTreeNode*> ToVisit;
+    std::vector<DomTreeNode*> Visited;
+    ToVisit.push_back(DT->getNode(OldRegionEntry));
+
+    while (!ToVisit.empty()) {
+      DomTreeNode *Node = ToVisit.back();
+
+      ToVisit.pop_back();
+
+      if (AfterSCoP == Node->getBlock())
+        continue;
+
+      Visited.push_back(Node);
+
+      std::vector<DomTreeNode*> Children = Node->getChildren();
+      ToVisit.insert(ToVisit.end(), Children.begin(), Children.end());
+    }
+
+    for (std::vector<DomTreeNode*>::reverse_iterator I = Visited.rbegin(),
+         E = Visited.rend(); I != E; ++I)
+      DT->eraseNode((*I)->getBlock());
+
+    R->getParent()->removeSubRegion(R);
     return false;
   }
 
@@ -710,6 +735,7 @@ class CodeGeneration : public RegionPass {
     AU.addRequired<DominatorTree>();
     AU.addRequired<ScalarEvolution>();
     AU.addRequired<LoopInfo>();
+    AU.addRequired<RegionInfo>();
     AU.addPreserved<DominatorTree>();
     AU.addPreserved<SCoPInfo>();
     AU.addPreserved<RegionInfo>();
