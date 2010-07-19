@@ -291,15 +291,11 @@ class TempSCoPInfo : public RegionPass {
   // Access function of bbs.
   AccFuncMapType AccFuncMap;
 
-  // SCoPs in the function
-  TempSCoPMapType RegionToSCoPs;
+  // SCoP for the current region.
+  TempSCoP *TSCoP;
 
   // Clear the context.
   void clear();
-
-  // Check if all parameters in Params valid in Region R.
-  void mergeParams(Region &R, ParamSetType &Params,
-                   ParamSetType &SubParams) const;
 
   /// @brief Build an affine function from a SCEV expression.
   ///
@@ -309,7 +305,7 @@ class TempSCoPInfo : public RegionPass {
   /// @param FuncToBuild  The SCEVAffFunc to hold the result.
   ///
   void buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
-                           TempSCoP &SCoP) const;
+                           Region &R, ParamSetType &Params) const;
 
 
   /// @brief Build condition constrains to BBs in a valid SCoP.
@@ -318,8 +314,7 @@ class TempSCoPInfo : public RegionPass {
   /// @param RegionEntry  The entry block of the Smallest Region that containing
   ///                     BB
   /// @param Cond         The built condition
-  void buildCondition(BasicBlock *BB, BasicBlock *RegionEntry, BBCond &Cond,
-                      TempSCoP &SCoP);
+  void buildCondition(BasicBlock *BB, BasicBlock *RegionEntry, TempSCoP &SCoP);
 
   // Build the affine function of the given condition
   void buildAffineCondition(Value &V, bool inverted,  SCEVAffFunc &FuncToBuild,
@@ -333,17 +328,14 @@ class TempSCoPInfo : public RegionPass {
   // of SCoP.
   TempSCoP *buildTempSCoP(Region &R);
 
-  // Extract the access functions from a BasicBlock to ScalarAccs
-  void buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
-                            AccFuncSetType &AccessFunctions);
+  void buildAccessFunctions(Region &RefRegion, ParamSetType &Params,
+                            BasicBlock &BB);
 
-  // Build the bounds of loop that corresponding to the outer most region of 
-  // a given SCoP
-  void buildLoopBound(TempSCoP &SCoP);
+  void buildLoopBounds(TempSCoP &SCoP);
 
 public:
   static char ID;
-  explicit TempSCoPInfo() : RegionPass(&ID) {}
+  explicit TempSCoPInfo() : RegionPass(&ID) {TSCoP = 0;}
   ~TempSCoPInfo();
 
   /// @brief Get the temporay SCoP information in LLVM IR represent
@@ -355,7 +347,7 @@ public:
   /// @name FunctionPass interface
   //@{
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-  //virtual void releaseMemory() { clear(); }
+  virtual void releaseMemory() { clear(); }
   virtual bool doFinalization() { clear(); return false; }
   virtual bool runOnRegion(Region *R, RGPassManager &RGM);
   virtual void print(raw_ostream &OS, const Module *) const;

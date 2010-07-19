@@ -17,7 +17,7 @@ FIND_PACKAGE(Cloog REQUIRED)
 FIND_PACKAGE(Isl REQUIRED)
 FIND_PACKAGE(Gmp REQUIRED)
 
-option(POLLY_ENABLE_OPENSCOP "Enalbe Openscop library for scop import/export" ON)
+option(POLLY_ENABLE_OPENSCOP "Enable Openscop library for scop import/export" ON)
 if (POLLY_ENABLE_OPENSCOP)
   FIND_PACKAGE(OpenScop)
 endif(POLLY_ENABLE_OPENSCOP)

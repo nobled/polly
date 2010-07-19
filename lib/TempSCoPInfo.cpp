@@ -289,20 +289,11 @@ static RegisterPass<TempSCoPInfo>
 X("polly-analyze-ir", "Polly - Analyse the LLVM-IR in the detected regions");
 
 void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
-                                       TempSCoP &SCoP) const {
+                                       Region &R, ParamSetType &Params) const {
   assert(S && "S can not be null!");
 
   assert(!isa<SCEVCouldNotCompute>(S)
     && "Un Expect broken affine function in SCoP!");
-
-  Region &CurRegion = SCoP.getMaxRegion();
-  BasicBlock *CurBB = CurRegion.getEntry();
-
-  Loop *Scope = getScopeLoop(SCoP.getMaxRegion(), *LI);
-
-  // Compute S at the smallest loop so the addrec from other loops may
-  // evaluate to constant.
-  S = SE->getSCEVAtScope(S, Scope);
 
   for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
       I != E; ++I) {
@@ -319,21 +310,22 @@ void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
       const SCEVUnknown *BaseAddr = dyn_cast<SCEVUnknown>(Var);
       assert(BaseAddr && "Why we got a broken scev?");
       FuncToBuild.BaseAddr = BaseAddr->getValue();
-    } else { // Extract others affine component
+    } else { // Extract other affine components.
       FuncToBuild.LnrTrans.insert(*I);
       // Do not add the indvar to the parameter list.
-      if (!isIndVar(Var, CurRegion, CurBB, *LI, *SE)) {
+      if (!isIndVar(Var, R, *LI, *SE)) {
         DEBUG(dbgs() << "Non indvar: "<< *Var << '\n');
-        assert(isParameter(Var, CurRegion, *LI, *SE)
+        assert(isParameter(Var, R, *LI, *SE)
                && "Find non affine function in scop!");
-        SCoP.getParamSet().insert(Var);
+        Params.insert(Var);
       }
     }
   }
 }
 
-void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
-                                        AccFuncSetType &Functions) {
+void TempSCoPInfo::buildAccessFunctions(Region &R, ParamSetType &Params,
+                                        BasicBlock &BB) {
+  AccFuncSetType Functions;
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
     Instruction &Inst = *I;
     if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
@@ -344,22 +336,44 @@ void TempSCoPInfo::buildAccessFunctions(TempSCoP &SCoP, BasicBlock &BB,
         Functions.push_back(SCEVAffFunc(SCEVAffFunc::WriteMem));
 
       Value *Ptr = getPointerOperand(Inst);
-      buildAffineFunction(SE->getSCEV(Ptr), Functions.back(), SCoP);
+      buildAffineFunction(SE->getSCEV(Ptr), Functions.back(), R, Params);
     }
   }
+
+  if (Functions.empty())
+    return;
+
+  AccFuncSetType &Accs = AccFuncMap[&BB];
+  Accs.insert(Accs.end(), Functions.begin(), Functions.end());
 }
 
-void TempSCoPInfo::buildLoopBound(TempSCoP &SCoP) {
-  if (Loop *L = castToLoop(SCoP.getMaxRegion(), *LI)) {
-    const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
-    std::pair<LoopBoundMapType::iterator, bool> at =
-            LoopBounds.insert(std::make_pair(L, SCEVAffFunc(SCEVAffFunc::GE)));
-    // Build the affine function for loop count.
-    buildAffineFunction(LoopCount, at.first->second, SCoP);
+void TempSCoPInfo::buildLoopBounds(TempSCoP &SCoP) {
+  Region &R = SCoP.getMaxRegion();
+  unsigned MaxLoopDepth = 0;
 
-    // Increase the loop depth because we found a loop.
-    ++SCoP.MaxLoopDepth;
+  for (Region::block_iterator I = R.block_begin(), E = R.block_end();
+       I != E; ++I) {
+    Loop *L = LI->getLoopFor(I->getNodeAs<BasicBlock>());
+
+    if (!L || !R.contains(L))
+      continue;
+
+    if (LoopBounds.find(L) != LoopBounds.end())
+      continue;
+
+    LoopBounds[L] = SCEVAffFunc(SCEVAffFunc::GE);
+    const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
+    buildAffineFunction(LoopCount, LoopBounds[L], SCoP.getMaxRegion(),
+                        SCoP.getParamSet());
+
+    Loop *OL = R.outermostLoopInRegion(L);
+    unsigned LoopDepth = L->getLoopDepth() - OL->getLoopDepth() + 1;
+
+    if (LoopDepth > MaxLoopDepth)
+      MaxLoopDepth = LoopDepth;
   }
+
+  SCoP.MaxLoopDepth = MaxLoopDepth;
 }
 
 void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
@@ -373,7 +387,8 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
     else
       FuncToBuild.FuncType = SCEVAffFunc::GE;
 
-    buildAffineFunction(SE->getConstant(C->getType(), 1), FuncToBuild, SCoP);
+    buildAffineFunction(SE->getConstant(C->getType(), 1), FuncToBuild,
+                        SCoP.getMaxRegion(), SCoP.getParamSet());
 
     return;
   }
@@ -389,8 +404,6 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
   if (inverted)
     Pred = ICmpInst::getInversePredicate(Pred);
 
-  // FIXME: In fact, this is only loop exit condition, try to use
-  // getBackedgeTakenCount.
   switch (Pred) {
   case ICmpInst::ICMP_EQ:
     FuncToBuild.FuncType = SCEVAffFunc::Eq;
@@ -422,168 +435,67 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
   default:
     llvm_unreachable("Unknown Predicate!");
   }
-  // Build the condition with FuncType
+
   // Transform A >= B to A - B >= 0
-  buildAffineFunction(SE->getMinusSCEV(LHS, RHS), FuncToBuild, SCoP);
+  buildAffineFunction(SE->getMinusSCEV(LHS, RHS), FuncToBuild,
+                      SCoP.getMaxRegion(), SCoP.getParamSet());
 }
 
 void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
-                                  BBCond &Cond, TempSCoP &SCoP) {
+                                  TempSCoP &SCoP) {
+  BBCond Cond;
   DomTreeNode *BBNode = DT->getNode(BB), *EntryNode = DT->getNode(RegionEntry);
   assert(BBNode && EntryNode && "Get null node while building condition!");
-  DEBUG(dbgs() << "Build condition from " << RegionEntry->getName() << " to "
-    << BB->getName() << ":  ");
 
-  // Find all Br conditions on the path.
+  // Walk up the dominance tree until reaching the entry node. Add all
+  // conditions on the path to BB except if BB postdominates the block
+  // containing the condition.
   while (BBNode != EntryNode) {
-    BasicBlock *CurBB = BBNode->getBlock();
     BBNode = BBNode->getIDom();
     assert(BBNode && "BBNode should not reach the root node!");
 
-    // Add any condition if BB post dominate IDomBB, because
-    // if we could reach IDomBB, we can reach BB,
-    // that means there is no any condition constrains from IDomBB to BB
-    if (PDT->dominates(CurBB, BBNode->getBlock()))
+    if (PDT->dominates(BB, BBNode->getBlock()))
       continue;
 
     BranchInst *Br = dyn_cast<BranchInst>(BBNode->getBlock()->getTerminator());
-    assert(Br && "Valid SCoP should only contain br or ret at this moment");
+    assert(Br && "A Valid SCoP should only contain branch instruction");
 
-    // If Br is unconditional, BB post dominates it or the
-    // BBNode should not be the immediate dominator of CurBB.
-    assert(Br->isConditional() && "Br should be conditional!");
+    if (Br->isUnconditional())
+      continue;
 
-    // Is CurBB on the ELSE side of the branch?
-    bool inverted = DT->dominates(Br->getSuccessor(1), CurBB);
+    // Is BB on the ELSE side of the branch?
+    bool inverted = DT->dominates(Br->getSuccessor(1), BB);
 
-    // Build the condition in SCEV form
     Cond.push_back(SCEVAffFunc());
     buildAffineCondition(*(Br->getCondition()), inverted, Cond.back(), SCoP);
-    DEBUG(
-      Cond.back().print(dbgs());
-      dbgs() << " && ";
-    );
   }
-  DEBUG(dbgs() << '\n');
-}
 
+  if (!Cond.empty())
+    BBConds[BB] = Cond;
+}
 
 TempSCoP *TempSCoPInfo::buildTempSCoP(Region &R) {
-  TempSCoP *SCoP = new TempSCoP(R, LoopBounds, BBConds, AccFuncMap);
-  AccFuncSetType AccFuncs;
-  BBCond Cond;
-  for (Region::element_iterator I = R.element_begin(), E = R.element_end();
+  TempSCoP *TSCoP = new TempSCoP(R, LoopBounds, BBConds, AccFuncMap);
+
+  for (Region::block_iterator I = R.block_begin(), E = R.block_end();
        I != E; ++I) {
-    Cond.clear();
-    buildCondition(I->getEntry(), R.getEntry(), Cond, *SCoP);
-    // Remember it if there is any condition extracted
-    if (!Cond.empty()) {
-      // A same BB will be visit multiple time if we iterate on the
-      // element_iterator down the region tree and get the BB by "getEntry",
-      // if this BB is the entry block of some region.
-      // one time(s, because multiple region can share one entry block)
-      // is when BB is some regions entry block, and we get the region node
-      // from the region(The region that have BB as entry block)'s parent
-      // region, this time, we will build the condition from the parent's entry
-      // to the BB.
-      // another time is when we get the region node from the the smallest
-      // region that containing this BB, but now I->getEntry() and R.getEntry()
-      // are the same bb, so no condition expect to extract.
-      assert(!BBConds.count(I->getEntry())
-             && "Why we got more than one conditions for a BB?");
-      BBConds.insert(
-        std::make_pair<const BasicBlock*, BBCond>(I->getEntry(), Cond));
-    }
-    if (I->isSubRegion()) {
-      TempSCoP *SubSCoP = getTempSCoP(*I->getNodeAs<Region>());
-
-      // Merge parameters from sub SCoPs.
-      mergeParams(R, SCoP->getParamSet(), SubSCoP->getParamSet());
-      // Update the loop depth.
-      if (SubSCoP->MaxLoopDepth > SCoP->MaxLoopDepth)
-        SCoP->MaxLoopDepth = SubSCoP->MaxLoopDepth;
-    } else {
-      // Extract access function of BasicBlocks.
-      BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-      AccFuncs.clear();
-      buildAccessFunctions(*SCoP, BB, AccFuncs);
-      if (!AccFuncs.empty()) {
-        AccFuncSetType &Accs = AccFuncMap[&BB];
-        Accs.insert(Accs.end(), AccFuncs.begin(), AccFuncs.end());
-      }
-    }
+    BasicBlock *BB =  I->getNodeAs<BasicBlock>();
+    buildAccessFunctions(R, TSCoP->getParamSet(), *BB);
+    buildCondition(BB, R.getEntry(), *TSCoP);
   }
-  // Try to extract the loop bounds
-  buildLoopBound(*SCoP);
-  return SCoP;
+
+  buildLoopBounds(*TSCoP);
+  return TSCoP;
 }
-
-void TempSCoPInfo::mergeParams(Region &R, ParamSetType &Params,
-                               ParamSetType &SubParams) const {
-  Loop *L = castToLoop(R, *LI);
-  // Merge the parameters.
-  for (ParamSetType::iterator I = SubParams.begin(),
-    E = SubParams.end(); I != E; ++I) {
-      const SCEV *Param = *I;
-      DEBUG(dbgs() << "Check param " << *Param << '\n');
-      // The valid parameter in subregion may not valid in its parameter.
-      if (isParameter(Param, R, *LI, *SE)) {
-        Params.insert(Param);
-        continue;
-      }
-      // Param maybe the indvar of the loop at current level.
-      else if (const SCEVAddRecExpr *AddRec = dyn_cast<SCEVAddRecExpr>(Param)) {
-        DEBUG(dbgs() << "Find AddRec: " << *AddRec
-          << " at region: " << R.getNameStr() << "\n");
-        if ( L == AddRec->getLoop())
-          continue;
-        // Else it is a invalid parameter.
-        assert((!L || AddRec->getLoop()->contains(L) ||
-          isa<SCEVCouldNotCompute>(
-          SE->getBackedgeTakenCount(AddRec->getLoop())))
-          && "Where comes the indvar?");
-      }
-
-      DEBUG(dbgs() << "Bad parameter in parent: " << *Param
-        << " in " << R.getNameStr() << " at "
-        << (L ? L->getHeader()->getName() : "Top Level")
-        << "\n");
-      llvm_unreachable("Unexpect bad parameter!");
-  }
-}
-
-TempSCoP *TempSCoPInfo::getTempSCoP(Region& R) {
-  assert(SD->isSCoP(R) && "R is expect to be found!");
-  // Did we already compute the SCoP for R?
-  TempSCoPMapType::const_iterator at = RegionToSCoPs.find(&R);
-  if (at != RegionToSCoPs.end())
-    return at->second;
-
-  // Otherwise, we had to extract the temporary SCoP information.
-  TempSCoP *tempSCoP = buildTempSCoP(R);
-  RegionToSCoPs[&R] = tempSCoP;
-  return tempSCoP;
-}
-
 
 TempSCoP *TempSCoPInfo::getTempSCoP() const {
-  // Only extract the TempSCoP information for valid regions.
-  if (!SD->isSCoP(*CurR)) return 0;
-
-  // Only analyse the maximal SCoPs.
-  if (!SD->isMaxRegionInSCoP(*CurR)) return 0;
-
-  // Recalculate the temporary SCoP info.
-  return const_cast<TempSCoPInfo*>(this)->getTempSCoP(*CurR);
+  return TSCoP;
 }
 
 void TempSCoPInfo::print(raw_ostream &OS, const Module *) const {
-  if (TempSCoP *TS = getTempSCoP())
-      TS->print(OS, SE, LI);
-  else
-    OS << "Region: " << CurR->getNameStr() << " is Not Valid SCoP!\n";
+  if (TSCoP)
+    TSCoP->print(OS, SE, LI);
 }
-
 
 bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   DT = &getAnalysis<DominatorTree>();
@@ -591,7 +503,15 @@ bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   SD = &getAnalysis<SCoPDetection>();
-  CurR = R;
+
+  // Only extract the TempSCoP information for valid regions.
+  if (!SD->isSCoP(*R)) return false;
+
+  // Only analyse the maximal SCoPs.
+  if (!SD->isMaxRegionInSCoP(*R)) return false;
+
+  TSCoP = buildTempSCoP(*R);
+
   return false;
 }
 
@@ -612,12 +532,7 @@ void TempSCoPInfo::clear() {
   BBConds.clear();
   LoopBounds.clear();
   AccFuncMap.clear();
-
-  // Delete all tempSCoP entry in the maps.
-  while (!RegionToSCoPs.empty()) {
-    TempSCoPMapType::iterator I = RegionToSCoPs.begin();
-    if (I->second) delete I->second;
-
-    RegionToSCoPs.erase(I);
-  }
+  if (TSCoP)
+    delete TSCoP;
+  TSCoP = 0;
 }
