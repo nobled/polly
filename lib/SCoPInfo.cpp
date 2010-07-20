@@ -24,7 +24,7 @@
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/CommandLine.h"
 
-#define DEBUG_TYPE "polly-scop-info"
+#define DEBUG_TYPE "polly-scops"
 #include "llvm/Support/Debug.h"
 
 #include "isl_constraint.h"

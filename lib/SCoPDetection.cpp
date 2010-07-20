@@ -26,7 +26,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 
-#define DEBUG_TYPE "polly-scop-detect"
+#define DEBUG_TYPE "polly-detect"
 #include "llvm/Support/Debug.h"
 
 
