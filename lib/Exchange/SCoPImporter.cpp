@@ -163,14 +163,21 @@ bool updateScattering(SCoP *S, openscop_scop_p OSCoP) {
 
 std::string SCoPImporter::getFileName(Region *R) const {
   std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-  std::string ExitName;
+  std::string ExitName, EntryName;
 
-  if (R->getExit())
-    ExitName = R->getExit()->getNameStr();
-  else
+  raw_string_ostream ExitStr(ExitName);
+  raw_string_ostream EntryStr(EntryName);
+
+  WriteAsOperand(EntryStr, R->getEntry(), false);
+  EntryStr.str();
+
+  if (R->getExit()) {
+    WriteAsOperand(ExitStr, R->getExit(), false);
+    ExitStr.str();
+  } else
     ExitName = "FunctionExit";
 
-  std::string RegionName = R->getEntry()->getNameStr() + "---" + ExitName;
+  std::string RegionName = EntryName + "---" + ExitName;
   std::string FileName = FunctionName + "___" + RegionName + ".scop";
 
   return FileName;
