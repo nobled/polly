@@ -253,10 +253,32 @@ struct CLooGExporter : public RegionPass {
   SCoP *S;
   explicit CLooGExporter() : RegionPass(&ID) {}
 
+  std::string getFileName(Region *R) const;
   virtual bool runOnRegion(Region *R, RGPassManager &RGM);
   void getAnalysisUsage(AnalysisUsage &AU) const;
 };
 
+}
+std::string CLooGExporter::getFileName(Region *R) const {
+  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
+  std::string ExitName, EntryName;
+
+  raw_string_ostream ExitStr(ExitName);
+  raw_string_ostream EntryStr(EntryName);
+
+  WriteAsOperand(EntryStr, R->getEntry(), false);
+  EntryStr.str();
+
+  if (R->getExit()) {
+    WriteAsOperand(ExitStr, R->getExit(), false);
+    ExitStr.str();
+  } else
+    ExitName = "FunctionExit";
+
+  std::string RegionName = EntryName + "---" + ExitName;
+  std::string FileName = FunctionName + "___" + RegionName + ".cloog";
+
+  return FileName;
 }
 
 char CLooGExporter::ID = 0;
@@ -267,15 +289,7 @@ bool CLooGExporter::runOnRegion(Region *R, RGPassManager &RGM) {
     return false;
 
   std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-  std::string ExitName;
-
-  if (R->getExit())
-    ExitName = R->getExit()->getNameStr();
-  else
-    ExitName = "FunctionExit";
-
-  std::string RegionName = R->getEntry()->getNameStr() + "---" + ExitName;
-  std::string Filename = FunctionName + "___" + RegionName + ".cloog";
+  std::string Filename = getFileName(R);
 
   errs() << "Writing SCoP '" << R->getNameStr() << "' in function '"
     << FunctionName << "' to '" << Filename << "'...\n";
