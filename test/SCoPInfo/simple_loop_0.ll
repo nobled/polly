@@ -1,4 +1,4 @@
-; RUN: opt -indvars -polly-analyze-ir -polly-print-temp-scop-in-detail -analyze %s | FileCheck %s -check-prefix=WITHAF
+; RUN: opt -indvars -polly-analyze-ir  -analyze %s | FileCheck %s -check-prefix=WITHAF
 ; RUN: opt -polly-analyze-ir  -analyze %s | FileCheck %s
 
 ;void f(long a[], long N) {

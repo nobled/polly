@@ -35,11 +35,6 @@
 using namespace llvm;
 using namespace polly;
 
-static cl::opt<bool>
-PrintTempSCoPInDetail("polly-print-temp-scop-in-detail",
-                      cl::desc("Print temporary scop information in detail"),
-                      cl::Hidden);
-
 //===----------------------------------------------------------------------===//
 /// Helper Class
 
@@ -222,9 +217,6 @@ void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const {
     OS << **PI << ", ";
 
   OS << "), Max Loop Depth: "<< MaxLoopDepth <<"\n";
-
-  if (!PrintTempSCoPInDetail)
-    return;
 
   printDetail(OS, SE, LI, &R, 0);
 }
