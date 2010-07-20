@@ -443,10 +443,11 @@ void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
   // conditions on the path to BB except if BB postdominates the block
   // containing the condition.
   while (BBNode != EntryNode) {
+    BasicBlock *CurBB = BBNode->getBlock();
     BBNode = BBNode->getIDom();
     assert(BBNode && "BBNode should not reach the root node!");
 
-    if (PDT->dominates(BB, BBNode->getBlock()))
+    if (PDT->dominates(CurBB, BBNode->getBlock()))
       continue;
 
     BranchInst *Br = dyn_cast<BranchInst>(BBNode->getBlock()->getTerminator());
