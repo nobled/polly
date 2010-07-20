@@ -57,11 +57,6 @@ BADSCOP_STAT(AffFunc,     "Expression not affine");
 BADSCOP_STAT(Scalar,      "Found scalar dependency");
 BADSCOP_STAT(Other,       "Others");
 
-static cl::opt<bool>
-AllowConditions("polly-detect-conditions",
-                cl::desc("Allow conditions in SCoPs."),
-                cl::Hidden,  cl::init(false));
-
 // Checks if a SCEV is independent.
 // This means it only references Instructions that are either
 //   * defined in the same BasicBlock
@@ -331,12 +326,6 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   // Only well structured conditions.
   if (!(maxRegionExit(Br->getSuccessor(0)) == maxRegionExit(Br->getSuccessor(1))
         && maxRegionExit(Br->getSuccessor(0)))) {
-    STATSCOP(CFG);
-    return false;
-  }
-
-  // There is a condition, if we reach this place.
-  if (!AllowConditions) {
     STATSCOP(CFG);
     return false;
   }
