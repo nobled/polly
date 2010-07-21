@@ -556,6 +556,19 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
   return false;
 }
 
+
+void polly::SCoPDetection::verifyRegion(const Region &R) const {
+  assert(isSCoP(R) && "Expect R is a valid region.");
+  if (!isValidRegion(const_cast<Region&>(R)))
+    report_fatal_error("Broken region found: " + R.getNameStr() + "\n");
+}
+
+void polly::SCoPDetection::verifyAnalysis() const {
+  for (RegionSet::const_iterator I = ValidRegions.begin(),
+      E = ValidRegions.end(); I != E; ++I)
+    verifyRegion(**I);
+}
+
 void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<DominatorTree>();
   AU.addRequiredTransitive<PostDominatorTree>();

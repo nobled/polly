@@ -174,6 +174,16 @@ public:
     return ValidRegions.count(&R);
   }
 
+  /// @brief Verify if all valid Regions in this Function are still valid
+  /// after some transformations.
+  void verifyAnalysis() const;
+
+  /// @brief Verify if R is still a valid part of SCoP after some
+  /// transformations.
+  ///
+  /// @param R The Region to verify.
+  void verifyRegion(const Region &R) const;
+
   /// @name FunctionPass interface
   //@{
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
