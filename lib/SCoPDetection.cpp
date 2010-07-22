@@ -227,46 +227,6 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
   return !isMemAcc || PtrExist;
 }
 
-// Return the exit of the maximal refined region, that starts at
-// BB.
-BasicBlock *SCoPDetection::maxRegionExit(BasicBlock *BB) const {
-  BasicBlock *Exit = NULL;
-
-  while (true) {
-    // Get largest region that starts at BB.
-    Region *R = RI->getRegionFor(BB);
-    while (R && R->getParent() && R->getParent()->getEntry() == BB)
-      R = R->getParent();
-
-    // Get the single exit of BB.
-    if (R && R->getEntry() == BB)
-      Exit = R->getExit();
-    else if (++succ_begin(BB) == succ_end(BB))
-      Exit = *succ_begin(BB);
-    else // No single exit exists.
-      return Exit;
-
-    // Get largest region that starts at Exit.
-    Region *ExitR = RI->getRegionFor(Exit);
-    while (ExitR && ExitR->getParent()
-           && ExitR->getParent()->getEntry() == Exit)
-      ExitR = ExitR->getParent();
-
-    for (pred_iterator PI = pred_begin(Exit), PE = pred_end(Exit); PI != PE;
-         ++PI)
-      if (!R->contains(*PI) && !ExitR->contains(*PI))
-        break;
-
-    // This stops infinite cycles.
-    if (DT->dominates(Exit, BB))
-      break;
-
-    BB = Exit;
-  }
-
-  return Exit;
-}
-
 bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   TerminatorInst *TI = BB.getTerminator();
 
@@ -324,8 +284,9 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
     return true;
 
   // Only well structured conditions.
-  if (!(maxRegionExit(Br->getSuccessor(0)) == maxRegionExit(Br->getSuccessor(1))
-        && maxRegionExit(Br->getSuccessor(0)))) {
+  if (!(RI->getMaxRegionExit(Br->getSuccessor(0)) 
+          == RI->getMaxRegionExit(Br->getSuccessor(1))
+        && RI->getMaxRegionExit(Br->getSuccessor(0)))) {
     STATSCOP(CFG);
     return false;
   }
