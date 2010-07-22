@@ -534,11 +534,11 @@ void polly::SCoPDetection::verifyAnalysis() const {
 }
 
 void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequiredTransitive<DominatorTree>();
-  AU.addRequiredTransitive<PostDominatorTree>();
-  AU.addRequiredTransitive<LoopInfo>();
+  AU.addRequired<DominatorTree>();
+  AU.addRequired<PostDominatorTree>();
+  AU.addRequired<LoopInfo>();
   AU.addRequiredTransitive<RegionInfo>();
-  AU.addRequiredTransitive<ScalarEvolution>();
+  AU.addRequired<ScalarEvolution>();
   AU.addRequiredID(SCoPCodePrepID);
   AU.setPreservesAll();
 }
