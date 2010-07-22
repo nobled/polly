@@ -57,7 +57,7 @@ class IndependentBlocks : public RegionPass {
   void createIndependentBlocks(Region *R);
   bool isIV(Instruction *I);
   bool isIndependentBlock(const Region *R, BasicBlock *BB);
-  bool hasIndependentBlocks(Region *R);
+  bool areAllBlocksIndependent(Region *R);
   bool runOnRegion(Region *R, RGPassManager &RGM);
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 };

@@ -122,7 +122,7 @@ namespace polly {
     return true;
   }
 
-  bool IndependentBlocks::hasIndependentBlocks(Region *R) {
+  bool IndependentBlocks::areAllBlocksIndependent(Region *R) {
     for (Region::block_iterator SI = R->block_begin(), SE = R->block_end();
          SI != SE; ++SI)
       if (!isIndependentBlock(R, (*SI)->getNodeAs<BasicBlock>()))
@@ -144,7 +144,7 @@ namespace polly {
     if (!SD->isMaxRegionInSCoP(*R)) return false;
 
     createIndependentBlocks(R);
-    assert (hasIndependentBlocks(R) && "Cannot generate independent blocks");
+    assert (areAllBlocksIndependent(R) && "Cannot generate independent blocks");
 
     return false;
   }
