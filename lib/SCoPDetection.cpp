@@ -45,7 +45,8 @@ STATISTIC(ValidRegion, "Number of regions that a valid part of SCoP");
                                            "Number of bad regions for SCoP: "\
                                            DESC)
 
-#define STATSCOP(NAME); ++Bad##NAME##ForSCoP;
+#define STATSCOP(NAME); assert(!verifying && #NAME);\
+                        ++Bad##NAME##ForSCoP;
 
 // Note: This also implies loop bounds can not be computed,
 // but this one is checked before the loop bounds.
@@ -521,8 +522,9 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
 
 void polly::SCoPDetection::verifyRegion(const Region &R) const {
   assert(isSCoP(R) && "Expect R is a valid region.");
-  if (!isValidRegion(const_cast<Region&>(R)))
-    report_fatal_error("Broken region found: " + R.getNameStr() + "\n");
+  verifying = true;
+  isValidRegion(const_cast<Region&>(R));
+  verifying = false;
 }
 
 void polly::SCoPDetection::verifyAnalysis() const {

@@ -147,9 +147,12 @@ class SCoPDetection : public FunctionPass {
   /// @return True if the loop is valid in the region.
   bool isValidLoop(Loop *L, Region &RefRegion) const;
 
+  /// This variable will point out the fail reason when we verifying SCoPs. 
+  mutable bool verifying;
+
 public:
   static char ID;
-  explicit SCoPDetection() : FunctionPass(&ID) {}
+  explicit SCoPDetection() : FunctionPass(&ID), verifying(false) {}
   ~SCoPDetection();
 
   /// @brief Is the region is the maximum region of a SCoP?
