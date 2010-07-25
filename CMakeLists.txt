@@ -106,12 +106,6 @@ add_definitions( -D_GNU_SOURCE )
 
 add_subdirectory(include)
 add_subdirectory(lib)
-
-# Add the Scoplib export/import library if the Scoplib is available.
-if (OPENSCOP_FOUND)
-  add_subdirectory(lib/Exchange)
-endif(OPENSCOP_FOUND)
-
 add_subdirectory(tools)
 add_subdirectory(test)
 # TODO: docs.
