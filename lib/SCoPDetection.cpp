@@ -455,10 +455,8 @@ bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
 
 bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
   PHINode *IndVar = L->getCanonicalInductionVariable();
-  Instruction *IndVarInc = L->getCanonicalInductionVariableIncrement();
-
   // No canonical induction variable.
-  if (!IndVar || !IndVarInc) {
+  if (!IndVar) {
     DEBUG(dbgs() << "No canonical iv for loop: ";
           WriteAsOperand(dbgs(), L->getHeader(), false);
           dbgs() << "\n");

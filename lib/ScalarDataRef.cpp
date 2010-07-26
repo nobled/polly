@@ -334,9 +334,6 @@ bool ScalarDataRef::valueEscapes(const Instruction *Inst, Loop *L) {
   if (L && L->getCanonicalInductionVariable() == Inst)
     return false;
 
-  if (L && L->getCanonicalInductionVariableIncrement() == Inst)
-    return false;
-
   // Translate GEP to memory access is not necessary, too.
   if (isa<GetElementPtrInst>(Inst))
     return false;
