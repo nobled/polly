@@ -14,7 +14,6 @@
 #ifndef POLLY_SCOP_DETECTION_H
 #define POLLY_SCOP_DETECTION_H
 
-#include "polly/PollyType.h"
 #include "polly/Support/AffineSCEVIterator.h"
 
 #include "llvm/Analysis/RegionInfo.h"
@@ -172,6 +171,16 @@ public:
   bool isSCoP(const Region &R) const {
     // The Region is valid only if it could be found in the set.
     return ValidRegions.count(&R);
+  }
+
+  /// @brief Remove a region and its children from valid region set.
+  ///
+  /// @param R The region to remove.
+  void forgetSCoP(const Region &R) {
+    assert(isSCoP(R) && "R is not a SCoP!");
+    ValidRegions.erase(&R);
+    for (Region::const_iterator I = R.begin(), E = R.end(); I != E; ++I)
+      forgetSCoP(**I);
   }
 
   /// @brief Verify if all valid Regions in this Function are still valid
