@@ -389,7 +389,7 @@ bool SCoPDetection::hasScalarDependency(Instruction &Inst,
 
   for (Instruction::use_iterator UI = Inst.use_begin(), UE = Inst.use_end();
        UI != UE; ++UI)
-    if (Instruction *Use = dyn_cast<Instruction>(UI))
+    if (Instruction *Use = dyn_cast<Instruction>(*UI))
       if (!RefRegion.contains(Use->getParent()))
         return false;
   return true;

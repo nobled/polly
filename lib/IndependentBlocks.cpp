@@ -88,7 +88,7 @@ namespace polly {
       // A value inside the SCoP is referenced outside.
       for (Instruction::use_iterator UI = Inst->use_begin(),
            UE = Inst->use_end(); UI != UE; ++UI) {
-        Instruction *Use = dyn_cast<Instruction>(UI);
+        Instruction *Use = dyn_cast<Instruction>(*UI);
 
         if (Use && !R->contains(Use)) {
           DEBUG(dbgs() << "Instruction not independent:\n");
