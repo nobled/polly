@@ -20,11 +20,13 @@
 
 namespace llvm {
   class Pass;
+  class PassInfo;
   class RegionPass;
 }
 
 namespace polly {
-  llvm::Pass *createScalarDataRefPass();
+  llvm::Pass *createSCoPCodePrepPass();
+  extern const llvm::PassInfo *const SCoPCodePrepID;
   llvm::Pass *createAffSCEVItTesterPass();
   llvm::Pass *createSCoPInfoPass();
   llvm::Pass *createScopPrinterPass();
@@ -50,7 +52,7 @@ namespace {
       (void) polly::createScopPrinterPass();
       (void) polly::createAffSCEVItTesterPass();
       (void) polly::createCodeGenerationPass();
-      (void) polly::createScalarDataRefPass();
+      (void) polly::createSCoPCodePrepPass();
       (void) polly::createCLooGExporterPass();
       (void) polly::createIndependentBlocksPass();
 

@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "polly/LinkAllPasses.h"
 #include "polly/SCoPDetection.h"
 #include "polly/Support/SCoPHelper.h"
 #include "polly/Support/GmpConv.h"
@@ -536,6 +537,7 @@ void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<LoopInfo>();
   AU.addRequiredTransitive<RegionInfo>();
   AU.addRequiredTransitive<ScalarEvolution>();
+  AU.addRequiredID(SCoPCodePrepID);
   AU.setPreservesAll();
 }
 

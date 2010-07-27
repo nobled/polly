@@ -11,7 +11,7 @@ add_polly_library(LLVMPolly
   SCoPPrinter.cpp
   SCoPDetection.cpp
   SCoPInfo.cpp
-  ScalarDataRef.cpp
+  SCoPCodePrep.cpp
   TempSCoPInfo.cpp
   Support/GmpConv.cpp
   Support/AffSCEVItTester.cpp
