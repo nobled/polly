@@ -55,14 +55,6 @@ public:
     C.generate();
     C.pprint();
 
-    int i = 0;
-    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-      outs() << "S" << i << ": ";
-      WriteAsOperand(outs(), (*SI)->getBasicBlock(), false);
-      outs() << "\n";
-      i++;
-    }
-
     return false;
   }
 

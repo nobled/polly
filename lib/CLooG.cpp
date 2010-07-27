@@ -104,6 +104,13 @@ CloogLoop *CLooG::buildCloogLoop(SCoPStmt* stmt) {
   Statement->number = StatementNumber++;
   Statement->usr = stmt;
 
+  std::string entryName;
+  raw_string_ostream OS(entryName);
+  WriteAsOperand(OS, stmt->getBasicBlock(), false);
+  entryName = OS.str();
+  Statement->name = (char*)malloc(sizeof(char) * (entryName.size() + 1));
+  strcpy(Statement->name, entryName.c_str());
+
   CloogBlock *Block = cloog_block_alloc(Statement, 0, NULL, 1);
   CloogDomain *Domain =
     cloog_domain_from_isl_set(isl_set_copy(stmt->getDomain()));

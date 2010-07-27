@@ -1,4 +1,4 @@
-; RUN: opt -polly-print -S < %s | FileCheck %s
+; RUN: opt -polly-print -disable-output < %s | FileCheck %s
 ; RUN: opt -polly-codegen < %s > /dev/null
 ; RUN: opt -polly-import -polly-import-dir=`dirname %s` -polly-print -S < %s | FileCheck -check-prefix=IMPORT %s
 ; ModuleID = 'pluto-matmul.s'
@@ -88,7 +88,7 @@ declare void @print_array(...)
 ; CHECK:  for (s1=0;s1<=2047;s1++) {
 ; CHECK:    for (s3=0;s3<=2047;s3++) {
 ; CHECK:      for (s5=0;s5<=2047;s5++) {
-; CHECK:        S{{[0-7]}}(s1,s3,s5);
+; CHECK:        %for.body8(s1,s3,s5);
 ; CHECK:      }
 ; CHECK:    }
 ; CHECK:  }
@@ -103,7 +103,7 @@ declare void @print_array(...)
 ; IMPORT:         for (s9=0;s9<=2047;s9+=64) {
 ; IMPORT:           s10<=min(2047,s9+63);s10++)
 ; IMPORT:             {
-; IMPORT:               S0(s2,s6,s10);
+; IMPORT:               %for.body8(s2,s6,s10);
 ; IMPORT:             }
 ; IMPORT:         }
 ; IMPORT:       }

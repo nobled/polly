@@ -130,17 +130,14 @@ define i32 @main() nounwind {
 
 declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i32, i1) nounwind
 
-; CHECK:for (s1=0;s1<=511;s1++) {
-; CHECK:    S0(s1);
-; CHECK:      S2(s1);
-; CHECK:}
-; CHECK:S1(512);
-; CHECK:S2(512);
-; CHECK:for (s1=513;s1<=1023;s1++) {
-; CHECK:    S0(s1);
-; CHECK:      S2(s1);
-; CHECK:}
-; CHECK:S0: %4
-; CHECK:S1: %5
-; CHECK:S2: %6
+; CHECK: for (s1=0;s1<=511;s1++) {
+; CHECK:     %4(s1);
+; CHECK:       %6(s1);
+; CHECK: }
+; CHECK: %5(512);
+; CHECK: %6(512);
+; CHECK: for (s1=513;s1<=1023;s1++) {
+; CHECK:     %4(s1);
+; CHECK:       %6(s1);
+; CHECK: }
 

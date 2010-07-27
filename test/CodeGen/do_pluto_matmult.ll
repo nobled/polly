@@ -1,6 +1,6 @@
-; RUN: opt -polly-print -S < %s | FileCheck %s
+; RUN: opt -polly-print -disable-output < %s | FileCheck %s
 ; RUN: opt -polly-codegen -disable-output < %s
-; RUN: opt -polly-import -polly-import-dir=`dirname %s` -polly-print -S < %s | FileCheck -check-prefix=IMPORT %s
+; RUN: opt -polly-import -polly-import-dir=`dirname %s` -polly-print -disable-output  < %s | FileCheck -check-prefix=IMPORT %s
 ; RUN: opt -polly-import -polly-import-dir=`dirname %s` -polly-codegen < %s | lli | diff %s.result -
 
 ; ModuleID = 'do_pluto_matmult.s'
@@ -186,7 +186,7 @@ entry:
 ; CHECK: for (s1=0;s1<=35;s1++) {
 ; CHECK:     for (s3=0;s3<=35;s3++) {
 ; CHECK:           for (s5=0;s5<=35;s5++) {
-; CHECK:                   S0(s1,s3,s5);
+; CHECK:                   %do.body2(s1,s3,s5);
 ; CHECK:                       }
 ; CHECK:                         }
 ; CHECK: }
@@ -201,7 +201,7 @@ entry:
 ; IMPORT:         for (s9=0;s9<=35;s9+=4) {
 ; IMPORT:           s10<=min(35,s9+3);s10++)
 ; IMPORT:           {
-; IMPORT:             S0(s2,s6,s10);
+; IMPORT:             %do.body2(s2,s6,s10);
 ; IMPORT:           }
 ; IMPORT:         }
 ; IMPORT:       }
