@@ -15,6 +15,7 @@
 #include "polly/Support/SCoPHelper.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/AffineSCEVIterator.h"
+#include "polly/LinkAllPasses.h"
 
 #include "llvm/Intrinsics.h"
 #include "llvm/ADT/Statistic.h"
@@ -514,6 +515,8 @@ void TempSCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<LoopInfo>();
   AU.addRequiredTransitive<ScalarEvolution>();
   AU.addRequiredTransitive<SCoPDetection>();
+  // Create independent blocks before extracting the SCoPs.
+  AU.addRequiredID(IndependentBlocksID);
   AU.setPreservesAll();
 }
 
