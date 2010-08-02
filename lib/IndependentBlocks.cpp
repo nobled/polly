@@ -175,18 +175,21 @@ bool IndependentBlocks::runOnRegion(Region *R, RGPassManager &RGM) {
   createIndependentBlocks(R);
   assert (areAllBlocksIndependent(R) && "Cannot generate independent blocks");
 
-  return false;
+  // Region Change!
+  return true;
 }
 
 void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<SCoPDetection>();
-  AU.addRequired<ScalarEvolution>();
+  // FIXME: If we set preserves cfg, the cfg only passes do not need to
+  // be "addPreserved"?
   AU.addRequired<LoopInfo>();
-  AU.addPreserved<SCoPDetection>();
-  AU.addPreserved<DominatorTree>();
   AU.addPreserved<LoopInfo>();
-  AU.addPreserved<ScalarEvolution>();
-  AU.setPreservesAll();
+  AU.addPreserved<DominatorTree>();
+  // NOTE: ScalarEvolution not preserved.
+  AU.addRequired<ScalarEvolution>();
+  AU.addRequired<SCoPDetection>();
+  AU.addPreserved<SCoPDetection>();
+  AU.setPreservesCFG();
 }
 
 char IndependentBlocks::ID = 0;
