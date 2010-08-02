@@ -618,15 +618,12 @@ class CodeGeneration : public RegionPass {
   }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-    AU.addRequired<SCoPInfo>();
     AU.addRequired<DominatorTree>();
     AU.addRequired<ScalarEvolution>();
     AU.addRequired<LoopInfo>();
     AU.addRequired<RegionInfo>();
     AU.addRequired<SCoPDetection>();
-    AU.addPreserved<DominatorTree>();
-    AU.addPreserved<SCoPInfo>();
-    AU.addPreserved<RegionInfo>();
+    AU.addRequired<SCoPInfo>();
     AU.setPreservesAll();
   }
 };

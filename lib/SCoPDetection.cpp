@@ -536,9 +536,9 @@ void polly::SCoPDetection::verifyAnalysis() const {
 void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<DominatorTree>();
   AU.addRequired<PostDominatorTree>();
+  AU.addRequired<ScalarEvolution>();
   AU.addRequired<LoopInfo>();
   AU.addRequiredTransitive<RegionInfo>();
-  AU.addRequired<ScalarEvolution>();
   AU.addRequiredID(SCoPCodePrepID);
   AU.setPreservesAll();
 }

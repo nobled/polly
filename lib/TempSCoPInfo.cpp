@@ -512,8 +512,8 @@ bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
 void TempSCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<DominatorTree>();
   AU.addRequiredTransitive<PostDominatorTree>();
-  AU.addRequiredTransitive<LoopInfo>();
   AU.addRequiredTransitive<ScalarEvolution>();
+  AU.addRequiredTransitive<LoopInfo>();
   AU.addRequiredTransitive<SCoPDetection>();
   // Create independent blocks before extracting the SCoPs.
   AU.addRequiredID(IndependentBlocksID);
