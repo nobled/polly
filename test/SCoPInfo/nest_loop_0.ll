@@ -41,9 +41,9 @@ return:                                           ; preds = %bb3, %entry
   ret void
 }
 
-; CHECK: SCoP: bb2.preheader => return Parameters: (%N, %M, ), Max Loop Depth: 2
-; INDVARS: SCoP: bb2.preheader => return.loopexit Parameters: (%N, %M, ), Max Loop Depth: 2
-; WITHAF: SCoP: bb2.preheader => return.loopexit        Parameters: (%N, %M, ), Max Loop Depth: 2
+; CHECK: SCoP: bb2.preheader => return Parameters: (%M, %N, ), Max Loop Depth: 2
+; INDVARS: SCoP: bb2.preheader => return.loopexit Parameters: (%M, %N, ), Max Loop Depth: 2
+; WITHAF: SCoP: bb2.preheader => return.loopexit        Parameters: (%M, %N, ), Max Loop Depth: 2
 ; WITHAF: Bounds of Loop: bb2.preheader:        { 1 * %M + -1 }
 ; WITHAF:   Bounds of Loop: bb1:        { 1 * %N + -1 }
 ; WITHAF:     BB: bb1{

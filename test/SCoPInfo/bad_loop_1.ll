@@ -52,5 +52,5 @@ return:                                           ; preds = %bb2.preheader, %bb2
 
 declare i64 @rnd(...)
 
-; INDVAR: SCoP: bb1.us => bb2.bb3_crit_edge.us    Parameters: (%N, {0,+,1}<%bb2.preheader.us>, ), Max Loop Depth: 1
-; CHECK: SCoP: bb1.us => bb2.bb3_crit_edge.us    Parameters: (%N, {0,+,1}<%bb2.preheader.us>, ), Max Loop Depth: 1
+; INDVAR: SCoP: bb1.us => bb2.bb3_crit_edge.us Parameters: ({0,+,1}<%bb2.preheader.us>, %N, ), Max Loop Depth: 1
+; CHECK: SCoP: bb1.us => bb2.bb3_crit_edge.us Parameters: ({0,+,1}<%bb2.preheader.us>, %N, ), Max Loop Depth: 1
