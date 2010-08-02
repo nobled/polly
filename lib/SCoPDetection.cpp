@@ -359,20 +359,20 @@ bool SCoPDetection::hasScalarDependency(Instruction &Inst,
       if (SE->isSCEVable(OpInst->getType())) {
         const SCEV *scev = SE->getSCEV(OpInst);
         if (!Checker.isIndependent(scev, Inst.getParent()))
-          return false;
+          return true;
       } else if (OpInst->getParent() == Inst.getParent()
                  || !RefRegion.contains(OpInst))
           continue;
       else
-        return false;
+        return true;
     }
 
   for (Instruction::use_iterator UI = Inst.use_begin(), UE = Inst.use_end();
        UI != UE; ++UI)
     if (Instruction *Use = dyn_cast<Instruction>(*UI))
       if (!RefRegion.contains(Use->getParent()))
-        return false;
-  return true;
+        return true;
+  return false;
 }
 
 bool SCoPDetection::isValidInstruction(Instruction &Inst,
@@ -401,7 +401,7 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
   }
 
   // Scalar dependencies are not allowed.
-  if (!hasScalarDependency(Inst, RefRegion)) {
+  if (hasScalarDependency(Inst, RefRegion)) {
     DEBUG(dbgs() << "Scalar dependency found: ";
           WriteAsOperand(dbgs(), &Inst, false);
           dbgs() << "\n");
