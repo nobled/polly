@@ -33,7 +33,37 @@
 using namespace polly;
 using namespace llvm;
 
-namespace polly {
+namespace {
+struct IndependentBlocks : public RegionPass {
+  Region *region;
+  ScalarEvolution *SE;
+  LoopInfo *LI;
+  SCoPDetection *SD;
+
+  static char ID;
+
+  IndependentBlocks() : RegionPass(&ID) {}
+
+  // Create new code for every instruction operator that can be expressed by a
+  // SCEV.  Like this there are just two types of instructions left:
+  //
+  // 1. Instructions that only reference loop ivs or parameters outside the
+  // region.
+  //
+  // 2. Instructions that are not used for any memory modification. (These
+  //    will be ignored later on.)
+  //
+  // Blocks containing only these kind of instructions are called independent
+  // blocks as they can be scheduled arbitrarily.
+  void createIndependentBlocks(BasicBlock *BB);
+  void createIndependentBlocks(Region *R);
+  bool isIV(Instruction *I);
+  bool isIndependentBlock(const Region *R, BasicBlock *BB);
+  bool areAllBlocksIndependent(Region *R);
+  bool runOnRegion(Region *R, RGPassManager &RGM);
+  virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+};
+}
 
 void IndependentBlocks::createIndependentBlocks(BasicBlock *BB) {
   std::vector<Instruction*> work;
@@ -159,12 +189,13 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<ScalarEvolution>();
   AU.setPreservesAll();
 }
-}
 
 char IndependentBlocks::ID = 0;
 
 static RegisterPass<IndependentBlocks>
 Z("polly-independent", "Polly - Create independent blocks");
+
+const PassInfo *const polly::IndependentBlocksID = &Z;
 
 RegionPass* polly::createIndependentBlocksPass() {
        return new IndependentBlocks();
