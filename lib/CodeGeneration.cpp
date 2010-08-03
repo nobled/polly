@@ -18,6 +18,7 @@
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/SCoPHelper.h"
 #include "polly/CLooG.h"
+#include "polly/SCoPDetection.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/CommandLine.h"

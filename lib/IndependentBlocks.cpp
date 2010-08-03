@@ -16,7 +16,6 @@
 
 #include "polly/LinkAllPasses.h"
 #include "polly/SCoPDetection.h"
-#include "polly/IndependentBlocks.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
