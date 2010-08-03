@@ -15,7 +15,6 @@
 #define DEBUG_TYPE "polly-codegen"
 
 #include "polly/LinkAllPasses.h"
-#include "polly/IndependentBlocks.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/SCoPHelper.h"
 #include "polly/CLooG.h"
