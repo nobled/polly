@@ -547,7 +547,6 @@ class CodeGeneration : public RegionPass {
       delete(C);
 
     C = new CLooG(S);
-    C->generate();
 
     Function *F = R->getEntry()->getParent();
 

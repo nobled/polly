@@ -50,4 +50,4 @@ return:                                           ; preds = %if.else, %if.then
 
 declare void @llvm.memory.barrier(i1, i1, i1, i1, i1) nounwind
 
-; CHECK:for (s1=0;s1<=2147483646;s1++) {
+; CHECK:for (c2=0;c2<=2147483646;c2++) {

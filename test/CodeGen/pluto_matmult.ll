@@ -85,10 +85,10 @@ entry:
 declare void @init_array(...)
 
 declare void @print_array(...)
-; CHECK:  for (s1=0;s1<=2047;s1++) {
-; CHECK:    for (s3=0;s3<=2047;s3++) {
-; CHECK:      for (s5=0;s5<=2047;s5++) {
-; CHECK:        %for.body8(s1,s3,s5);
+; CHECK:  for (c2=0;c2<=2047;c2++) {
+; CHECK:    for (c4=0;c4<=2047;c4++) {
+; CHECK:      for (c6=0;c6<=2047;c6++) {
+; CHECK:        %for.body8(c2,c4,c6);
 ; CHECK:      }
 ; CHECK:    }
 ; CHECK:  }
@@ -96,14 +96,14 @@ declare void @print_array(...)
 
 ; Do not dump the complete CLooG output. New CLooG version optimize more
 ; in this test case.
-; IMPORT: for (s1=0;s1<=2047;s1+=64) {
-; IMPORT:   s2<=min(2047,s1+63);s2++) {
-; IMPORT:     for (s5=0;s5<=2047;s5+=64) {
-; IMPORT:       s6<=min(2047,s5+63);s6++) {
-; IMPORT:         for (s9=0;s9<=2047;s9+=64) {
-; IMPORT:           s10<=min(2047,s9+63);s10++)
+; IMPORT: for (c2=0;c2<=2047;c2+=64) {
+; IMPORT:   c3<=min(2047,c2+63);c3++) {
+; IMPORT:     for (c6=0;c6<=2047;c6+=64) {
+; IMPORT:       c7<=min(2047,c6+63);c7++) {
+; IMPORT:         for (c10=0;c10<=2047;c10+=64) {
+; IMPORT:           c11<=min(2047,c10+63);c11++)
 ; IMPORT:             {
-; IMPORT:               %for.body8(s2,s6,s10);
+; IMPORT:               %for.body8(c3,c7,c11);
 ; IMPORT:             }
 ; IMPORT:         }
 ; IMPORT:       }

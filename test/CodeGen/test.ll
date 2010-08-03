@@ -38,11 +38,11 @@ for.end19:                                        ; preds = %for.inc16.us
   %tmp23 = load i32* %arrayidx22                  ; <i32> [#uses=1]
   ret i32 %tmp23
 }
-; CHECK: for (s1=0;s1<=99;s1++) {
-; CHECK:   S{{[0-4]}}(s1);
-; CHECK:   for (s3=0;s3<=199;s3++) {
-; CHECK:     S{{[[0-4]}}(s1,s3);
+; CHECK: for (c2=0;c2<=99;c2++) {
+; CHECK:   S{{[0-4]}}(c2);
+; CHECK:   for (c4=0;c4<=199;c4++) {
+; CHECK:     S{{[[0-4]}}(c2,c4);
 ; CHECK:   }
-; CHECK:   S{{[0-4]}}(s1);
+; CHECK:   S{{[0-4]}}(c2);
 ; CHECK: }
 

@@ -58,15 +58,15 @@ define i32 @main() nounwind {
 }
 
 declare void @llvm.memory.barrier(i1, i1, i1, i1, i1) nounwind
-; CHECK: for (s1=0;s1<=2;s1++) {
-; CHECK:     S0(s1);
-; CHECK:       S1(s1);
-; CHECK:         S2(s1);
+; CHECK: for (c2=0;c2<=2;c2++) {
+; CHECK:     S0(c2);
+; CHECK:       S1(c2);
+; CHECK:         S2(c2);
 ; CHECK: }
 ; CHECK: S0(3);
 ; CHECK: S1(3);
-; CHECK: for (s1=4;s1<=49;s1++) {
-; CHECK:     S0(s1);
+; CHECK: for (c2=4;c2<=49;c2++) {
+; CHECK:     S0(c2);
 ; CHECK: }
 ; CHECK: S0: %4
 ; CHECK: S1: %7

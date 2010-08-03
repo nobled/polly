@@ -40,5 +40,5 @@ return:                                           ; preds = %if.else, %if.then
 }
 
 declare void @llvm.memory.barrier(i1, i1, i1, i1, i1) nounwind
-; CHECK:for (s1=0;s1<=9223372036854775806;s1++) {
+; CHECK:for (c2=0;c2<=9223372036854775806;c2++) {
 

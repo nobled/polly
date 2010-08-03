@@ -52,7 +52,6 @@ public:
       << S->getRegion().getNameStr() << ":\n";
 
     CLooG C = CLooG(S);
-    C.generate();
     C.pprint();
 
     return false;

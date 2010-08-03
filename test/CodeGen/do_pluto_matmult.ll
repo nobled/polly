@@ -183,10 +183,10 @@ entry:
   ret i32 0
 }
 
-; CHECK: for (s1=0;s1<=35;s1++) {
-; CHECK:     for (s3=0;s3<=35;s3++) {
-; CHECK:           for (s5=0;s5<=35;s5++) {
-; CHECK:                   %do.body2(s1,s3,s5);
+; CHECK: for (c2=0;c2<=35;c2++) {
+; CHECK:     for (c4=0;c4<=35;c4++) {
+; CHECK:           for (c6=0;c6<=35;c6++) {
+; CHECK:                   %do.body2(c2,c4,c6);
 ; CHECK:                       }
 ; CHECK:                         }
 ; CHECK: }
@@ -194,14 +194,14 @@ entry:
 
 ; Do not dump the complete CLooG output. New CLooG version optimize more
 ; in this test case.
-; IMPORT: for (s1=0;s1<=35;s1+=4) {
-; IMPORT:   s2<=min(35,s1+3);s2++) {
-; IMPORT:     for (s5=0;s5<=35;s5+=4) {
-; IMPORT:       s6<=min(35,s5+3);s6++) {
-; IMPORT:         for (s9=0;s9<=35;s9+=4) {
-; IMPORT:           s10<=min(35,s9+3);s10++)
+; IMPORT: for (c2=0;c2<=35;c2+=4) {
+; IMPORT:   c3<=min(35,c2+3);c3++) {
+; IMPORT:     for (c6=0;c6<=35;c6+=4) {
+; IMPORT:       c7<=min(35,c6+3);c7++) {
+; IMPORT:         for (c10=0;c10<=35;c10+=4) {
+; IMPORT:           c11<=min(35,c10+3);c11++)
 ; IMPORT:           {
-; IMPORT:             %do.body2(s2,s6,s10);
+; IMPORT:             %do.body2(c3,c7,c11);
 ; IMPORT:           }
 ; IMPORT:         }
 ; IMPORT:       }
