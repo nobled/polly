@@ -629,14 +629,10 @@ ac_user_opts='
 enable_option_checking
 with_llvmsrc
 with_llvmobj
-with_gmp_include
-with_gmp_library
-with_isl_include
-with_isl_library
-with_cloog_include
-with_cloog_library
-with_openscop_include
-with_openscop_library
+with_gmp
+with_isl
+with_cloog
+with_openscop
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1258,14 +1254,10 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-llvmsrc          Location of LLVM Source Code
   --with-llvmobj          Location of LLVM Object Code
-  --with-gmp-include      location of gmp includes
-  --with-gmp-library      location of the gmp libraries
-  --with-isl-include      location of isl includes
-  --with-isl-library      location of the isl libraries
-  --with-cloog-include    location of cloog includes
-  --with-cloog-library    location of the cloog libraries
-  --with-openscop-include location of openscop includes
-  --with-openscop-library location of the openscop libraries
+  --with-gmp              prefix of gmp
+  --with-isl              prefix of isl
+  --with-cloog            prefix of cloog
+  --with-openscop         prefix of openscop
 
 Some influential environment variables:
   CXX         C++ compiler command
@@ -2395,29 +2387,21 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
   LIBS="$LIBS -lgmp";
 
-  # Get include path
+  # Get include path and lib path
 
-# Check whether --with-gmp-include was given.
-if test "${with_gmp_include+set}" = set; then :
-  withval=$with_gmp_include; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
+# Check whether --with-gmp was given.
+if test "${with_gmp+set}" = set; then :
+  withval=$with_gmp; given_inc_path="$withval/include"; CXXFLAGS="-I$given_inc_path $CXXFLAGS";
+       given_lib_path="$withval/lib"; LDFLAGS="-L$given_lib_path $LDFLAGS"
 else
-  given_inc_path=inc_not_give_gmp
-
-fi
-
-  # Get lib path
-
-# Check whether --with-gmp-library was given.
-if test "${with_gmp_library+set}" = set; then :
-  withval=$with_gmp_library; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
-else
-  given_lib_path=lib_not_give_gmp
+  given_inc_path=inc_not_give_gmp;
+       given_lib_path=lib_not_give_gmp
 
 fi
 
   # Check for library and headers works
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for gmp" >&5
-$as_echo_n "checking for gmp... " >&6; }
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for gmp in $given_inc_path, $given_lib_path" >&5
+$as_echo_n "checking for gmp in $given_inc_path, $given_lib_path... " >&6; }
   # try to compile a file that includes a header of the library
   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
@@ -2482,29 +2466,21 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
   LIBS="$LIBS -lisl";
 
-  # Get include path
+  # Get include path and lib path
 
-# Check whether --with-isl-include was given.
-if test "${with_isl_include+set}" = set; then :
-  withval=$with_isl_include; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
+# Check whether --with-isl was given.
+if test "${with_isl+set}" = set; then :
+  withval=$with_isl; given_inc_path="$withval/include"; CXXFLAGS="-I$given_inc_path $CXXFLAGS";
+       given_lib_path="$withval/lib"; LDFLAGS="-L$given_lib_path $LDFLAGS"
 else
-  given_inc_path=inc_not_give_isl
-
-fi
-
-  # Get lib path
-
-# Check whether --with-isl-library was given.
-if test "${with_isl_library+set}" = set; then :
-  withval=$with_isl_library; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
-else
-  given_lib_path=lib_not_give_isl
+  given_inc_path=inc_not_give_isl;
+       given_lib_path=lib_not_give_isl
 
 fi
 
   # Check for library and headers works
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for isl" >&5
-$as_echo_n "checking for isl... " >&6; }
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for isl in $given_inc_path, $given_lib_path" >&5
+$as_echo_n "checking for isl in $given_inc_path, $given_lib_path... " >&6; }
   # try to compile a file that includes a header of the library
   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
@@ -2574,29 +2550,21 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
   LIBS="$LIBS -lcloog-isl";
 
-  # Get include path
+  # Get include path and lib path
 
-# Check whether --with-cloog-include was given.
-if test "${with_cloog_include+set}" = set; then :
-  withval=$with_cloog_include; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
+# Check whether --with-cloog was given.
+if test "${with_cloog+set}" = set; then :
+  withval=$with_cloog; given_inc_path="$withval/include"; CXXFLAGS="-I$given_inc_path $CXXFLAGS";
+       given_lib_path="$withval/lib"; LDFLAGS="-L$given_lib_path $LDFLAGS"
 else
-  given_inc_path=inc_not_give_cloog
-
-fi
-
-  # Get lib path
-
-# Check whether --with-cloog-library was given.
-if test "${with_cloog_library+set}" = set; then :
-  withval=$with_cloog_library; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
-else
-  given_lib_path=lib_not_give_cloog
+  given_inc_path=inc_not_give_cloog;
+       given_lib_path=lib_not_give_cloog
 
 fi
 
   # Check for library and headers works
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for cloog" >&5
-$as_echo_n "checking for cloog... " >&6; }
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for cloog in $given_inc_path, $given_lib_path" >&5
+$as_echo_n "checking for cloog in $given_inc_path, $given_lib_path... " >&6; }
   # try to compile a file that includes a header of the library
   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
@@ -2661,29 +2629,21 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
   LIBS="$LIBS -lopenscop";
 
-  # Get include path
+  # Get include path and lib path
 
-# Check whether --with-openscop-include was given.
-if test "${with_openscop_include+set}" = set; then :
-  withval=$with_openscop_include; given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"
+# Check whether --with-openscop was given.
+if test "${with_openscop+set}" = set; then :
+  withval=$with_openscop; given_inc_path="$withval/include"; CXXFLAGS="-I$given_inc_path $CXXFLAGS";
+       given_lib_path="$withval/lib"; LDFLAGS="-L$given_lib_path $LDFLAGS"
 else
-  given_inc_path=inc_not_give_openscop
-
-fi
-
-  # Get lib path
-
-# Check whether --with-openscop-library was given.
-if test "${with_openscop_library+set}" = set; then :
-  withval=$with_openscop_library; given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"
-else
-  given_lib_path=lib_not_give_openscop
+  given_inc_path=inc_not_give_openscop;
+       given_lib_path=lib_not_give_openscop
 
 fi
 
   # Check for library and headers works
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for openscop" >&5
-$as_echo_n "checking for openscop... " >&6; }
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for openscop in $given_inc_path, $given_lib_path" >&5
+$as_echo_n "checking for openscop in $given_inc_path, $given_lib_path... " >&6; }
   # try to compile a file that includes a header of the library
   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */

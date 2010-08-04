@@ -14,20 +14,16 @@ AC_DEFUN([find_lib_and_headers],
 
   LIBS="$LIBS -l$3";
 
-  # Get include path
-  AC_ARG_WITH([$1-include],
-    [AS_HELP_STRING([--with-$1-include], [location of $1 includes])],
-      [given_inc_path=$withval; CXXFLAGS="-I$withval $CXXFLAGS"],
-      [given_inc_path=inc_not_give_$1]
+  # Get include path and lib path
+  AC_ARG_WITH([$1],
+    [AS_HELP_STRING([--with-$1], [prefix of $1 ])],
+      [given_inc_path="$withval/include"; CXXFLAGS="-I$given_inc_path $CXXFLAGS";
+       given_lib_path="$withval/lib"; LDFLAGS="-L$given_lib_path $LDFLAGS"],
+      [given_inc_path=inc_not_give_$1;
+       given_lib_path=lib_not_give_$1]
     )
-  # Get lib path
-  AC_ARG_WITH([$1-library],
-    [AS_HELP_STRING([--with-$1-library],[location of the $1 libraries])],
-      [given_lib_path=$withval; LDFLAGS="-L$withval $LDFLAGS"],
-      [given_lib_path=lib_not_give_$1]
-  )
   # Check for library and headers works
-  AC_MSG_CHECKING([for $1])
+  AC_MSG_CHECKING([for $1 in $given_inc_path, $given_lib_path])
   # try to compile a file that includes a header of the library
   AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <$2>]], [[;]])],
     [AC_MSG_RESULT([ok])
