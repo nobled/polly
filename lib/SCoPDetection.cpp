@@ -301,9 +301,15 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
     return true;
 
   // Only well structured conditions.
-  if (!(RI->getMaxRegionExit(Br->getSuccessor(0)) 
-          == RI->getMaxRegionExit(Br->getSuccessor(1))
-        && RI->getMaxRegionExit(Br->getSuccessor(0)))) {
+  BasicBlock *SuccZero = RI->getMaxRegionExit(Br->getSuccessor(0));
+  BasicBlock *SuccOne = RI->getMaxRegionExit(Br->getSuccessor(1));
+
+  if (!SuccZero)
+    SuccZero = Br->getSuccessor(0);
+  if (!SuccOne)
+    SuccOne = Br->getSuccessor(1);
+
+  if (SuccZero != SuccOne) {
     DEBUG(dbgs() << "Non well structured condition starting at BB: ";
           WriteAsOperand(dbgs(), &BB, false);
           dbgs() << "\n");

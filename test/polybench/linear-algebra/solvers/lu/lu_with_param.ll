@@ -74,14 +74,4 @@ return:                                           ; preds = %bb9, %entry
   ret void
 }
 
-; CHECK: SCoP: bb6.preheader => bb9.loopexit Parameters: ({0,+,1}<%bb2.preheader>, %n, ),
-; CHECK:   Max Loop Depth: 2
-; CHECK:   Bounds of Loop: bb6.preheader:  { -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2 }
-; CHECK:   Bounds of Loop: bb5:  { -1 * {0,+,1}<%bb2.preheader> + 1 * %n + -2 }
-; CHECK: BB: bb5{
-; CHECK:       Reads @A[8 * {0,+,1}<%bb5> + 8200 * {0,+,1}<%bb2.preheader> + 8192 * {0,+,1}<%bb6.preheader> + 8200]
-; CHECK:       Reads @A[8200 * {0,+,1}<%bb2.preheader> + 8192 * {0,+,1}<%bb6.preheader> + 8192]
-; CHECK:       Reads @A[8 * {0,+,1}<%bb5> + 8200 * {0,+,1}<%bb2.preheader> + 8]
-; CHECK:       Writes @A[8 * {0,+,1}<%bb5> + 8200 * {0,+,1}<%bb2.preheader> + 8192 * {0,+,1}<%bb6.preheader> + 8200]
-; CHECK:     }
-
+; CHECK: SCoP: entry => return Parameters: (%n, ),
