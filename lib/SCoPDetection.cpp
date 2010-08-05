@@ -199,7 +199,6 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
       // If this is not expect a memory access
       if (!isMemAcc) return false;
 
-      DEBUG(dbgs() << "Find pointer: " << *Var <<"\n");
       assert(I->second->isOne()
         && "The coefficient of pointer expect is one!");
       const SCEVUnknown *BaseAddr = dyn_cast<SCEVUnknown>(Var);
@@ -239,21 +238,31 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   BranchInst *Br = dyn_cast<BranchInst>(TI);
 
   if (!Br) {
+    DEBUG(dbgs() << "Non branch instruction as terminator of BB: ";
+          WriteAsOperand(dbgs(), &BB, false);
+          dbgs() << "\n");
     STATSCOP(CFG);
     return false;
   }
+
   if (Br->isUnconditional()) return true;
 
   Value *Condition = Br->getCondition();
 
   // UndefValue is not allowed as condition.
   if (isa<UndefValue>(Condition)) {
+    DEBUG(dbgs() << "Undefined value in branch instruction of BB: ";
+          WriteAsOperand(dbgs(), &BB, false);
+          dbgs() << "\n");
     STATSCOP(AffFunc);
     return false;
   }
 
   // Only Constant and ICmpInst are allowed as condition.
   if (!(isa<Constant>(Condition) || isa<ICmpInst>(Condition))) {
+    DEBUG(dbgs() << "Non Constant and non ICmpInst instruction in BB: ";
+          WriteAsOperand(dbgs(), &BB, false);
+          dbgs() << "\n");
     STATSCOP(AffFunc);
     return false;
   }
@@ -265,6 +274,9 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   if (ICmpInst *ICmp = dyn_cast<ICmpInst>(Condition)) {
     if (isa<UndefValue>(ICmp->getOperand(0))
         || isa<UndefValue>(ICmp->getOperand(1))) {
+      DEBUG(dbgs() << "Undefined operand in branch instruction of BB: ";
+            WriteAsOperand(dbgs(), &BB, false);
+            dbgs() << "\n");
       STATSCOP(AffFunc);
       return false;
     }
@@ -275,6 +287,9 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
                                             RefRegion, &BB, false);
 
     if (!(affineLHS && affineRHS)) {
+      DEBUG(dbgs() << "Non affine branch instruction in BB: ";
+            WriteAsOperand(dbgs(), &BB, false);
+            dbgs() << "\n");
       STATSCOP(AffFunc);
       return false;
     }
@@ -289,6 +304,9 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   if (!(RI->getMaxRegionExit(Br->getSuccessor(0)) 
           == RI->getMaxRegionExit(Br->getSuccessor(1))
         && RI->getMaxRegionExit(Br->getSuccessor(0)))) {
+    DEBUG(dbgs() << "Non well structured condition starting at BB: ";
+          WriteAsOperand(dbgs(), &BB, false);
+          dbgs() << "\n");
     STATSCOP(CFG);
     return false;
   }
@@ -305,7 +323,6 @@ bool SCoPDetection::isValidCallInst(CallInst &CI) {
     return true;
 
   Function *CalledFunction = CI.getCalledFunction();
-
 
   // Indirect call is not support now.
   if (CalledFunction == 0)
@@ -363,8 +380,12 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
   // Only canonical IVs are allowed.
   if (isa<PHINode>(Inst)) {
     Loop *L = LI->getLoopFor(Inst.getParent());
-    if (!L || L->getCanonicalInductionVariable() != &Inst)
+    if (!L || L->getCanonicalInductionVariable() != &Inst) {
+      DEBUG(dbgs() << "Non canonical PHI node found: ";
+            WriteAsOperand(dbgs(), &Inst, false);
+            dbgs() << "\n");
       return false;
+    }
   }
 
   // We only check the call instruction but not invoke instruction.
@@ -372,7 +393,9 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
     if (isValidCallInst(*CI))
       return true;
 
-    DEBUG(dbgs() << "Bad call Inst!\n");
+    DEBUG(dbgs() << "Bad call Inst: ";
+          WriteAsOperand(dbgs(), &Inst, false);
+          dbgs() << "\n");
     STATSCOP(FuncCall);
     return false;
   }
@@ -402,12 +425,18 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
     return isValidMemoryAccess(Inst, RefRegion);
 
   // We do not know this instruction, therefore we assume it is invalid.
+  DEBUG(dbgs() << "Bad instruction found: ";
+        WriteAsOperand(dbgs(), &Inst, false);
+        dbgs() << "\n");
   STATSCOP(Other);
   return false;
 }
 
 bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
                                       Region &RefRegion) const {
+  if (!isValidCFG(BB, RefRegion))
+    return false;
+
   // Check all instructions, except the terminator instruction.
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I)
     if (!isValidInstruction(*I, RefRegion))
@@ -429,7 +458,6 @@ bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
 
   // Is the loop count affine?
   const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
-  DEBUG(dbgs() << "Backedge taken count: " << *LoopCount << "\n");
   if (!isValidAffineFunction(LoopCount, RefRegion, L->getHeader(), false)) {
     STATSCOP(LoopBound);
     return false;
@@ -452,9 +480,14 @@ void SCoPDetection::findSCoPs(Region &R) {
 }
 
 bool SCoPDetection::isValidRegion(Region &R) const {
+  DEBUG(dbgs() << "Checking region: " << R.getNameStr() << "\n\t");
+
   // The toplevel region is no valid region.
-  if (!R.getParent())
+  if (!R.getParent()) {
+    DEBUG(dbgs() << "Top level region is invalid";
+          dbgs() << "\n");
     return false;
+  }
 
   // PHI nodes are not allowed in the exit basic block.
   if (BasicBlock *Exit = R.getExit()) {
@@ -465,6 +498,8 @@ bool SCoPDetection::isValidRegion(Region &R) const {
 
   if (!isValidRegion(R,R))
     return false;
+
+  DEBUG(dbgs() << "OK\n");
 
   return true;
 }
@@ -488,14 +523,8 @@ bool SCoPDetection::isValidRegion(Region &RefRegion,
     } else {
       BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
 
-      if (isValidCFG(BB, RefRegion)
-          && isValidBasicBlock(BB, RefRegion))
-        continue;
-
-      DEBUG(dbgs() << "Bad BB found: ";
-            WriteAsOperand(dbgs(), &BB, false);
-            dbgs() << "\n");
-      return false;
+      if (!isValidBasicBlock(BB, RefRegion))
+        return false;
     }
   }
 
