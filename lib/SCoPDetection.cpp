@@ -490,8 +490,11 @@ bool SCoPDetection::isValidRegion(Region &R) const {
   // PHI nodes are not allowed in the exit basic block.
   if (BasicBlock *Exit = R.getExit()) {
     BasicBlock::iterator I = Exit->begin();
-    if (I != Exit->end() && isa<PHINode> (*I))
+    if (I != Exit->end() && isa<PHINode> (*I)) {
+      DEBUG(dbgs() << "PHI node in exit";
+            dbgs() << "\n");
       return false;
+    }
   }
 
   if (!isValidRegion(R,R))
