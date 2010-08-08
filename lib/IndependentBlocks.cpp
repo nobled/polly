@@ -107,7 +107,7 @@ bool IndependentBlocks::isIV(Instruction *I) {
 }
 
 bool IndependentBlocks::isIndependentBlock(const Region *R, BasicBlock *BB) {
-  for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
+  for (BasicBlock::iterator II = BB->begin(), IE = --BB->end();
        II != IE; ++II) {
     Instruction *Inst = &*II;
 
