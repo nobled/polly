@@ -35,7 +35,7 @@ ExportDir("polly-export-dir",
 struct SCoPExporter : public RegionPass {
   static char ID;
   SCoP *S;
-  explicit SCoPExporter() : RegionPass(&ID) {}
+  explicit SCoPExporter() : RegionPass(ID) {}
 
   std::string getFileName(Region *R) const;
 

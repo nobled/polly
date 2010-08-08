@@ -26,7 +26,7 @@ namespace llvm {
 
 namespace polly {
   llvm::Pass *createSCoPCodePrepPass();
-  extern const llvm::PassInfo *const SCoPCodePrepID;
+  extern char &SCoPCodePrepID;
   llvm::Pass *createAffSCEVItTesterPass();
   llvm::Pass *createSCoPInfoPass();
   llvm::Pass *createScopPrinterPass();
@@ -36,7 +36,7 @@ namespace polly {
   llvm::RegionPass* createCLooGExporterPass();
   llvm::RegionPass* createCodeGenerationPass();
   llvm::Pass* createIndependentBlocksPass();
-  extern const llvm::PassInfo *const IndependentBlocksID;
+  extern char &IndependentBlocksID;
 }
 
 namespace {

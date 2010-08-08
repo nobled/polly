@@ -46,7 +46,7 @@ struct AffSCEVItTester : public FunctionPass {
   LoopInfo *LI;
   Function *F;
 
-  explicit AffSCEVItTester() : FunctionPass(&ID), SE(0), LI(0), F(0) {}
+  explicit AffSCEVItTester() : FunctionPass(ID), SE(0), LI(0), F(0) {}
 
   virtual bool runOnFunction(Function &F) {
     SE = &getAnalysis<ScalarEvolution>();

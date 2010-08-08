@@ -41,7 +41,7 @@ struct IndependentBlocks : public FunctionPass {
 
   static char ID;
 
-  IndependentBlocks() : FunctionPass(&ID) {}
+  IndependentBlocks() : FunctionPass(ID) {}
 
   // Create new code for every instruction operator that can be expressed by a
   // SCEV.  Like this there are just two types of instructions left:
@@ -234,7 +234,7 @@ char IndependentBlocks::ID = 0;
 static RegisterPass<IndependentBlocks>
 Z("polly-independent", "Polly - Create independent blocks");
 
-const PassInfo *const polly::IndependentBlocksID = &Z;
+char &polly::IndependentBlocksID = IndependentBlocks::ID;
 
 Pass* polly::createIndependentBlocksPass() {
        return new IndependentBlocks();

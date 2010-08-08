@@ -38,7 +38,7 @@ class ScopPrinter : public RegionPass {
 public:
   static char ID;
 
-  ScopPrinter() : RegionPass(&ID), S(0) {}
+  ScopPrinter() : RegionPass(ID), S(0) {}
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     S = getAnalysis<SCoPInfo>().getSCoP();

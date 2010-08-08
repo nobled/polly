@@ -398,7 +398,7 @@ class SCoPInfo : public RegionPass {
 
 public:
   static char ID;
-  explicit SCoPInfo() : RegionPass(&ID), scop(0) {}
+  explicit SCoPInfo() : RegionPass(ID), scop(0) {}
   ~SCoPInfo() { clear(); }
 
   /// @brief Try to build the Polly IR of static control part on the current

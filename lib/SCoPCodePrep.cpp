@@ -55,7 +55,7 @@ class SCoPCodePrep : public FunctionPass {
 public:
   static char ID;
 
-  explicit SCoPCodePrep() : FunctionPass(&ID) {}
+  explicit SCoPCodePrep() : FunctionPass(ID) {}
   ~SCoPCodePrep();
 
   /// @name FunctionPass interface.
@@ -152,7 +152,7 @@ RegisterPass<SCoPCodePrep> X("polly-scalar-data-ref",
                               "Polly - Scalar Data Reference Analysis",
                               false, true);
 
-const PassInfo *const polly::SCoPCodePrepID = &X;
+char &polly::SCoPCodePrepID = SCoPCodePrep::ID;
 
 Pass *polly::createSCoPCodePrepPass() {
   return new SCoPCodePrep();

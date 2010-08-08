@@ -488,7 +488,7 @@ class CodeGeneration : public RegionPass {
   public:
   static char ID;
 
-  CodeGeneration() : RegionPass(&ID) {
+  CodeGeneration() : RegionPass(ID) {
     C = 0;
   }
 
@@ -623,6 +623,7 @@ class CodeGeneration : public RegionPass {
     AU.addRequired<RegionInfo>();
     AU.addRequired<SCoPDetection>();
     AU.addRequired<SCoPInfo>();
+
     AU.setPreservesAll();
   }
 };

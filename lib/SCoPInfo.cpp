@@ -446,8 +446,8 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
 
 char SCoPInfo::ID = 0;
 
-static RegisterPass<SCoPInfo>
-X("polly-scops", "Polly - Create polyhedral description of SCoPs");
+INITIALIZE_PASS(SCoPInfo, "polly-scops",
+                "Polly - Create polyhedral description of SCoPs", true, true);
 
 Pass *polly::createSCoPInfoPass() {
   return new SCoPInfo();

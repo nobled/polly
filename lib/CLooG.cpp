@@ -102,7 +102,7 @@ namespace {
 struct CLooGExporter : public RegionPass {
   static char ID;
   SCoP *S;
-  explicit CLooGExporter() : RegionPass(&ID) {}
+  explicit CLooGExporter() : RegionPass(ID) {}
 
   std::string getFileName(Region *R) const;
   virtual bool runOnRegion(Region *R, RGPassManager &RGM);

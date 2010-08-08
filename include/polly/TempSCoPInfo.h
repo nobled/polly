@@ -335,7 +335,7 @@ class TempSCoPInfo : public RegionPass {
 
 public:
   static char ID;
-  explicit TempSCoPInfo() : RegionPass(&ID) {TSCoP = 0;}
+  explicit TempSCoPInfo() : RegionPass(ID) {TSCoP = 0;}
   ~TempSCoPInfo();
 
   /// @brief Get the temporay SCoP information in LLVM IR represent

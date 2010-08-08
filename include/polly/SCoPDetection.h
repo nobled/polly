@@ -152,7 +152,7 @@ class SCoPDetection : public FunctionPass {
 
 public:
   static char ID;
-  explicit SCoPDetection() : FunctionPass(&ID), verifying(false) {}
+  explicit SCoPDetection() : FunctionPass(ID), verifying(false) {}
   ~SCoPDetection();
 
   /// @brief Is the region is the maximum region of a SCoP?

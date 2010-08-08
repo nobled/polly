@@ -561,6 +561,6 @@ SCoPDetection::~SCoPDetection() {
 
 char SCoPDetection::ID = 0;
 
-static RegisterPass<SCoPDetection>
-X("polly-detect", "Polly - Detect SCoPs in functions");
+INITIALIZE_PASS(SCoPDetection, "polly-detect",
+                "Polly - Detect SCoPs in functions", true, true);
 

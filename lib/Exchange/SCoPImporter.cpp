@@ -38,7 +38,7 @@ ImportPostfix("polly-import-postfix",
 struct SCoPImporter : public RegionPass {
   static char ID;
   SCoP *S;
-  explicit SCoPImporter() : RegionPass(&ID) {}
+  explicit SCoPImporter() : RegionPass(ID) {}
 
   std::string getFileName(Region *R) const;
   virtual bool runOnRegion(Region *R, RGPassManager &RGM);
