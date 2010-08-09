@@ -114,8 +114,8 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
 //                For new statements a relation old->new is inserted in this
 //                map.
 //
-static void copyBB (IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
-                    DominatorTree *DT, const Region *R, ScalarEvolution *SE) {
+static void copyBB(IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
+                   DominatorTree *DT, const Region *R) {
   Function *F = Builder->GetInsertBlock()->getParent();
   LLVMContext &Context = F->getContext();
 
@@ -322,7 +322,6 @@ class ClastStmtCodeGen {
   SCoP *S;
 
   DominatorTree *DT;
-  ScalarEvolution *SE;
 
   // The Builder specifies the current location to code generate at.
   IRBuilder<> *Builder;
@@ -379,7 +378,7 @@ public:
     // Actually we have a list of pointers here. Be careful.
     if (u->substitutions)
       codegen(u->substitutions);
-    copyBB(Builder, BB, ValueMap, DT, &S->getRegion(), SE);
+    copyBB(Builder, BB, ValueMap, DT, &S->getRegion());
   }
 
   void codegen(struct clast_block *b) {
@@ -469,8 +468,8 @@ public:
   }
 
   public:
-  ClastStmtCodeGen(SCoP *scop, DominatorTree *dt, ScalarEvolution *se,
-                   IRBuilder<> *B) : S(scop), DT(dt), SE(se), Builder(B),
+  ClastStmtCodeGen(SCoP *scop, DominatorTree *dt, IRBuilder<> *B) :
+    S(scop), DT(dt), Builder(B),
   ExpGen(Builder, &CharMap) {}
 
 };
@@ -555,7 +554,7 @@ class CodeGeneration : public RegionPass {
     IRBuilder<> Builder(PollyBB);
     DT->addNewBlock(PollyBB, R->getEntry());
 
-    ClastStmtCodeGen CodeGen(S, DT, SE, &Builder);
+    ClastStmtCodeGen CodeGen(S, DT, &Builder);
 
     clast_stmt *clast = C->getClast();
 
