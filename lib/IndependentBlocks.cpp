@@ -98,6 +98,7 @@ void IndependentBlocks::createIndependentBlocks(BasicBlock *BB) {
 
       Value *V = Rewriter.expandCodeFor(Scev, UI->get()->getType(), Inst);
       UI->set(V);
+      SE->forgetValue(Inst);
     }
   }
 }
@@ -220,12 +221,12 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<LoopInfo>();
   AU.addPreserved<LoopInfo>();
   AU.addPreserved<DominatorTree>();
-  // NOTE: ScalarEvolution not preserved.
   AU.addRequired<ScalarEvolution>();
   AU.addRequired<RegionInfo>();
   AU.addPreserved<RegionInfo>();
   AU.addRequired<SCoPDetection>();
   AU.addPreserved<SCoPDetection>();
+  AU.addPreserved<ScalarEvolution>();
   AU.setPreservesCFG();
 }
 
