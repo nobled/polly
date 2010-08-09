@@ -623,7 +623,10 @@ class CodeGeneration : public RegionPass {
     AU.addRequired<SCoPDetection>();
     AU.addRequired<SCoPInfo>();
 
-    AU.setPreservesAll();
+    AU.addPreserved<LoopInfo>();
+    AU.addPreserved<DominatorTree>();
+    AU.addPreserved<SCoPDetection>();
+    AU.addPreserved<ScalarEvolution>();
   }
 };
 }
