@@ -620,6 +620,7 @@ class CodeGeneration : public RegionPass {
     AU.addRequired<ScalarEvolution>();
     AU.addRequired<LoopInfo>();
     AU.addRequired<RegionInfo>();
+    AU.addRequiredID(IndependentBlocksID);
     AU.addRequired<SCoPDetection>();
     AU.addRequired<SCoPInfo>();
 
