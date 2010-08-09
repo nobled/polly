@@ -33,15 +33,15 @@ using namespace polly;
 using namespace llvm;
 
 namespace {
-struct IndependentBlocks : public FunctionPass {
+struct IndependentBlocks : public RegionPass {
+  Region *region;
   ScalarEvolution *SE;
   LoopInfo *LI;
   SCoPDetection *SD;
-  RegionInfo *RI;
 
   static char ID;
 
-  IndependentBlocks() : FunctionPass(ID) {}
+  IndependentBlocks() : RegionPass(ID) {}
 
   // Create new code for every instruction operator that can be expressed by a
   // SCEV.  Like this there are just two types of instructions left:
@@ -56,18 +56,10 @@ struct IndependentBlocks : public FunctionPass {
   // blocks as they can be scheduled arbitrarily.
   void createIndependentBlocks(BasicBlock *BB);
   void createIndependentBlocks(Region *R);
-  
-  bool isIV(Instruction *I) const;
-  
-  bool isIndependentBlock(const Region *R, BasicBlock *BB) const;
-  bool areAllBlocksIndependent(const Region *R) const;
-  
-  bool runOnFunction(Function &F);
-  void runOnRegion(Region *R);
-
-  void verifyAnalysis() const;
-  void verifyRegion(const Region *R) const;
-
+  bool isIV(Instruction *I);
+  bool isIndependentBlock(const Region *R, BasicBlock *BB);
+  bool areAllBlocksIndependent(Region *R);
+  bool runOnRegion(Region *R, RGPassManager &RGM);
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 };
 }
@@ -109,14 +101,13 @@ void IndependentBlocks::createIndependentBlocks(Region *R) {
     createIndependentBlocks((*SI)->getNodeAs<BasicBlock>());
 }
 
-bool IndependentBlocks::isIV(Instruction *I) const {
+bool IndependentBlocks::isIV(Instruction *I) {
   Loop *L = LI->getLoopFor(I->getParent());
 
   return L && I == L->getCanonicalInductionVariable();
 }
 
-bool IndependentBlocks::isIndependentBlock(const Region *R,
-                                           BasicBlock *BB) const {
+bool IndependentBlocks::isIndependentBlock(const Region *R, BasicBlock *BB) {
   for (BasicBlock::iterator II = BB->begin(), IE = BB->end();
        II != IE; ++II) {
     Instruction *Inst = &*II;
@@ -161,8 +152,8 @@ bool IndependentBlocks::isIndependentBlock(const Region *R,
   return true;
 }
 
-bool IndependentBlocks::areAllBlocksIndependent(const Region *R) const {
-  for (Region::const_block_iterator SI = R->block_begin(), SE = R->block_end();
+bool IndependentBlocks::areAllBlocksIndependent(Region *R) {
+  for (Region::block_iterator SI = R->block_begin(), SE = R->block_end();
        SI != SE; ++SI)
     if (!isIndependentBlock(R, (*SI)->getNodeAs<BasicBlock>()))
       return false;
@@ -170,48 +161,22 @@ bool IndependentBlocks::areAllBlocksIndependent(const Region *R) const {
   return true;
 }
 
-
-void IndependentBlocks::verifyAnalysis() const {
-  verifyRegion(RI->getTopLevelRegion());
-}
-
-void IndependentBlocks::verifyRegion(const Region *R) const {
-  if (!SD->isMaxRegionInSCoP(*R)) {
-    for (Region::const_iterator I = R->begin(), E = R->end(); I != E; ++I)
-      verifyRegion(*I);
-
-    // Only verify the maximal SCoPs.
-    return;
-  }
-
-  assert (areAllBlocksIndependent(R) && "Independent block found!");
-}
-
-void IndependentBlocks::runOnRegion(Region *R) {
-  if (!SD->isMaxRegionInSCoP(*R)) {
-    for (Region::iterator I = R->begin(), E = R->end(); I != E; ++I)
-      runOnRegion(*I);
-
-    // Only handle the maximal SCoPs.
-    return;
-  }
-
-  createIndependentBlocks(R);
-}
-
-bool IndependentBlocks::runOnFunction(Function &F) {
+bool IndependentBlocks::runOnRegion(Region *R, RGPassManager &RGM) {
+  region = R;
   SD = &getAnalysis<SCoPDetection>();
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
-  RI = &getAnalysis<RegionInfo>();
 
-  runOnRegion(RI->getTopLevelRegion());
+  // Only extract the TempSCoP information for valid regions.
+  if (!SD->isSCoP(*R)) return false;
 
-  DEBUG(dbgs() << "After create indepnedent blocks:\n");
-  DEBUG(F.dump());
+  // Only analyse the maximal SCoPs.
+  if (!SD->isMaxRegionInSCoP(*R)) return false;
 
-  verifyAnalysis();
-  // The function change after we create independent blocks.
+  createIndependentBlocks(R);
+  assert (areAllBlocksIndependent(R) && "Cannot generate independent blocks");
+
+  // Region Change!
   return true;
 }
 
@@ -222,8 +187,6 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<LoopInfo>();
   AU.addPreserved<DominatorTree>();
   AU.addRequired<ScalarEvolution>();
-  AU.addRequired<RegionInfo>();
-  AU.addPreserved<RegionInfo>();
   AU.addRequired<SCoPDetection>();
   AU.addPreserved<SCoPDetection>();
   AU.addPreserved<ScalarEvolution>();
@@ -237,6 +200,6 @@ Z("polly-independent", "Polly - Create independent blocks");
 
 char &polly::IndependentBlocksID = IndependentBlocks::ID;
 
-Pass* polly::createIndependentBlocksPass() {
+RegionPass* polly::createIndependentBlocksPass() {
        return new IndependentBlocks();
 }
