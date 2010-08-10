@@ -15,7 +15,7 @@
 #define DEBUG_TYPE "polly-independent"
 
 #include "polly/LinkAllPasses.h"
-#include "polly/SCoPDetection.h"
+#include "polly/SCoPInfo.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -37,7 +37,6 @@ struct IndependentBlocks : public RegionPass {
   Region *region;
   ScalarEvolution *SE;
   LoopInfo *LI;
-  SCoPDetection *SD;
 
   static char ID;
 
@@ -163,15 +162,12 @@ bool IndependentBlocks::areAllBlocksIndependent(Region *R) {
 
 bool IndependentBlocks::runOnRegion(Region *R, RGPassManager &RGM) {
   region = R;
-  SD = &getAnalysis<SCoPDetection>();
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
+  SCoP *S = getAnalysis<SCoPInfo>().getSCoP();
 
-  // Only extract the TempSCoP information for valid regions.
-  if (!SD->isSCoP(*R)) return false;
-
-  // Only analyse the maximal SCoPs.
-  if (!SD->isMaxRegionInSCoP(*R)) return false;
+  if (!S)
+    return false;
 
   createIndependentBlocks(R);
   assert (areAllBlocksIndependent(R) && "Cannot generate independent blocks");
@@ -187,9 +183,9 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<LoopInfo>();
   AU.addPreserved<DominatorTree>();
   AU.addRequired<ScalarEvolution>();
-  AU.addRequired<SCoPDetection>();
-  AU.addPreserved<SCoPDetection>();
   AU.addPreserved<ScalarEvolution>();
+  AU.addRequired<SCoPInfo>();
+  AU.addPreserved<SCoPInfo>();
   AU.setPreservesCFG();
 }
 

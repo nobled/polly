@@ -604,9 +604,6 @@ class CodeGeneration : public RegionPass {
       DT->eraseNode((*I)->getBlock());
 
     R->getParent()->removeSubRegion(R);
-
-    // And forget the SCoP if we remove the region.
-    getAnalysis<SCoPDetection>().forgetSCoP(*R);
     return false;
   }
 
@@ -628,6 +625,7 @@ class CodeGeneration : public RegionPass {
     AU.addPreserved<DominatorTree>();
     AU.addPreserved<SCoPDetection>();
     AU.addPreserved<ScalarEvolution>();
+    AU.addPreserved<RegionInfo>();
   }
 };
 }

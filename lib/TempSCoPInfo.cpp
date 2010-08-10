@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/TempSCoPInfo.h"
+#include "polly/SCoPDetection.h"
 #include "polly/Support/SCoPHelper.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/AffineSCEVIterator.h"
@@ -497,10 +498,15 @@ bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   LI = &getAnalysis<LoopInfo>();
   SD = &getAnalysis<SCoPDetection>();
 
+  TSCoP = NULL;
+
   // Only analyse the maximal SCoPs.
   if (!SD->isMaxRegionInSCoP(*R)) return false;
 
   TSCoP = buildTempSCoP(*R);
+
+  // And forget the SCoP if we remove the region.
+  SD->forgetSCoP(*R);
 
   return false;
 }
