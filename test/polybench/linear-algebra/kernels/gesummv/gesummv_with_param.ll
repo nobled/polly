@@ -1,5 +1,4 @@
-; RUN: opt -O3 -indvars -polly-analyze-ir -polly-print-temp-scop-in-detail -print-top-scop-only  -analyze %s | FileCheck %s
-; XFAIL: *
+; RUN: opt  -mem2reg -loopsimplify -indvars -polly-code-prep -polly-detect -analyze %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
@@ -64,27 +63,5 @@ return:                                           ; preds = %bb3.us, %entry
   ret void
 }
 
-; CHECK: SCoP: bb.nph.us => return.loopexit     Parameters: (%n, ), Max Loop Depth: 2
-; CHECK: Bounds of Loop: bb.nph.us:     { 1 * {0,+,1}<%bb.nph.us> + 0 >= 0, -1 * {0,+,1}<%bb.nph.us> + 1 * %n + -1 >= 0}
-; CHECK:   BB: bb.nph.us{
-; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:     Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:   }
-; CHECK:   Bounds of Loop: bb1.us:      { 1 * {0,+,1}<%bb1.us> + 0 >= 0, -1 * {0,+,1}<%bb1.us> + 1 * %n + -1 >= 0}
-; CHECK:     BB: bb1.us{
-; CHECK:       Reads %13[]
-; CHECK:       Reads %10[]
-; CHECK:       Reads @A[8 * {0,+,1}<%bb1.us> + 32000 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:       Reads @x[8 * {0,+,1}<%bb1.us> + 0]
-; CHECK:       Writes %10[]
-; CHECK:       Reads @B[8 * {0,+,1}<%bb1.us> + 32000 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:       Writes %13[]
-; CHECK:     }
-; CHECK:   BB: bb3.us{
-; CHECK:     Reads %13[]
-; CHECK:     Reads %10[]
-; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:     Reads %1[]
-; CHECK:     Reads %2[]
-; CHECK:     Writes @y[8 * {0,+,1}<%bb.nph.us> + 0]
-; CHECK:   }
+; CHECK: Valid Region for SCoP: bb.nph.us => return.loopexit
+
