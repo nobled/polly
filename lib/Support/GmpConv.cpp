@@ -14,11 +14,15 @@
 
 using namespace llvm;
 
-void polly::MPZ_from_APInt (mpz_t v, const APInt apint) {
+void polly::MPZ_from_APInt (mpz_t v, const APInt apint, bool is_signed) {
   // There is no sign taken from the data, rop will simply be a positive
   // integer. An application can handle any sign itself, and apply it for
   // instance with mpz_neg.
-  APInt abs = apint.abs();
+  APInt abs;
+  if (is_signed)
+   abs  = apint.abs();
+  else
+   abs = apint;
 
   const uint64_t *rawdata = abs.getRawData();
   unsigned numWords = abs.getNumWords();
@@ -26,7 +30,7 @@ void polly::MPZ_from_APInt (mpz_t v, const APInt apint) {
   // TODO: Check if this is true for all platforms.
   mpz_import(v, numWords, 1, sizeof (uint64_t), 0, 0, rawdata);
 
-  if (apint.isNegative()) mpz_neg(v, v);
+  if (is_signed && apint.isNegative()) mpz_neg(v, v);
 }
 
 APInt polly::APInt_from_MPZ (const mpz_t mpz) {

@@ -23,7 +23,7 @@ namespace polly {
 ///
 /// @param v      The mpz_t object your want to hold the result.
 /// @param apint  The APInt you want to convert.
-void MPZ_from_APInt (mpz_t v, const llvm::APInt apint);
+void MPZ_from_APInt (mpz_t v, const llvm::APInt apint, bool is_signed = true);
 
 /// @brief Convert mpz to APInt.
 ///
