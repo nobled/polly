@@ -65,12 +65,13 @@ SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
   }
 }
 
-static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative) {
+static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
+                           bool isSigned = true) {
   if (Coeff) { // If the coefficient exists.
     const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
     const APInt &CI = C->getValue()->getValue();
     // Convert i >= expr to i - expr >= 0
-    MPZ_from_APInt(v, negative ?(-CI):CI);
+    MPZ_from_APInt(v, negative ?(-CI):CI, isSigned);
   } else
     isl_int_set_si(v, 0);
 }
@@ -92,18 +93,18 @@ polly_constraint *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
 
    // Set the coefficient for induction variables.
    for (unsigned i = 0, e = num_in; i != e; ++i) {
-     setCoefficient(getCoeff(IndVars[i]), v, false);
+     setCoefficient(getCoeff(IndVars[i]), v, false, isSigned);
      isl_constraint_set_coefficient(c, isl_dim_set, i, v);
    }
 
    // Set the coefficient of parameters
    for (unsigned i = 0, e = num_param; i != e; ++i) {
-     setCoefficient(getCoeff(Params[i]), v, false);
+     setCoefficient(getCoeff(Params[i]), v, false, isSigned);
      isl_constraint_set_coefficient(c, isl_dim_param, i, v);
    }
 
    // Set the constant.
-   setCoefficient(TransComp, v, false);
+   setCoefficient(TransComp, v, false, isSigned);
    isl_constraint_set_constant(c, v);
    isl_int_clear(v);
 
@@ -382,6 +383,7 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
 
     buildAffineFunction(SE->getConstant(C->getType(), 1), FuncToBuild,
                         SCoP.getMaxRegion(), SCoP.getParamSet());
+    FuncToBuild.setUnsigned();
 
     return;
   }
@@ -427,6 +429,17 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
     break;
   default:
     llvm_unreachable("Unknown Predicate!");
+  }
+
+  switch (Pred) {
+  case ICmpInst::ICMP_UGT:
+  case ICmpInst::ICMP_UGE:
+  case ICmpInst::ICMP_ULT:
+  case ICmpInst::ICMP_ULE:
+    FuncToBuild.setUnsigned();
+    break;
+  default:
+    break;
   }
 
   // Transform A >= B to A - B >= 0

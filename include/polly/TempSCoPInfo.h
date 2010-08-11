@@ -43,6 +43,7 @@ class SCEVAffFunc {
   // { Variable, Coefficient }
   typedef std::map<const SCEV*, const SCEV*> LnrTransSet;
   LnrTransSet LnrTrans;
+  bool isSigned;
 
 public:
   // The type of the scev affine function
@@ -72,16 +73,18 @@ private:
 
 public:
   /// @brief Create a new SCEV affine function.
-  explicit SCEVAffFunc() : TransComp(0), BaseAddr(0),
+  explicit SCEVAffFunc() : TransComp(0), isSigned(true), BaseAddr(0),
     FuncType(None) {}
 
   /// @brief Create a new SCEV affine function with memory access type or
   ///        condition type
 
   explicit SCEVAffFunc(SCEVAffFuncType Type, Value* baseAddr = 0)
-    : TransComp(0), BaseAddr(baseAddr), FuncType(Type) {}
+    : TransComp(0), isSigned(true), BaseAddr(baseAddr), FuncType(Type) {}
 
   SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, ScalarEvolution *SE);
+
+  void setUnsigned() {isSigned=false;}
 
   /// @brief Build a constraint from an affine condition
   ///       (affine function + inequality modifier ).
