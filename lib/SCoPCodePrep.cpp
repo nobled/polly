@@ -96,7 +96,7 @@ bool SCoPCodePrep::eliminatePHINodes(Function &F) {
           }
         }
 
-        // As DemotePHIToStack dose not support invoke edge, we have to leave
+        // As DemotePHIToStack does not support invoke edges, we have to leave
         // the PHINodes that have invoke edges.
         bool hasInvoke = false;
         for (unsigned i = 0, e = PN->getNumIncomingValues(); i < e; ++i)
