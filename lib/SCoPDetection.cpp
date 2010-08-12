@@ -566,7 +566,6 @@ void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<ScalarEvolution>();
   AU.addRequired<LoopInfo>();
   AU.addRequiredTransitive<RegionInfo>();
-  AU.addRequiredID(SCoPCodePrepID);
   AU.setPreservesAll();
 }
 
