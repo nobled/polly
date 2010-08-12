@@ -498,9 +498,6 @@ bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   LI = &getAnalysis<LoopInfo>();
   SD = &getAnalysis<SCoPDetection>();
 
-  // Only extract the TempSCoP information for valid regions.
-  if (!SD->isSCoP(*R)) return false;
-
   // Only analyse the maximal SCoPs.
   if (!SD->isMaxRegionInSCoP(*R)) return false;
 

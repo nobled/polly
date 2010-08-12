@@ -470,11 +470,9 @@ void SCoPDetection::findSCoPs(Region &R) {
   if (isValidRegion(R)) {
     ++ValidRegion;
     ValidRegions.insert(&R);
+    return;
   }
 
-  // FIXME: We visit the same region multiple times.
-  //        All subregions of a valid region are valid. So we can just insert
-  //        them in the set.
   for (Region::iterator I = R.begin(), E = R.end(); I != E; ++I)
     findSCoPs(**I);
 }
@@ -550,7 +548,7 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
 
 
 void polly::SCoPDetection::verifyRegion(const Region &R) const {
-  assert(isSCoP(R) && "Expect R is a valid region.");
+  assert(isMaxRegionInSCoP(R) && "Expect R is a valid region.");
   verifying = true;
   isValidRegion(const_cast<Region&>(R));
   verifying = false;

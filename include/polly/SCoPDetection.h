@@ -161,16 +161,6 @@ public:
   ///
   /// @return Return true if R is the maximum Region in a SCoP, false otherwise.
   bool isMaxRegionInSCoP(const Region &R) const {
-    return isSCoP(R)
-      && ((R.getParent() == 0) || !isSCoP(*R.getParent()));
-  }
-
-  /// @brief Is the region is a valid SCoP?
-  ///
-  /// @param R The Region to test if it is a valid SCoP.
-  ///
-  /// @return Return true if R is a valid SCoP, false otherwise.
-  bool isSCoP(const Region &R) const {
     // The Region is valid only if it could be found in the set.
     return ValidRegions.count(&R);
   }
@@ -179,10 +169,8 @@ public:
   ///
   /// @param R The region to remove.
   void forgetSCoP(const Region &R) {
-    assert(isSCoP(R) && "R is not a SCoP!");
+    assert(isMaxRegionInSCoP(R) && "R is not a SCoP!");
     ValidRegions.erase(&R);
-    for (Region::const_iterator I = R.begin(), E = R.end(); I != E; ++I)
-      forgetSCoP(**I);
   }
 
   /// @brief Verify if all valid Regions in this Function are still valid

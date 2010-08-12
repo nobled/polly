@@ -1,4 +1,4 @@
-; RUN: opt -polly-analyze-ir  -analyze %s | FileCheck %s
+; RUN: opt -polly-code-prep -polly-analyze-ir  -analyze %s | FileCheck %s
 
 ;void f(long a[], long n, long m) {
 ; long i0, i1;
