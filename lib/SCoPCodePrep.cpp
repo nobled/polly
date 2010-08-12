@@ -80,18 +80,21 @@ SCoPCodePrep::~SCoPCodePrep() {
 }
 
 bool SCoPCodePrep::eliminatePHINodes(Function &F) {
+  // The PHINodes that will be deleted.
   std::vector<PHINode*> PNtoDel;
-  std::vector<PHINode*> IVs;
+  // The PHINodes that will be preserved.
+  std::vector<PHINode*> PreservedPNs;
 
   // Scan the PHINodes in this function.
   for (Function::iterator ibb = F.begin(), ibe = F.end();
       ibb != ibe; ++ibb)
     for (BasicBlock::iterator iib = ibb->begin(), iie = ibb->getFirstNonPHI();
         iib != iie; ++iib)
-      if (PHINode *PN = dyn_cast<PHINode>(iib)) {
+      if (PHINode *PN = cast<PHINode>(iib)) {
         if (Loop *L = LI->getLoopFor(ibb)) {
+          // Induction variable will be preserved.
           if (L->getCanonicalInductionVariable() == PN) {
-            IVs.push_back(PN);
+            PreservedPNs.push_back(PN);
             continue;
           }
         }
@@ -100,13 +103,17 @@ bool SCoPCodePrep::eliminatePHINodes(Function &F) {
         // the PHINodes that have invoke edges.
         bool hasInvoke = false;
         for (unsigned i = 0, e = PN->getNumIncomingValues(); i < e; ++i)
-          if (isa<InvokeInst>(PN->getIncomingValue(i))) {
-            hasInvoke = true;
-            break;
-          }
+          if (InvokeInst *II = dyn_cast<InvokeInst>(PN->getIncomingValue(i)))
+            if (II->getParent() == PN->getIncomingBlock(i)) {
+              hasInvoke = true;
+              break;
+            }
 
         if (!hasInvoke)
           PNtoDel.push_back(PN);
+        else
+          // And those PHINodes that we could not handle will also be preserved.
+          PreservedPNs.push_back(PN);
       }
 
   if (PNtoDel.empty())
@@ -120,17 +127,16 @@ bool SCoPCodePrep::eliminatePHINodes(Function &F) {
     DemotePHIToStack(PN);
   }
 
-  // Move all left PHINodes (IVs) to the beginning of the BasicBlock.
-  while (!IVs.empty()) {
-    PHINode *PN = IVs.back();
-    IVs.pop_back();
+  // Move all preserved PHINodes to the beginning of the BasicBlock.
+  while (!PreservedPNs.empty()) {
+    PHINode *PN = PreservedPNs.back();
+    PreservedPNs.pop_back();
 
     BasicBlock *BB = PN->getParent();
     if (PN == BB->begin())
       continue;
 
-    PN->removeFromParent();
-    BB->getInstList().push_front(PN);
+    PN->moveBefore(BB->begin());
   }
 
   return true;
