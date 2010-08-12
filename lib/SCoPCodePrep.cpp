@@ -86,7 +86,7 @@ bool SCoPCodePrep::eliminatePHINodes(Function &F) {
   // Scan the PHINodes in this function.
   for (Function::iterator ibb = F.begin(), ibe = F.end();
       ibb != ibe; ++ibb)
-    for (BasicBlock::iterator iib = ibb->begin(), iie = ibb->end();
+    for (BasicBlock::iterator iib = ibb->begin(), iie = ibb->getFirstNonPHI();
         iib != iie; ++iib)
       if (PHINode *PN = dyn_cast<PHINode>(iib)) {
         if (Loop *L = LI->getLoopFor(ibb)) {
@@ -96,7 +96,17 @@ bool SCoPCodePrep::eliminatePHINodes(Function &F) {
           }
         }
 
-        PNtoDel.push_back(PN);
+        // As DemotePHIToStack dose not support invoke edge, we have to leave
+        // the PHINodes that have invoke edges.
+        bool hasInvoke = false;
+        for (unsigned i = 0, e = PN->getNumIncomingValues(); i < e; ++i)
+          if (isa<InvokeInst>(PN->getIncomingValue(i))) {
+            hasInvoke = true;
+            break;
+          }
+
+        if (!hasInvoke)
+          PNtoDel.push_back(PN);
       }
 
   if (PNtoDel.empty())
