@@ -394,6 +394,15 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
     }
   }
 
+  // Scalar dependencies are not allowed.
+  if (hasScalarDependency(Inst, RefRegion)) {
+    DEBUG(dbgs() << "Scalar dependency found: ";
+    WriteAsOperand(dbgs(), &Inst, false);
+    dbgs() << "\n");
+    STATSCOP(Scalar);
+    return false;
+  }
+
   // We only check the call instruction but not invoke instruction.
   if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
     if (isValidCallInst(*CI))
@@ -403,15 +412,6 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
           WriteAsOperand(dbgs(), &Inst, false);
           dbgs() << "\n");
     STATSCOP(FuncCall);
-    return false;
-  }
-
-  // Scalar dependencies are not allowed.
-  if (hasScalarDependency(Inst, RefRegion)) {
-    DEBUG(dbgs() << "Scalar dependency found: ";
-          WriteAsOperand(dbgs(), &Inst, false);
-          dbgs() << "\n");
-    STATSCOP(Scalar);
     return false;
   }
 
