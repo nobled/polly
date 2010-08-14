@@ -33,9 +33,9 @@ namespace polly {
   llvm::Pass *createScopCodeGenPass();
   llvm::Pass *createSCoPExporterPass();
   llvm::Pass *createSCoPImporterPass();
-  llvm::RegionPass* createCLooGExporterPass();
-  llvm::RegionPass* createCodeGenerationPass();
-  llvm::RegionPass* createIndependentBlocksPass();
+  llvm::RegionPass *createCLooGExporterPass();
+  llvm::RegionPass *createCodeGenerationPass();
+  llvm::Pass *createIndependentBlocksPass();
   extern char &IndependentBlocksID;
 }
 

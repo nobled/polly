@@ -12,20 +12,17 @@
 //===----------------------------------------------------------------------===//
 //
 
-#define DEBUG_TYPE "polly-independent"
-
 #include "polly/LinkAllPasses.h"
 #include "polly/SCoPInfo.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/IRBuilder.h"
+
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/RegionPass.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
 
+#define DEBUG_TYPE "polly-independent"
+#include "llvm/Support/Debug.h"
 
 #include <vector>
 
@@ -196,6 +193,6 @@ Z("polly-independent", "Polly - Create independent blocks");
 
 char &polly::IndependentBlocksID = IndependentBlocks::ID;
 
-RegionPass* polly::createIndependentBlocksPass() {
+Pass* polly::createIndependentBlocksPass() {
        return new IndependentBlocks();
 }
