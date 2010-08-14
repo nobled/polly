@@ -572,8 +572,8 @@ void polly::SCoPDetection::verifyAnalysis() const {
 void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<DominatorTree>();
   AU.addRequired<PostDominatorTree>();
-  AU.addRequired<ScalarEvolution>();
   AU.addRequired<LoopInfo>();
+  AU.addRequired<ScalarEvolution>();
   AU.addRequiredTransitive<RegionInfo>();
   AU.setPreservesAll();
 }

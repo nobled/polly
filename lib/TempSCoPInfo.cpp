@@ -16,6 +16,7 @@
 #include "polly/Support/SCoPHelper.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/AffineSCEVIterator.h"
+#include "polly/LinkAllPasses.h"
 
 #include "llvm/Intrinsics.h"
 #include "llvm/ADT/Statistic.h"
@@ -527,9 +528,10 @@ bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
 void TempSCoPInfo::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<DominatorTree>();
   AU.addRequiredTransitive<PostDominatorTree>();
-  AU.addRequiredTransitive<ScalarEvolution>();
   AU.addRequiredTransitive<LoopInfo>();
+  AU.addRequiredTransitive<ScalarEvolution>();
   AU.addRequiredTransitive<SCoPDetection>();
+  AU.addRequiredID(IndependentBlocksID);
   AU.setPreservesAll();
 }
 
