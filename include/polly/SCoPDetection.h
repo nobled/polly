@@ -165,6 +165,21 @@ public:
     return ValidRegions.count(&R);
   }
 
+  /// @name Maximum Region In SCoPs Iterators
+  ///
+  /// These iterators iterator over all maximum region in SCoPs of this
+  /// function.
+  //@{
+  typedef RegionSet::iterator iterator;
+  typedef RegionSet::const_iterator const_iterator;
+
+  iterator begin()  { return ValidRegions.begin(); }
+  iterator end()    { return ValidRegions.end();   }
+
+  const_iterator begin() const { return ValidRegions.begin(); }
+  const_iterator end()   const { return ValidRegions.end();   }
+  //@}
+
   /// @brief Remove a region and its children from valid region set.
   ///
   /// @param R The region to remove.
