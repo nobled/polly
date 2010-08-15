@@ -88,8 +88,8 @@ bool IndependentBlocks::createIndependentBlocks(BasicBlock *BB) {
 
       Value *V = Rewriter.expandCodeFor(Scev, UI->get()->getType(), Inst);
       UI->set(V);
-      SE->forgetValue(Inst);
     }
+    SE->forgetValue(Inst);
   }
 
   // The BB changed if we replaced any operand.
