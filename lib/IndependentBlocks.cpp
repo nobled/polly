@@ -50,8 +50,8 @@ struct IndependentBlocks : public RegionPass {
   //
   // Blocks containing only these kind of instructions are called independent
   // blocks as they can be scheduled arbitrarily.
-  void createIndependentBlocks(BasicBlock *BB);
-  void createIndependentBlocks(Region *R);
+  bool createIndependentBlocks(BasicBlock *BB);
+  bool createIndependentBlocks(Region *R);
   bool isIV(const Instruction *I) const;
   bool isIndependentBlock(const Region *R, BasicBlock *BB) const;
   bool areAllBlocksIndependent(Region *R) const;
@@ -62,7 +62,7 @@ struct IndependentBlocks : public RegionPass {
 };
 }
 
-void IndependentBlocks::createIndependentBlocks(BasicBlock *BB) {
+bool IndependentBlocks::createIndependentBlocks(BasicBlock *BB) {
   std::vector<Instruction*> work;
   SCEVExpander Rewriter(*SE);
   Rewriter.disableInstructionHoisting();
@@ -91,12 +91,19 @@ void IndependentBlocks::createIndependentBlocks(BasicBlock *BB) {
       SE->forgetValue(Inst);
     }
   }
+
+  // The BB changed if we replaced any operand.
+  return !work.empty();
 }
 
-void IndependentBlocks::createIndependentBlocks(Region *R) {
+bool IndependentBlocks::createIndependentBlocks(Region *R) {
+  bool Changed = false;
+
   for (Region::block_iterator SI = R->block_begin(), SE = R->block_end();
        SI != SE; ++SI)
-    createIndependentBlocks((*SI)->getNodeAs<BasicBlock>());
+    Changed |= createIndependentBlocks((*SI)->getNodeAs<BasicBlock>());
+
+  return Changed;
 }
 
 bool IndependentBlocks::isIV(const Instruction *I) const {
@@ -171,12 +178,11 @@ bool IndependentBlocks::runOnRegion(Region *R, RGPassManager &RGM) {
     return false;
   }
 
-  createIndependentBlocks(R);
+  bool Changed = createIndependentBlocks(R);
 
   verifyAnalysis();
 
-  // Region Change!
-  return true;
+  return Changed;
 }
 
 void IndependentBlocks::verifyAnalysis() const {
