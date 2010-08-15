@@ -52,11 +52,13 @@ struct IndependentBlocks : public RegionPass {
   // blocks as they can be scheduled arbitrarily.
   void createIndependentBlocks(BasicBlock *BB);
   void createIndependentBlocks(Region *R);
-  bool isIV(Instruction *I);
-  bool isIndependentBlock(const Region *R, BasicBlock *BB);
-  bool areAllBlocksIndependent(Region *R);
+  bool isIV(const Instruction *I) const;
+  bool isIndependentBlock(const Region *R, BasicBlock *BB) const;
+  bool areAllBlocksIndependent(Region *R) const;
+
   bool runOnRegion(Region *R, RGPassManager &RGM);
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+  void verifyAnalysis() const;
+  void getAnalysisUsage(AnalysisUsage &AU) const;
 };
 }
 
@@ -97,13 +99,14 @@ void IndependentBlocks::createIndependentBlocks(Region *R) {
     createIndependentBlocks((*SI)->getNodeAs<BasicBlock>());
 }
 
-bool IndependentBlocks::isIV(Instruction *I) {
+bool IndependentBlocks::isIV(const Instruction *I) const {
   Loop *L = LI->getLoopFor(I->getParent());
 
   return L && I == L->getCanonicalInductionVariable();
 }
 
-bool IndependentBlocks::isIndependentBlock(const Region *R, BasicBlock *BB) {
+bool IndependentBlocks::isIndependentBlock(const Region *R,
+                                           BasicBlock *BB) const {
   for (BasicBlock::iterator II = BB->begin(), IE = --BB->end();
        II != IE; ++II) {
     Instruction *Inst = &*II;
@@ -148,7 +151,7 @@ bool IndependentBlocks::isIndependentBlock(const Region *R, BasicBlock *BB) {
   return true;
 }
 
-bool IndependentBlocks::areAllBlocksIndependent(Region *R) {
+bool IndependentBlocks::areAllBlocksIndependent(Region *R) const {
   for (Region::block_iterator SI = R->block_begin(), SE = R->block_end();
        SI != SE; ++SI)
     if (!isIndependentBlock(R, (*SI)->getNodeAs<BasicBlock>()))
@@ -163,14 +166,22 @@ bool IndependentBlocks::runOnRegion(Region *R, RGPassManager &RGM) {
   LI = &getAnalysis<LoopInfo>();
   SCoP *S = getAnalysis<SCoPInfo>().getSCoP();
 
-  if (!S)
+  if (!S) {
+    region = 0;
     return false;
+  }
 
   createIndependentBlocks(R);
-  assert (areAllBlocksIndependent(R) && "Cannot generate independent blocks");
+
+  verifyAnalysis();
 
   // Region Change!
   return true;
+}
+
+void IndependentBlocks::verifyAnalysis() const {
+  assert (areAllBlocksIndependent(region)
+          && "Cannot generate independent blocks");
 }
 
 void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
