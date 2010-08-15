@@ -297,7 +297,9 @@ bool IndependentBlocks::runOnFunction(Function &F) {
   DEBUG(dbgs() << "Before Independent Blocks clean up------->\n");
   DEBUG(F.dump());
   OwningPtr<FunctionPass> DCE(createDeadCodeEliminationPass());
-  Changed |= DCE->run(F);
+  Changed |= DCE->doInitialization(*F.getParent());
+  Changed |= DCE->runOnFunction(F);
+  Changed |= DCE->doFinalization(*F.getParent());
 
   DEBUG(dbgs() << "After Independent Blocks------------->\n");
   DEBUG(F.dump());
