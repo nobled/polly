@@ -25,6 +25,7 @@ bb40:                                             ; preds = %bb46
 bb46:                                             ; preds = %bb40, %bb24
   %indvar61 = phi i64 [ %indvar.next62, %bb40 ], [ 0, %bb24 ] ; <i64> [#uses=1]
   %scevgep74 = getelementptr [2 x [576 x double]]* %mdct_freq, i64 0, i64 %indvar1, i64 0 ; <double*> [#uses=1]
+  store double undef, double* %scevgep74, align 8
   br i1 false, label %bb40, label %bb47
 
 bb47:                                             ; preds = %bb46, %bb24
