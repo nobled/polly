@@ -19,7 +19,7 @@
 #include "llvm/Analysis/RegionPass.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolution.h"
-#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/OwningPtr.h"
 
@@ -32,14 +32,15 @@ using namespace polly;
 using namespace llvm;
 
 namespace {
-struct IndependentBlocks : public FunctionPass {
+struct IndependentBlocks : public RegionPass {
+  Region *CurR;
   ScalarEvolution *SE;
   SCoPDetection *SD;
   LoopInfo *LI;
 
   static char ID;
 
-  IndependentBlocks() : FunctionPass(ID) {}
+  IndependentBlocks() : RegionPass(ID) {}
 
   // Create new code for every instruction operator that can be expressed by a
   // SCEV.  Like this there are just two types of instructions left:
@@ -54,6 +55,10 @@ struct IndependentBlocks : public FunctionPass {
   // blocks as they can be scheduled arbitrarily.
   bool createIndependentBlocks(BasicBlock *BB, const Region *R);
   bool createIndependentBlocks(const Region *R);
+
+  // Elimination on the SCoP to eliminate the scalar dependencies come with
+  // trivially dead instructions.
+  bool eliminateDeadCode(const Region *R);
 
   /// @brief Check if the instruction I is the induction variable of a loop.
   ///
@@ -77,7 +82,7 @@ struct IndependentBlocks : public FunctionPass {
   bool isIndependentBlock(const Region *R, BasicBlock *BB) const;
   bool areAllBlocksIndependent(const Region *R) const;
 
-  bool runOnFunction(Function &F);
+  bool runOnRegion(Region *R, RGPassManager &RGM);
   void verifyAnalysis() const;
   void verifySCoP(const Region *R) const;
   void getAnalysisUsage(AnalysisUsage &AU) const;
@@ -208,6 +213,30 @@ bool IndependentBlocks::createIndependentBlocks(const Region *R) {
   return Changed;
 }
 
+bool IndependentBlocks::eliminateDeadCode(const Region *R) {
+  std::vector<Instruction*> WorkList;
+
+  // Find all trivially dead instructions.
+  for (Region::const_block_iterator SI = R->block_begin(), SE = R->block_end();
+      SI != SE; ++SI) {
+    BasicBlock *BB = (*SI)->getNodeAs<BasicBlock>();
+    for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; ++I)
+      if (isInstructionTriviallyDead(I))
+        WorkList.push_back(I);
+  }
+
+  if (WorkList.empty()) return false;
+
+  // Delete them so the cross BB scalar dependencies come with them will
+  // also be eliminated.
+  while (!WorkList.empty()) {
+    RecursivelyDeleteTriviallyDeadInstructions(WorkList.back());
+    WorkList.pop_back();
+  }
+
+  return true;
+}
+
 bool IndependentBlocks::isIV(const Instruction *I) const {
   Loop *L = LI->getLoopFor(I->getParent());
 
@@ -282,35 +311,30 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
 }
 
-bool IndependentBlocks::runOnFunction(Function &F) {
+bool IndependentBlocks::runOnRegion(Region *R, RGPassManager &RGM) {
   LI = &getAnalysis<LoopInfo>();
   SD = &getAnalysis<SCoPDetection>();
   SE = &getAnalysis<ScalarEvolution>();
 
-  bool Changed = false;
+  if (!SD->isMaxRegionInSCoP(*R)) return false;
+  
+  CurR = R;
+  bool Changed = createIndependentBlocks(CurR);
 
-  for (SCoPDetection::iterator I = SD->begin(), E = SD->end(); I != E; ++I)
-    Changed |= createIndependentBlocks(*I);
-
-  // We must perform dead code elimination on the function to eliminate
-  // the scalar dependencies come with trivially dead instructions.
   DEBUG(dbgs() << "Before Independent Blocks clean up------->\n");
-  DEBUG(F.dump());
-  OwningPtr<FunctionPass> DCE(createDeadCodeEliminationPass());
-  Changed |= DCE->doInitialization(*F.getParent());
-  Changed |= DCE->runOnFunction(F);
-  Changed |= DCE->doFinalization(*F.getParent());
+  DEBUG(CurR->getEntry()->getParent()->dump());
+
+  Changed |= eliminateDeadCode(CurR);
 
   DEBUG(dbgs() << "After Independent Blocks------------->\n");
-  DEBUG(F.dump());
-  verifyAnalysis();
+  DEBUG(CurR->getEntry()->getParent()->dump());
+  verifySCoP(CurR);
 
   return Changed;
 }
 
 void IndependentBlocks::verifyAnalysis() const {
-  for (SCoPDetection::const_iterator I = SD->begin(), E = SD->end(); I != E; ++I)
-    verifySCoP(*I);
+  verifySCoP(CurR);
 }
 
 void IndependentBlocks::verifySCoP(const Region *R) const {
