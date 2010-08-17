@@ -98,14 +98,29 @@ struct IndependentBlocks : public RegionPass {
   bool isEscapeOperand(const Value *Operand, const BasicBlock *CurBB,
                        const Region *R) const;
 
-
-  // Can the instruction be moved to another place?
-  static bool isSaveToMove(Instruction *Inst);
+  //===--------------------------------------------------------------------===//
+  /// Operand tree moving functions.
+  /// Trivial scalar dependences can eliminate by move the def to the same BB
+  /// that containing use.
+  ///
+  /// @brief Check if the instruction can be moved to another place safely.
+  ///
+  /// @param Inst The instruction.
+  ///
+  /// @return Return true if the instruction can be moved safely, false
+  ///         otherwise. 
+  static bool isSafeToMove(Instruction *Inst);
 
   typedef std::map<Instruction*, Instruction*> ReplacedMapType;
 
-  // Move as much instructions as possible in the Operand Tree (DAG) of Inst
-  // to the same BB that contains Inst.
+  /// @brief Move all safe to move instructions in the Operand Tree (DAG) to
+  ///        eliminate trivial scalar dependences.
+  ///
+  /// @param Inst         The root of the operand Tree.
+  /// @param R            The maximum region in the SCoP.
+  /// @param ReplacedMap  The map that mapping original instruction to the moved
+  ///                     instruction.
+  /// @param InsertPos    The insert position of the moved instructions.
   void moveOperandTree(Instruction *Inst, const Region *R,
                        ReplacedMapType &ReplacedMap,
                        Instruction *InsertPos);
@@ -120,7 +135,7 @@ struct IndependentBlocks : public RegionPass {
 };
 }
 
-bool IndependentBlocks::isSaveToMove(Instruction *Inst) {
+bool IndependentBlocks::isSafeToMove(Instruction *Inst) {
   if (Inst->mayReadFromMemory() ||
       Inst->mayWriteToMemory())
     return false;
@@ -174,7 +189,7 @@ void IndependentBlocks::moveOperandTree(Instruction *Inst, const Region *R,
       }
 
       // We can not move the operand, a non trivial scalar dependence found!
-      if (!isSaveToMove(Operand)) {
+      if (!isSafeToMove(Operand)) {
         DEBUG(dbgs() << "Can not move!\n");
         continue;
       }
@@ -220,7 +235,7 @@ bool IndependentBlocks::createIndependentBlocks(BasicBlock *BB,
                                                 const Region *R) {
   std::vector<Instruction*> WorkList;
   for (BasicBlock::iterator II = BB->begin(), IE = BB->end(); II != IE; ++II)
-    if (!isSaveToMove(II) && !isIV(II))
+    if (!isSafeToMove(II) && !isIV(II))
       WorkList.push_back(II);
 
   ReplacedMapType ReplacedMap;
