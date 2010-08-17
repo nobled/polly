@@ -56,7 +56,7 @@ struct IndependentBlocks : public RegionPass {
   bool createIndependentBlocks(BasicBlock *BB, const Region *R);
   bool createIndependentBlocks(const Region *R);
 
-  // Elimination on the SCoP to eliminate the scalar dependencies come with
+  // Elimination on the SCoP to eliminate the scalar dependences come with
   // trivially dead instructions.
   bool eliminateDeadCode(const Region *R);
 
@@ -67,6 +67,37 @@ struct IndependentBlocks : public RegionPass {
   /// @return Return true if I is the induction variable of a loop, false
   ///         otherwise.
   bool isIV(const Instruction *I) const;
+
+  //===--------------------------------------------------------------------===//
+  /// Non trivial scalar dependences checking functions.
+  /// Non trivial scalar dependences occur when the def and use are located in
+  /// different BBs and we can not move them into the same one. This will
+  /// prevent use from schedule BBs arbitrarily.
+  ///
+  /// @brief This function checks if a scalar value that is part of the
+  ///        SCoP is used outside of the SCoP.
+  ///
+  /// @param Use  The use of the instruction.
+  /// @param R    The maximum region in the SCoP.
+  ///
+  /// @return Return true if the Use of an instruction and the instruction
+  ///         itself form a non trivial scalar dependence.
+  static bool isEscapeUse(const Value *Use, const Region *R);
+
+  /// @brief This function just checks if a Value is either defined in the same
+  ///        basic block or outside the region, such that there are no scalar
+  ///        dependences between basic blocks that are both part of the same
+  ///        region.
+  ///
+  /// @param Operand  The operand of the instruction.
+  /// @param CurBB    The BasicBlock that contains the instruction.
+  /// @param R        The maximum region in the SCoP.
+  ///
+  /// @return Return true if the Operand of an instruction and the instruction
+  ///         itself form a non trivial scalar (true) dependence.
+  bool isEscapeOperand(const Value *Operand, const BasicBlock *CurBB,
+                       const Region *R) const;
+
 
   // Can the instruction be moved to another place?
   static bool isSaveToMove(Instruction *Inst);
@@ -142,7 +173,7 @@ void IndependentBlocks::moveOperandTree(Instruction *Inst, const Region *R,
         continue;
       }
 
-      // We can not move the operand, a non-trivial scalar dependency found!
+      // We can not move the operand, a non trivial scalar dependence found!
       if (!isSaveToMove(Operand)) {
         DEBUG(dbgs() << "Can not move!\n");
         continue;
@@ -227,7 +258,7 @@ bool IndependentBlocks::eliminateDeadCode(const Region *R) {
 
   if (WorkList.empty()) return false;
 
-  // Delete them so the cross BB scalar dependencies come with them will
+  // Delete them so the cross BB scalar dependences come with them will
   // also be eliminated.
   while (!WorkList.empty()) {
     RecursivelyDeleteTriviallyDeadInstructions(WorkList.back());
@@ -243,6 +274,28 @@ bool IndependentBlocks::isIV(const Instruction *I) const {
   return L && I == L->getCanonicalInductionVariable();
 }
 
+bool IndependentBlocks::isEscapeUse(const Value *Use, const Region *R) {
+  // Non-instruction user will never escape.
+  if (!isa<Instruction>(Use)) return false;
+
+  return !R->contains(cast<Instruction>(Use));
+}
+
+bool IndependentBlocks::isEscapeOperand(const Value *Operand,
+                                        const BasicBlock *CurBB,
+                                        const Region *R) const {
+  const Instruction *OpInst = dyn_cast<Instruction>(Operand);
+
+  // Non-instruction operand will never escape.
+  if (OpInst == 0) return false;
+
+  // Induction variables are valid operands.
+  if (isIV(OpInst)) return false;
+
+  // A value from a different BB is used in the same region.
+  return R->contains(OpInst) && (OpInst->getParent() != CurBB);
+}
+
 bool IndependentBlocks::isIndependentBlock(const Region *R,
                                            BasicBlock *BB) const {
   for (BasicBlock::iterator II = BB->begin(), IE = --BB->end();
@@ -255,9 +308,7 @@ bool IndependentBlocks::isIndependentBlock(const Region *R,
     // A value inside the SCoP is referenced outside.
     for (Instruction::use_iterator UI = Inst->use_begin(),
          UE = Inst->use_end(); UI != UE; ++UI) {
-      Instruction *Use = dyn_cast<Instruction>(*UI);
-
-      if (Use && !R->contains(Use)) {
+      if (isEscapeUse(*UI, R)) {
         DEBUG(dbgs() << "Instruction not independent:\n");
         DEBUG(dbgs() << "Instruction used outside the SCoP!\n");
         DEBUG(Inst->print(dbgs()));
@@ -266,12 +317,9 @@ bool IndependentBlocks::isIndependentBlock(const Region *R,
       }
     }
 
-    for (Instruction::op_iterator UI = Inst->op_begin(),
-         UE = Inst->op_end(); UI != UE; ++UI) {
-      Instruction *Op = dyn_cast<Instruction>(&(*UI));
-
-      if (Op && R->contains(Op) && !(Op->getParent() == BB)
-          && !isIV(Op)) {
+    for (Instruction::op_iterator OI = Inst->op_begin(),
+         OE = Inst->op_end(); OI != OE; ++OI) {
+      if (isEscapeOperand(*OI, BB, R)) {
         DEBUG(dbgs() << "Instruction in function '";
               WriteAsOperand(dbgs(), BB->getParent(), false);
               dbgs() << "' not independent:\n");
@@ -279,7 +327,7 @@ bool IndependentBlocks::isIndependentBlock(const Region *R,
         DEBUG(Inst->print(dbgs()));
         DEBUG(dbgs() << "\n");
         DEBUG(dbgs() << "Invalid operator is: ";
-              WriteAsOperand(dbgs(), Op, false);
+              WriteAsOperand(dbgs(), *OI, false);
               dbgs() << "\n");
         return false;
       }
