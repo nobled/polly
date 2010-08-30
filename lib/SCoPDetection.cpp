@@ -1,4 +1,4 @@
-//===----- SCoPDetection.cpp  - Detect SCoPs in LLVM Function ---*- C++ -*-===//
+//===----- SCoPDetection.cpp  - Detect SCoPs --------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Detect SCoPs in LLVM Function.
+// Pass to detect the maximal static control parts (SCoPs) of a function.
 //
 //===----------------------------------------------------------------------===//
 
@@ -516,10 +516,6 @@ void SCoPDetection::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
 }
 
-void SCoPDetection::clear() {
-  ValidRegions.clear();
-}
-
 void SCoPDetection::print(raw_ostream &OS, const Module *) const {
   for (RegionSet::const_iterator I = ValidRegions.begin(),
       E = ValidRegions.end(); I != E; ++I)
@@ -528,8 +524,8 @@ void SCoPDetection::print(raw_ostream &OS, const Module *) const {
   OS << "\n";
 }
 
-SCoPDetection::~SCoPDetection() {
-  clear();
+void SCoPDetection::releaseMemory() {
+  ValidRegions.clear();
 }
 
 char SCoPDetection::ID = 0;

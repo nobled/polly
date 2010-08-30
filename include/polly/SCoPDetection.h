@@ -1,4 +1,4 @@
-//===--- polly/SCoPDetection.h - Detect SCoPs in LLVM Function ---*- C++ -*-===//
+//===--- polly/SCoPDetection.h - Detect SCoPs -------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Detect SCoPs in LLVM Function.
+// Pass to detect the maximal static control parts (SCoPs) of a function.
 //
 //===----------------------------------------------------------------------===//
 
@@ -36,48 +36,29 @@ namespace llvm {
 
 namespace polly {
 typedef std::set<const SCEV*> ParamSetType;
-typedef std::pair<const SCEV*, const SCEV*> AffCmptType;
-
-class TempSCoP;
-class SCoPDetection;
-class SCEVAffFunc;
 
 //===----------------------------------------------------------------------===//
-/// @brief The Function Pass to detection Static control part in llvm function.
-///
-/// Please run "Canonicalize Induction Variables" pass(-indvars) before this
-/// pass.
-///
-/// TODO: Provide interface to update the temporary SCoP information.
-///
+/// @brief Pass to detect the maximal static control parts (SCoPs) of a
+/// function.
 class SCoPDetection : public FunctionPass {
-  //===-------------------------------------------------------------------===//
+  //===--------------------------------------------------------------------===//
   // DO NOT IMPLEMENT
   SCoPDetection(const SCoPDetection &);
   // DO NOT IMPLEMENT
   const SCoPDetection &operator=(const SCoPDetection &);
 
-  // The ScalarEvolution to help building SCoP.
+  /// @brief Analysis passes used.
+  //@{
   ScalarEvolution* SE;
-
-  // LoopInfo for information about loops
   LoopInfo *LI;
-
-  // RegionInfo for regiontrees
   RegionInfo *RI;
-
-  // FIXME: This is only a temporary hack, we need a standalone condition
-  // analysis and construction pass.
-  // For simple condition extraction support
   DominatorTree *DT;
   PostDominatorTree *PDT;
+  //@}
 
   // Remember the valid regions
   typedef std::set<const Region*> RegionSet;
   RegionSet ValidRegions;
-
-  // Clear the context.
-  void clear();
 
   // Find the SCoPs in this region tree.
   void findSCoPs(Region &R);
@@ -99,10 +80,6 @@ class SCoPDetection : public FunctionPass {
 
   // Check is a memory access is valid.
   bool isValidMemoryAccess(Instruction &Inst, Region &RefRegion) const;
-
-  // Check if all parameters in Params valid in Region R.
-  void mergeParams(Region &R, ParamSetType &Params,
-                   ParamSetType &SubParams) const;
 
   bool hasScalarDependency(Instruction &Inst, Region &RefRegion) const;
 
@@ -150,7 +127,6 @@ class SCoPDetection : public FunctionPass {
 public:
   static char ID;
   explicit SCoPDetection() : FunctionPass(ID), verifying(false) {}
-  ~SCoPDetection();
 
   /// @brief Is the region is the maximum region of a SCoP?
   ///
@@ -198,7 +174,7 @@ public:
   /// @name FunctionPass interface
   //@{
   virtual void getAnalysisUsage(AnalysisUsage &AU) const;
-  virtual void releaseMemory() { clear(); }
+  virtual void releaseMemory();
   virtual bool runOnFunction(Function &F);
   virtual void print(raw_ostream &OS, const Module *) const;
   //@}
