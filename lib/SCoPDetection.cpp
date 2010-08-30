@@ -443,16 +443,16 @@ void SCoPDetection::findSCoPs(Region &R) {
     findSCoPs(**I);
 }
 
-bool SCoPDetection::isValidRegion(Region &R) const {
-  DEBUG(dbgs() << "Checking region: " << R.getNameStr() << "\n\t");
+bool SCoPDetection::allBlocksValid(Region &R) const {
+  for (Region::block_iterator I = R.block_begin(), E = R.block_end(); I != E;
+       ++I)
+    if (!isValidBasicBlock(*(I->getNodeAs<BasicBlock>()), R))
+      return false;
 
-  // The toplevel region is no valid region.
-  if (!R.getParent()) {
-    DEBUG(dbgs() << "Top level region is invalid";
-          dbgs() << "\n");
-    return false;
-  }
+  return true;
+}
 
+bool SCoPDetection::isValidExit(Region &R) const {
   // PHI nodes are not allowed in the exit basic block.
   if (BasicBlock *Exit = R.getExit()) {
     BasicBlock::iterator I = Exit->begin();
@@ -463,13 +463,26 @@ bool SCoPDetection::isValidRegion(Region &R) const {
     }
   }
 
-  for (Region::block_iterator I = R.block_begin(), E = R.block_end(); I != E;
-       ++I)
-    if (!isValidBasicBlock(*(I->getNodeAs<BasicBlock>()), R))
-      return false;
+  return true;
+}
+
+bool SCoPDetection::isValidRegion(Region &R) const {
+  DEBUG(dbgs() << "Checking region: " << R.getNameStr() << "\n\t");
+
+  // The toplevel region is no valid region.
+  if (!R.getParent()) {
+    DEBUG(dbgs() << "Top level region is invalid";
+          dbgs() << "\n");
+    return false;
+  }
+
+  if (!allBlocksValid(R))
+    return false;
+
+  if (!isValidExit(R))
+    return false;
 
   DEBUG(dbgs() << "OK\n");
-
   return true;
 }
 

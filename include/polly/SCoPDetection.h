@@ -59,16 +59,22 @@ class SCoPDetection : public FunctionPass {
   // Find the SCoPs in this region tree.
   void findSCoPs(Region &R);
 
-  /////////////////////////////////////////////////////////////////////////////
-  // Check if the max region of SCoP is valid, return true if it is valid
-  // false otherwise.
-  //
-  // NOTE: All this function will increase the statistic counters.
+  /// @brief Check if all basic block in the region are valid.
+  ///
+  /// @param R The region to check.
+  /// @return True if all blocks in R are valid, false otherwise.
+  bool allBlocksValid(Region &R) const;
+
+  /// @brief Check the exit block of a region is valid.
+  ///
+  /// @param R The region to check.
+  /// @return True if the exit of R is valid, false otherwise.
+  bool isValidExit(Region &R) const;
 
   /// @brief Check if a region is a SCoP.
   ///
   /// @param R The region to check.
-  /// @return True it R is a SCoP, false otherwise.
+  /// @return True if R is a SCoP, false otherwise.
   bool isValidRegion(Region &R) const;
 
   // Check if the instruction is a valid function call.
@@ -91,9 +97,9 @@ class SCoPDetection : public FunctionPass {
   ///
   /// @param BB The BB to check the control flow.
   /// @param RefRegion The region in respect to which we check the control
-  ///                        flow.
-  /// @return True if the BB contains only valid control flow.
+  ///                  flow.
   ///
+  /// @return True if the BB contains only valid control flow.
   bool isValidCFG(BasicBlock &BB, Region &RefRegion) const;
 
   /// @brief Check if the SCEV expression is a valid affine function
