@@ -14,17 +14,25 @@
 #ifndef POLLY_SCOP_DETECTION_H
 #define POLLY_SCOP_DETECTION_H
 
-#include "polly/Support/AffineSCEVIterator.h"
+#include "llvm/Pass.h"
 
-#include "llvm/Analysis/RegionInfo.h"
-#include "llvm/Analysis/Passes.h"
-#include "llvm/Analysis/ScalarEvolution.h"
-#include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/ADT/PointerIntPair.h"
-#include "llvm/Transforms/Scalar.h"
+#include <set>
 
 using namespace llvm;
+
+namespace llvm {
+  class RegionInfo;
+  class Region;
+  class LoopInfo;
+  class Loop;
+  class PostDominatorTree;
+  class DominatorTree;
+  class ScalarEvolution;
+  class SCEV;
+  class SCEVAddRecExpr;
+  class CallInst;
+  class Instruction;
+}
 
 namespace polly {
 typedef std::set<const SCEV*> ParamSetType;

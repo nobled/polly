@@ -11,27 +11,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/LinkAllPasses.h"
 #include "polly/SCoPDetection.h"
+
+#include "polly/LinkAllPasses.h"
 #include "polly/Support/SCoPHelper.h"
-#include "polly/Support/GmpConv.h"
 #include "polly/Support/AffineSCEVIterator.h"
 
-#include "llvm/Intrinsics.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/RegionIterator.h"
-#include "llvm/Analysis/ScalarEvolutionExpressions.h"
-#include "llvm/Assembly/Writer.h"
-#include "llvm/Support/CFG.h"
-#include "llvm/Support/CallSite.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/ErrorHandling.h"
 
 #define DEBUG_TYPE "polly-detect"
 #include "llvm/Support/Debug.h"
-
-
-#include "isl_constraint.h"
 
 using namespace llvm;
 using namespace polly;
