@@ -36,11 +36,11 @@ STATISTIC(SCoPFound,  "Number of valid SCoPs");
 STATISTIC(RichSCoPFound,   "Number of SCoPs containing a loop");
 
 //===----------------------------------------------------------------------===//
-DataRef::~DataRef() {
+MemoryAccess::~MemoryAccess() {
   isl_map_free(getAccessFunction());
 }
 
-void DataRef::print(raw_ostream &OS) const {
+void MemoryAccess::print(raw_ostream &OS) const {
   OS << (isRead() ? "Reads" : "Writes") << " ";
   WriteAsOperand(OS, getBaseAddr(), false);
   OS << " at:\n";
@@ -49,7 +49,7 @@ void DataRef::print(raw_ostream &OS) const {
   DEBUG(isl_map_dump(getAccessFunction(), stderr, 20));
 }
 
-void DataRef::dump() const {
+void MemoryAccess::dump() const {
   print(errs());
 }
 
@@ -124,13 +124,13 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
     bmap = isl_basic_map_add_constraint(bmap, c);
     polly_map *map = isl_map_from_basic_map(bmap);
 
-    DataRef::AccessType AccessType;
+    MemoryAccess::AccessType AccessType;
     if (AffFunc.isRead())
-      AccessType = DataRef::Read;
+      AccessType = MemoryAccess::Read;
     else
-      AccessType = DataRef::Write;
+      AccessType = MemoryAccess::Write;
 
-    DataRef *access = new DataRef(AffFunc.getBaseAddr(), AccessType, map);
+    MemoryAccess *access = new MemoryAccess(AffFunc.getBaseAddr(), AccessType, map);
     MemAccs.push_back(access);
   }
 }
@@ -276,7 +276,7 @@ void SCoPStmt::print(raw_ostream &OS) const {
 
   OS << "\n";
 
-  for (DataRefVec::const_iterator I = MemAccs.begin(), E = MemAccs.end();
+  for (MemoryAccessVec::const_iterator I = MemAccs.begin(), E = MemAccs.end();
       I != E; ++I) {
     (*I)->print(OS);
     OS << "\n";

@@ -42,14 +42,12 @@ class TempSCoP;
 
 //===----------------------------------------------------------------------===//
 /// @brief Represent memory accesses in statements.
-///
-/// XXX: Or call it DataReference?
-class DataRef {
+class MemoryAccess {
   //===-------------------------------------------------------------------===//
   // DO NOT IMPLEMENT
-  DataRef(const DataRef &);
+  MemoryAccess(const MemoryAccess &);
   // DO NOT IMPLEMENT
-  const DataRef &operator=(const DataRef &);
+  const MemoryAccess &operator=(const MemoryAccess &);
 
 public:
   enum AccessType {
@@ -65,12 +63,12 @@ private:
   const Value* BaseAddr;
 
 public:
-  DataRef(const Value *Base, AccessType AccType, polly_map *accFunc)
+  MemoryAccess(const Value *Base, AccessType AccType, polly_map *accFunc)
     : AccFunc(accFunc, AccType), BaseAddr(Base) {}
 
-  ~DataRef();
+  ~MemoryAccess();
 
-  bool isRead() const { return AccFunc.getInt() == DataRef::Read; }
+  bool isRead() const { return AccFunc.getInt() == MemoryAccess::Read; }
 
   polly_map *getAccessFunction() { return AccFunc.getPointer(); }
   polly_map *getAccessFunction() const { return AccFunc.getPointer(); }
@@ -131,8 +129,8 @@ class SCoPStmt {
   /// a look at cloog.org to find a complete description.
   polly_map *Scattering;
 
-  typedef SmallVector<DataRef*, 8> DataRefVec;
-  DataRefVec MemAccs;
+  typedef SmallVector<MemoryAccess*, 8> MemoryAccessVec;
+  MemoryAccessVec MemAccs;
 
   typedef SmallVector<const SCEVAddRecExpr*, 8> IndVarVec;
   void addConditionsToDomain(TempSCoP &tempSCoP,
@@ -179,7 +177,7 @@ public:
 
   void setBasicBlock(BasicBlock *Block) { BB = Block; }
 
-  typedef DataRefVec::iterator memacc_iterator;
+  typedef MemoryAccessVec::iterator memacc_iterator;
   memacc_iterator memacc_begin() { return MemAccs.begin(); }
   memacc_iterator memacc_end() { return MemAccs.end(); }
 
