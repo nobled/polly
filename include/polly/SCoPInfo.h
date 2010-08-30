@@ -51,27 +51,27 @@ class MemoryAccess {
 
 public:
   enum AccessType {
-    Read, // Or we could call it "Use"
-    Write // Or define
+    Read,
+    Write,
+    MayWrite
   };
 
 private:
-  // The access function map iteration domain to memory location.
-  PointerIntPair<polly_map*, 1, AccessType> AccFunc;
+  polly_map *AccessRelation;
+  enum AccessType Type;
 
-  // Base address and access type.
   const Value* BaseAddr;
 
 public:
-  MemoryAccess(const Value *Base, AccessType AccType, polly_map *accFunc)
-    : AccFunc(accFunc, AccType), BaseAddr(Base) {}
+  MemoryAccess(const Value *Base, AccessType AccType, polly_map *accRel)
+    : AccessRelation(accRel), Type(AccType), BaseAddr(Base) {}
 
   ~MemoryAccess();
 
-  bool isRead() const { return AccFunc.getInt() == MemoryAccess::Read; }
+  bool isRead() const { return Type == MemoryAccess::Read; }
 
-  polly_map *getAccessFunction() { return AccFunc.getPointer(); }
-  polly_map *getAccessFunction() const { return AccFunc.getPointer(); }
+  polly_map *getAccessFunction() { return AccessRelation; }
+  polly_map *getAccessFunction() const { return AccessRelation; }
 
   const Value *getBaseAddr() const {
     return BaseAddr;
@@ -84,7 +84,6 @@ public:
 
   /// @brief Print the MemoryAccess to stderr.
   void dump() const;
-
 };
 
 //===----------------------------------------------------------------------===//
