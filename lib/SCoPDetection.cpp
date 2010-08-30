@@ -438,6 +438,10 @@ bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
     if (!isValidInstruction(*I, RefRegion))
       return false;
 
+  Loop *L = LI->getLoopFor(&BB);
+  if (L && L->getHeader() == &BB && !isValidLoop(L, RefRegion))
+    return false;
+
   return true;
 }
 
@@ -524,11 +528,6 @@ bool SCoPDetection::isValidRegion(Region &RefRegion,
         return false;
     }
   }
-
-  Loop *L = castToLoop(CurRegion, *LI);
-
-  if (L && !isValidLoop(L, RefRegion))
-    return false;
 
   return true;
 }
