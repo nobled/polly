@@ -147,7 +147,7 @@ public:
 };
 
 //===----------------------------------------------------------------------===//
-// SCoPDetection Implementation.
+// SCoPDetection.
 
 bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
                                           bool isMemoryAccess) const {

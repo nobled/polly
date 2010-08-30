@@ -16,16 +16,8 @@
 
 #include "polly/PollyType.h"
 #include "polly/SCoPDetection.h"
-#include "polly/Support/AffineSCEVIterator.h"
 
-#include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/RegionPass.h"
-#include "llvm/Analysis/Passes.h"
-#include "llvm/Analysis/ScalarEvolution.h"
-#include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/ADT/PointerIntPair.h"
-#include "llvm/Transforms/Scalar.h"
 
 using namespace llvm;
 

@@ -1,4 +1,4 @@
-//===----------- TempSCoPExtraction.cpp  - Extract TempSCoPs -----*- C++ -*-===//
+//===---------- TempSCoPExtraction.cpp  - Extract TempSCoPs -----*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,25 +12,16 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/TempSCoPInfo.h"
-#include "polly/SCoPDetection.h"
-#include "polly/Support/SCoPHelper.h"
-#include "polly/Support/GmpConv.h"
-#include "polly/Support/AffineSCEVIterator.h"
-#include "polly/LinkAllPasses.h"
 
-#include "llvm/Intrinsics.h"
-#include "llvm/ADT/Statistic.h"
+#include "polly/LinkAllPasses.h"
+#include "polly/Support/AffineSCEVIterator.h"
+#include "polly/Support/GmpConv.h"
+#include "polly/Support/SCoPHelper.h"
+
 #include "llvm/Analysis/RegionIterator.h"
-#include "llvm/Analysis/ScalarEvolutionExpressions.h"
-#include "llvm/Assembly/Writer.h"
-#include "llvm/Support/CFG.h"
-#include "llvm/Support/CallSite.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/ErrorHandling.h"
 
 #define DEBUG_TYPE "polly-analyze-ir"
 #include "llvm/Support/Debug.h"
-
 
 #include "isl_constraint.h"
 
@@ -68,11 +59,10 @@ SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
 
 static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
                            bool isSigned = true) {
-  if (Coeff) { // If the coefficient exists.
+  if (Coeff) {
     const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
     const APInt &CI = C->getValue()->getValue();
-    // Convert i >= expr to i - expr >= 0
-    MPZ_from_APInt(v, negative ?(-CI):CI, isSigned);
+    MPZ_from_APInt(v, negative ? (-CI) : CI, isSigned);
   } else
     isl_int_set_si(v, 0);
 }
