@@ -150,50 +150,37 @@ public:
 // SCoPDetection Implementation.
 
 bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
-                                          BasicBlock *CurBB,
-                                          bool isMemAcc) const {
-  bool PtrExist = false;
+                                          bool isMemoryAccess) const {
+  bool PointerExists = false;
   assert(S && "S can not be null!");
 
   if (isa<SCEVCouldNotCompute>(S))
     return false;
 
-  Loop *Scope = LI->getLoopFor(CurBB);
-
-  // Compute S at the smallest loop so the addrec from other loops may
-  // evaluate to constant.
-  S = SE->getSCEVAtScope(S, Scope);
-
-  for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
-      I != E; ++I) {
+  for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end(); I != E;
+       ++I) {
     // The constant part must be a SCEVConstant.
     // TODO: support sizeof in coefficient.
     if (!isa<SCEVConstant>(I->second))
       return false;
 
     const SCEV *Var = I->first;
-    // S is not fully evaluate at current scope, it is not our jobs to fully
-    // evaluate it here.
-    if (Var != SE->getSCEVAtScope(Var, Scope))
-      return false;
 
-    // The constant offset is affine.
+    // A constant offset is affine.
     if(isa<SCEVConstant>(Var))
       continue;
 
-    // The pointer is OK.
+    // Memory accesses are allowed to have a base pointer.
     if (Var->getType()->isPointerTy()) {
-      // If this is not expect a memory access
-      if (!isMemAcc) return false;
+      if (!isMemoryAccess) return false;
 
-      assert(I->second->isOne()
-        && "The coefficient of pointer expect is one!");
+      assert(I->second->isOne() && "Only one as pointer coefficient allowed.");
       const SCEVUnknown *BaseAddr = dyn_cast<SCEVUnknown>(Var);
 
       if (!BaseAddr) return false;
 
-      assert(!PtrExist && "We got two pointer?");
-      PtrExist = true;
+      assert(!PointerExists && "Found second base pointer.");
+      PointerExists = true;
       continue;
     }
 
@@ -201,18 +188,9 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
         || isIndVar(Var, RefRegion, *LI, *SE))
       continue;
 
-    // A bad SCEV found.
-    DEBUG(dbgs() << "Bad SCEV: " << *Var << " at loop";
-          if (Scope)
-            WriteAsOperand(dbgs(), Scope->getHeader(), false);
-          else
-            dbgs() << "Top Level";
-          dbgs()  << "Cur BB: " << CurBB->getName()
-            << "Ref Region: " << RefRegion.getNameStr()
-            << "\n");
     return false;
   }
-  return !isMemAcc || PtrExist;
+  return !isMemoryAccess || PointerExists;
 }
 
 bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
@@ -269,9 +247,9 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
     }
 
     bool affineLHS = isValidAffineFunction(SE->getSCEV(ICmp->getOperand(0)),
-                                            RefRegion, &BB, false);
+                                            RefRegion, false);
     bool affineRHS = isValidAffineFunction(SE->getSCEV(ICmp->getOperand(1)),
-                                            RefRegion, &BB, false);
+                                            RefRegion, false);
 
     if (!(affineLHS && affineRHS)) {
       DEBUG(dbgs() << "Non affine branch instruction in BB: ";
@@ -329,8 +307,7 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
                                         Region &RefRegion) const {
   Value *Ptr = getPointerOperand(Inst);
 
-  if (!isValidAffineFunction(SE->getSCEV(Ptr), RefRegion, Inst.getParent(),
-                             true)) {
+  if (!isValidAffineFunction(SE->getSCEV(Ptr), RefRegion, true)) {
     DEBUG(dbgs() << "Bad memory addr " << *SE->getSCEV(Ptr) << "\n");
     STATSCOP(AffFunc);
     return false;
@@ -455,7 +432,7 @@ bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
 
   // Is the loop count affine?
   const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
-  if (!isValidAffineFunction(LoopCount, RefRegion, L->getHeader(), false)) {
+  if (!isValidAffineFunction(LoopCount, RefRegion, false)) {
     STATSCOP(LoopBound);
     return false;
   }

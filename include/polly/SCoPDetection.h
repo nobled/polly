@@ -128,13 +128,13 @@ class SCoPDetection : public FunctionPass {
   /// @param S          The SCEV expression to be checked
   /// @param RefRegion  The reference scope to check SCEV, it help to find out
   ///                   induction variables and parameters
-  /// @param CurBB      The BasicBlock that containing this expression, it help
-  ///                   to find out induction variables and parameters, too 
+  /// @param isMemoryAccess Does S represent a memory access. In this case one
+  ///                       base pointer is allowed.
   ///
   /// @return True if the SCEV expression is affine, false otherwise
   ///
-  bool isValidAffineFunction(const SCEV *S, Region &RefRegion, BasicBlock *CurBB,
-    bool isMemAcc) const;
+  bool isValidAffineFunction(const SCEV *S, Region &RefRegion,
+                             bool isMemoryAccess) const;
 
   /// @brief Is a loop valid with respect to a given region.
   ///
