@@ -27,7 +27,7 @@ using namespace llvm;
 using namespace polly;
 
 //===----------------------------------------------------------------------===//
-// Some statistic
+// Statistics.
 
 STATISTIC(ValidRegion, "Number of regions that a valid part of SCoP");
 
@@ -35,8 +35,7 @@ STATISTIC(ValidRegion, "Number of regions that a valid part of SCoP");
                                            "Number of bad regions for SCoP: "\
                                            DESC)
 
-#define STATSCOP(NAME); assert(!verifying && #NAME);\
-                        ++Bad##NAME##ForSCoP;
+#define STATSCOP(NAME); assert(!verifying && #NAME); ++Bad##NAME##ForSCoP;
 
 BADSCOP_STAT(CFG,         "CFG too complex");
 BADSCOP_STAT(IndVar,      "Non canonical induction variable in loop");
@@ -313,8 +312,6 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
     return false;
   }
 
-  // FIXME: Why can expression like int *j = **k; where k has int ** type, pass
-  //        the affine function check?
   return true;
 }
 
@@ -342,6 +339,7 @@ bool SCoPDetection::hasScalarDependency(Instruction &Inst,
     if (Instruction *Use = dyn_cast<Instruction>(*UI))
       if (!RefRegion.contains(Use->getParent()))
         return true;
+
   return false;
 }
 
