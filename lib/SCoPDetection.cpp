@@ -480,8 +480,6 @@ bool SCoPDetection::isValidRegion(Region &R) const {
 }
 
 bool SCoPDetection::runOnFunction(llvm::Function &F) {
-  DT = &getAnalysis<DominatorTree>();
-  PDT = &getAnalysis<PostDominatorTree>();
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   RI = &getAnalysis<RegionInfo>();

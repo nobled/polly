@@ -25,8 +25,6 @@ namespace llvm {
   class Region;
   class LoopInfo;
   class Loop;
-  class PostDominatorTree;
-  class DominatorTree;
   class ScalarEvolution;
   class SCEV;
   class SCEVAddRecExpr;
@@ -52,8 +50,6 @@ class SCoPDetection : public FunctionPass {
   ScalarEvolution* SE;
   LoopInfo *LI;
   RegionInfo *RI;
-  DominatorTree *DT;
-  PostDominatorTree *PDT;
   //@}
 
   // Remember the valid regions
