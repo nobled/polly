@@ -180,36 +180,26 @@ bool polly::isInvariant(const SCEV *S, Region &R) {
 bool polly::isParameter(const SCEV *Var, Region &RefRegion,
                         LoopInfo &LI, ScalarEvolution &SE) {
   assert(Var && "Var can not be null!");
+
   if (!isInvariant(Var, RefRegion))
+    return false;
+
+  if (isa<SCEVAddRecExpr>(Var))
+    return true;
+
+  if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(Var)) {
+    if (isa<PHINode>(U->getValue()))
       return false;
 
-  if (isa<SCEVAddRecExpr>(Var)) {
-    DEBUG(dbgs() << "Find AddRec: " << *cast<SCEVAddRecExpr>(Var)
-      << " at region: " << RefRegion.getNameStr() << " as param\n");
-    // The indvar only expect come from outer loop
-    // Or from a loop whose backend taken count could not compute.
-    assert(
-      (cast<SCEVAddRecExpr>(Var)->getLoop()->contains(getScopeLoop(RefRegion,
-                                                                   LI))
-          || isa<SCEVCouldNotCompute>(
-               SE.getBackedgeTakenCount(cast<SCEVAddRecExpr>(Var)->getLoop())))
-         && "Where comes the indvar?");
-    return true;
-  } else if (const SCEVUnknown *U = dyn_cast<SCEVUnknown>(Var)) {
-    // Some SCEVUnknown will depend on loop variant or conditions:
-    // 1. Phi node as SCEVUnknown is not allow.
-    if (isa<PHINode>(U->getValue()))
-        return false;
-    // UndefValue are not a valid parameter.
-    else if(isa<UndefValue>(U->getValue()))
+    if(isa<UndefValue>(U->getValue()))
       return false;
-    // TODO: add others conditions.
+
     return true;
   }
-  // FIXME: Should we accept casts?
-  else if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var))
+
+  if (const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(Var))
     return isParameter(Cast->getOperand(), RefRegion, LI, SE);
-  // Not a SCEVUnknown.
+
   return false;
 }
 
