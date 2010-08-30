@@ -264,16 +264,9 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
   if (L && L->getExitingBlock() == &BB)
     return true;
 
-  // Only well structured conditions.
-  BasicBlock *SuccZero = RI->getMaxRegionExit(Br->getSuccessor(0));
-  BasicBlock *SuccOne = RI->getMaxRegionExit(Br->getSuccessor(1));
-
-  if (!SuccZero)
-    SuccZero = Br->getSuccessor(0);
-  if (!SuccOne)
-    SuccOne = Br->getSuccessor(1);
-
-  if (SuccZero != SuccOne) {
+  // Allow perfectly nested conditions.
+  Region *R = RI->getRegionFor(&BB);
+  if (R->getEntry() != &BB) {
     DEBUG(dbgs() << "Non well structured condition starting at BB: ";
           WriteAsOperand(dbgs(), &BB, false);
           dbgs() << "\n");
@@ -281,7 +274,6 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
     return false;
   }
 
-  // Everything is ok if we reach here.
   return true;
 }
 
