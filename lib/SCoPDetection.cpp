@@ -151,7 +151,7 @@ public:
 bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
                                           bool isMemoryAccess) const {
   bool PointerExists = false;
-  assert(S && "S can not be null!");
+  assert(S && "S must not be null!");
 
   if (isa<SCEVCouldNotCompute>(S))
     return false;
@@ -245,12 +245,13 @@ bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
       return false;
     }
 
-    bool affineLHS = isValidAffineFunction(SE->getSCEV(ICmp->getOperand(0)),
-                                            RefRegion, false);
-    bool affineRHS = isValidAffineFunction(SE->getSCEV(ICmp->getOperand(1)),
-                                            RefRegion, false);
+    const SCEV *ScevLHS = SE->getSCEV(ICmp->getOperand(0));
+    const SCEV *ScevRHS = SE->getSCEV(ICmp->getOperand(1));
 
-    if (!(affineLHS && affineRHS)) {
+    bool affineLHS = isValidAffineFunction(ScevLHS, RefRegion);
+    bool affineRHS = isValidAffineFunction(ScevRHS, RefRegion);
+
+    if (!affineLHS || !affineRHS) {
       DEBUG(dbgs() << "Non affine branch instruction in BB: ";
             WriteAsOperand(dbgs(), &BB, false);
             dbgs() << "\n");
@@ -286,7 +287,7 @@ bool SCoPDetection::isValidCallInst(CallInst &CI) {
 
   Function *CalledFunction = CI.getCalledFunction();
 
-  // Indirect call is not support now.
+  // Indirect calls are not supported.
   if (CalledFunction == 0)
     return false;
 
@@ -297,9 +298,10 @@ bool SCoPDetection::isValidCallInst(CallInst &CI) {
 bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
                                         Region &RefRegion) const {
   Value *Ptr = getPointerOperand(Inst);
+  const SCEV *AccessFunction = SE->getSCEV(Ptr);
 
-  if (!isValidAffineFunction(SE->getSCEV(Ptr), RefRegion, true)) {
-    DEBUG(dbgs() << "Bad memory addr " << *SE->getSCEV(Ptr) << "\n");
+  if (!isValidAffineFunction(AccessFunction, RefRegion, true)) {
+    DEBUG(dbgs() << "Bad memory addr " << *AccessFunction << "\n");
     STATSCOP(AffFunc);
     return false;
   }

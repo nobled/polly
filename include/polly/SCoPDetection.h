@@ -107,7 +107,7 @@ class SCoPDetection : public FunctionPass {
   /// @return True if the SCEV expression is affine, false otherwise
   ///
   bool isValidAffineFunction(const SCEV *S, Region &RefRegion,
-                             bool isMemoryAccess) const;
+                             bool isMemoryAccess = false) const;
 
   /// @brief Is a loop valid with respect to a given region.
   ///
