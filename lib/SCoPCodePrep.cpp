@@ -164,8 +164,8 @@ void SCoPCodePrep::print(raw_ostream &OS, const Module *) const {
 
 char SCoPCodePrep::ID = 0;
 
-RegisterPass<SCoPCodePrep> X("polly-code-prep",
-                              "Polly - Code preparation for SCoP detection",
+RegisterPass<SCoPCodePrep> X("polly-prepare",
+                              "Polly - Prepare code for polly.",
                               false, true);
 
 char &polly::SCoPCodePrepID = SCoPCodePrep::ID;
