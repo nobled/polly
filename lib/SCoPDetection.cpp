@@ -38,9 +38,6 @@ STATISTIC(ValidRegion, "Number of regions that a valid part of SCoP");
 #define STATSCOP(NAME); assert(!verifying && #NAME);\
                         ++Bad##NAME##ForSCoP;
 
-// Note: This also implies loop bounds can not be computed,
-// but this one is checked before the loop bounds.
-BADSCOP_STAT(LoopNest,    "Some loop has multiple exits");
 BADSCOP_STAT(CFG,         "CFG too complex");
 BADSCOP_STAT(IndVar,      "Non canonical induction variable in loop");
 BADSCOP_STAT(LoopBound,   "Loop bounds can not be computed");
@@ -507,13 +504,6 @@ bool SCoPDetection::isValidRegion(Region &R) const {
 
 bool SCoPDetection::isValidRegion(Region &RefRegion,
                                   Region &CurRegion) const {
-  // Does getScopeLoop work on the current loop nest and region tree?
-  if (getScopeLoop(CurRegion, *LI)
-      != LI->getLoopFor(CurRegion.getEntry())) {
-    STATSCOP(LoopNest);
-    return false;
-  }
-
   // Visit all sub region nodes.
   for (Region::element_iterator I = CurRegion.element_begin(),
        E = CurRegion.element_end(); I != E; ++I) {
