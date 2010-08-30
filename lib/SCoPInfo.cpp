@@ -12,17 +12,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/TempSCoPInfo.h"
+
 #include "polly/SCoPInfo.h"
 #include "polly/LinkAllPasses.h"
-#include "polly/Support/GmpConv.h"
 #include "polly/Support/SCoPHelper.h"
 
 #include "llvm/ADT/Statistic.h"
-#include "llvm/Analysis/RegionIterator.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
-#include "llvm/Assembly/Writer.h"
-#include "llvm/Support/CFG.h"
-#include "llvm/Support/CommandLine.h"
+#include "llvm/Analysis/RegionIterator.h"
 
 #define DEBUG_TYPE "polly-scops"
 #include "llvm/Support/Debug.h"

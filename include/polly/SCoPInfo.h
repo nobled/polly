@@ -15,23 +15,17 @@
 #define POLLY_SCOP_INFO_H
 
 #include "polly/PollyType.h"
-
-#include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/RegionPass.h"
-#include "llvm/Analysis/Passes.h"
-#include "llvm/Analysis/ScalarEvolution.h"
-#include "llvm/Analysis/ScalarEvolutionExpressions.h"
-#include "llvm/Analysis/LoopInfo.h"
-#include "llvm/ADT/PointerIntPair.h"
-#include "llvm/ADT/PointerUnion.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/Scalar.h"
-
-#include <set>
-#include <map>
 
 using namespace llvm;
+
+namespace llvm {
+  class SCEV;
+  class ScalarEvolution;
+  class SCEVAddRecExpr;
+  class Loop;
+  class LoopInfo;
+}
 
 namespace polly {
 
