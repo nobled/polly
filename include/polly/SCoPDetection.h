@@ -77,20 +77,20 @@ class SCoPDetection : public FunctionPass {
   /// @return True if R is a SCoP, false otherwise.
   bool isValidRegion(Region &R) const;
 
-  // Check if the instruction is a valid function call.
+  /// @brief Check if a call instruction can be part of a SCoP.
   static bool isValidCallInst(CallInst &CI);
 
-  // Check is a memory access is valid.
+  /// @brief Check if a memory access can be part of a SCoP.
   bool isValidMemoryAccess(Instruction &Inst, Region &RefRegion) const;
 
+  /// @brief Check if an instruction has any non trivial scalar dependencies
+  ///        as part of a SCoP.
   bool hasScalarDependency(Instruction &Inst, Region &RefRegion) const;
 
-  // Check if the Instruction is a valid part of SCoP, return true and extract
-  // the corresponding information, return false otherwise.
+  /// @brief Check if an instruction can be part of a SCoP.
   bool isValidInstruction(Instruction &I, Region &RefRegion) const;
 
-  // Check if the BB is a valid part of SCoP, return true and extract the
-  // corresponding information, return false otherwise.
+  /// @brief Check if the BB can be part of a SCoP.
   bool isValidBasicBlock(BasicBlock &BB, Region &RefRegion) const;
 
   /// @brief Check if the control flow in a basic block is valid.
