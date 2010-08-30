@@ -494,30 +494,12 @@ bool SCoPDetection::isValidRegion(Region &R) const {
     }
   }
 
-  if (!isValidRegion(R,R))
-    return false;
+  for (Region::block_iterator I = R.block_begin(), E = R.block_end(); I != E;
+       ++I)
+    if (!isValidBasicBlock(*(I->getNodeAs<BasicBlock>()), R))
+      return false;
 
   DEBUG(dbgs() << "OK\n");
-
-  return true;
-}
-
-bool SCoPDetection::isValidRegion(Region &RefRegion,
-                                  Region &CurRegion) const {
-  // Visit all sub region nodes.
-  for (Region::element_iterator I = CurRegion.element_begin(),
-       E = CurRegion.element_end(); I != E; ++I) {
-    if (I->isSubRegion()) {
-      Region &subR = *(I->getNodeAs<Region>());
-      if (!isValidRegion(RefRegion, subR))
-        return false;
-    } else {
-      BasicBlock &BB = *(I->getNodeAs<BasicBlock>());
-
-      if (!isValidBasicBlock(BB, RefRegion))
-        return false;
-    }
-  }
 
   return true;
 }

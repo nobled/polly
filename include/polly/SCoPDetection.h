@@ -94,17 +94,6 @@ class SCoPDetection : public FunctionPass {
   /// @return True it R is a SCoP, false otherwise.
   bool isValidRegion(Region &R) const;
 
-  /// @brief Check if a Region is a valid element of a SCoP.
-  ///
-  ///
-  /// @param RefRegion The region in respect to which the correctness is
-  ///                        checked.
-  /// @param CurRegion The region that is checked to be a valid element of
-  ///                      the RefRegion.
-  ///
-  /// @return Return true if R is a valid subregion of R.
-  bool isValidRegion(Region &RefRegion, Region &CurRegion) const;
-
   // Check if the instruction is a valid function call.
   static bool isValidCallInst(CallInst &CI);
 
