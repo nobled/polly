@@ -56,6 +56,10 @@ class SCoPDetection : public FunctionPass {
   typedef std::set<const Region*> RegionSet;
   RegionSet ValidRegions;
 
+  // Try to expand the region R. If R can be expanded return the expanded
+  // region, NULL otherwise.
+  Region *expandRegion(Region &R);
+
   // Find the SCoPs in this region tree.
   void findSCoPs(Region &R);
 

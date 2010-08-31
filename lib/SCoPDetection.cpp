@@ -432,7 +432,44 @@ bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
   return true;
 }
 
+Region *SCoPDetection::expandRegion(Region &R) {
+  Region *CurrentRegion = &R;
+  Region *TmpRegion = R.getExpandedRegion();
+
+  DEBUG(dbgs() << "\tExpanding " << R.getNameStr() << "\n");
+
+  while (TmpRegion) {
+    DEBUG(dbgs() << "\t\tTrying " << TmpRegion->getNameStr() << "\n");
+
+    if (!allBlocksValid(*TmpRegion))
+      break;
+
+    if (isValidExit(*TmpRegion)) {
+      if (CurrentRegion != &R)
+        delete CurrentRegion;
+
+      CurrentRegion = TmpRegion;
+    }
+
+    Region *TmpRegion2 = TmpRegion->getExpandedRegion();
+
+    if (TmpRegion != &R && TmpRegion != CurrentRegion)
+      delete TmpRegion;
+
+    TmpRegion = TmpRegion2;
+  }
+
+  if (&R == CurrentRegion)
+    return NULL;
+
+  DEBUG(dbgs() << "\tto " << CurrentRegion->getNameStr() << "\n");
+
+  return CurrentRegion;
+}
+
+
 void SCoPDetection::findSCoPs(Region &R) {
+
   if (isValidRegion(R)) {
     ++ValidRegion;
     ValidRegions.insert(&R);
@@ -441,6 +478,40 @@ void SCoPDetection::findSCoPs(Region &R) {
 
   for (Region::iterator I = R.begin(), E = R.end(); I != E; ++I)
     findSCoPs(**I);
+
+  // Try to expand regions.
+  //
+  // As the region tree normally only contains canonical regions, non canonical
+  // regions that form a SCoP are not found. Therefore, those non canonical
+  // regions are checked by expanding the canonical ones.
+
+  std::vector<Region*> ToExpand;
+
+  for (Region::iterator I = R.begin(), E = R.end(); I != E; ++I)
+    ToExpand.push_back(*I);
+
+  for (std::vector<Region*>::iterator RI = ToExpand.begin(),
+       RE = ToExpand.end(); RI != RE; ++RI) {
+    Region *CurrentRegion = *RI;
+
+    // Skip invalid regions. Regions may become invalid, if they are element of
+    // an already expanded region.
+    if (ValidRegions.find(CurrentRegion) == ValidRegions.end())
+      continue;
+
+    Region *ExpandedR = expandRegion(*CurrentRegion);
+
+    if (!ExpandedR)
+      continue;
+
+    R.addSubRegion(ExpandedR, true);
+    ValidRegions.insert(ExpandedR);
+    ValidRegions.erase(CurrentRegion);
+
+    for (Region::iterator I = ExpandedR->begin(), E = ExpandedR->end(); I != E;
+         ++I)
+      ValidRegions.erase(*I);
+  }
 }
 
 bool SCoPDetection::allBlocksValid(Region &R) const {
