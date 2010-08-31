@@ -63,5 +63,5 @@ return:                                           ; preds = %bb3.us, %entry
   ret void
 }
 
-; CHECK: Valid Region for SCoP: bb.nph.us => return.loopexit
+; CHECK: Valid Region for SCoP: bb.nph.us => return
 
