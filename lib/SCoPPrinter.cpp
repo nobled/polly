@@ -48,8 +48,12 @@ public:
 
     Function *F = S->getRegion().getEntry()->getParent();
     fflush(stdout);
-    outs() << "\nIn function: '" << F->getNameStr() << "' SCoP: "
+
+    std::string output;
+    raw_string_ostream OS(output);
+    OS << "In function: '" << F->getNameStr() << "' SCoP: "
       << S->getRegion().getNameStr() << ":\n";
+    fprintf(stdout, "%s", OS.str().c_str());
 
     CLooG C = CLooG(S);
     C.pprint();
