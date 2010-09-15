@@ -148,6 +148,11 @@ public:
 //===----------------------------------------------------------------------===//
 // SCoPDetection.
 
+bool SCoPDetection::isMaxRegionInSCoP(const Region &R) const {
+  // The Region is valid only if it could be found in the set.
+  return ValidRegions.count(&R);
+}
+
 bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
                                           bool isMemoryAccess) const {
   bool PointerExists = false;

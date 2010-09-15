@@ -379,8 +379,11 @@ bool IndependentBlocks::runOnRegion(Region *R, RGPassManager &RGM) {
   SD = &getAnalysis<SCoPDetection>();
   SE = &getAnalysis<ScalarEvolution>();
 
-  if (!SD->isMaxRegionInSCoP(*R)) return false;
-  
+  if (!SD->isMaxRegionInSCoP(*R)) {
+    CurR = NULL;
+    return false;
+  }
+
   CurR = R;
   bool Changed = createIndependentBlocks(CurR);
 
@@ -397,6 +400,12 @@ bool IndependentBlocks::runOnRegion(Region *R, RGPassManager &RGM) {
 }
 
 void IndependentBlocks::verifyAnalysis() const {
+  if (!CurR)
+    return;
+
+  if (!SD->isMaxRegionInSCoP(*CurR))
+    return;
+
   verifySCoP(CurR);
 }
 

@@ -139,10 +139,7 @@ public:
   /// @param R The Region to test if it is maximum.
   ///
   /// @return Return true if R is the maximum Region in a SCoP, false otherwise.
-  bool isMaxRegionInSCoP(const Region &R) const {
-    // The Region is valid only if it could be found in the set.
-    return ValidRegions.count(&R);
-  }
+  bool isMaxRegionInSCoP(const Region &R) const;
 
   /// @name Maximum Region In SCoPs Iterators
   ///
