@@ -221,10 +221,9 @@ void SCoPImporter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<SCoPInfo>();
 }
 
-static RegisterPass<SCoPImporter> A("polly-import",
-                                    "Polly - Import SCoPs with OpenSCoP library"
-                                    " (Reads a .scop file for each SCoP)"
-                                    );
+INITIALIZE_PASS(SCoPImporter, "polly-import",
+                "Polly - Import scops with OpenSCoP library"
+                " (Reads a .scop file for each SCoP)", true, true);
 
 Pass *polly::createSCoPImporterPass() {
   return new SCoPImporter();
