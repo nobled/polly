@@ -509,9 +509,6 @@ bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
 
   TSCoP = buildTempSCoP(*R);
 
-  // And forget the SCoP if we remove the region.
-  SD->forgetSCoP(*R);
-
   return false;
 }
 

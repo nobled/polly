@@ -19,6 +19,7 @@
 #include "polly/Support/SCoPHelper.h"
 #include "polly/CLooG.h"
 #include "polly/SCoPDetection.h"
+#include "polly/TempSCoPInfo.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/CommandLine.h"
@@ -481,6 +482,7 @@ class CodeGeneration : public RegionPass {
   SCoP *S;
   DominatorTree *DT;
   ScalarEvolution *SE;
+  SCoPDetection *SD;
   CLooG *C;
   LoopInfo *LI;
 
@@ -534,6 +536,7 @@ class CodeGeneration : public RegionPass {
     DT = &getAnalysis<DominatorTree>();
     SE = &getAnalysis<ScalarEvolution>();
     LI = &getAnalysis<LoopInfo>();
+    SD = &getAnalysis<SCoPDetection>();
 
     if (!S) {
       C = 0;
@@ -604,6 +607,10 @@ class CodeGeneration : public RegionPass {
       DT->eraseNode((*I)->getBlock());
 
     R->getParent()->removeSubRegion(R);
+
+    // And forget the SCoP if we remove the region.
+    SD->forgetSCoP(*R);
+
     return false;
   }
 
@@ -622,9 +629,12 @@ class CodeGeneration : public RegionPass {
 
     AU.addPreserved<LoopInfo>();
     AU.addPreserved<DominatorTree>();
+    AU.addPreserved<PostDominatorTree>();
     AU.addPreserved<SCoPDetection>();
     AU.addPreserved<ScalarEvolution>();
     AU.addPreserved<RegionInfo>();
+    AU.addPreserved<SCoPInfo>();
+    AU.addPreservedID(IndependentBlocksID);
   }
 };
 }
