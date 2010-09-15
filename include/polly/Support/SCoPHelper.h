@@ -68,6 +68,6 @@ namespace polly {
 
   // Helper function for LLVM-IR about SCoP.
   llvm::BasicBlock *createSingleEntryEdge(llvm::Region *R, llvm::Pass *P);
-  void createSingleExitEdge(llvm::Region *R, llvm::Pass *P);
+  llvm::BasicBlock *createSingleExitEdge(llvm::Region *R, llvm::Pass *P);
 }
 #endif

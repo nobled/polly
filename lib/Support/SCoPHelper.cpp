@@ -255,24 +255,13 @@ BasicBlock *polly::createSingleEntryEdge(Region *R, Pass *P) {
   return newBB;
 }
 
-void polly::createSingleExitEdge(Region *R, Pass *P) {
+BasicBlock *polly::createSingleExitEdge(Region *R, Pass *P) {
   BasicBlock *BB = R->getExit();
-  int num = 0, i = 0;
 
+  SmallVector<BasicBlock*, 4> Preds;
   for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI)
     if (R->contains(*PI))
-      ++num;
+      Preds.push_back(*PI);
 
-  BasicBlock **Preds = new BasicBlock *[num];
-
-  for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI) {
-    if (R->contains(*PI)) {
-      Preds[i] = *PI;
-      ++i;
-    }
-  }
-
-  SplitBlockPredecessors(BB, Preds, num, ".region", P);
-
-  delete[] Preds;
+  return SplitBlockPredecessors(BB, Preds.data(), Preds.size(), ".region", P);
 }
