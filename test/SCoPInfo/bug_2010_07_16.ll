@@ -49,4 +49,4 @@ return:                                           ; preds = %bb54
   ret void
 }
 
-; CHECK: SCoP: bb24 => bb48      Parameters: ({0,+,1}<%bb54>, ), Max Loop Depth: 1
+; CHECK: SCoP: bb24 => bb48.region      Parameters: ({0,+,1}<%bb54>, ), Max Loop Depth: 1
