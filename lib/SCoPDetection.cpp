@@ -19,12 +19,18 @@
 
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/RegionIterator.h"
+#include "llvm/Support/CommandLine.h"
 
 #define DEBUG_TYPE "polly-detect"
 #include "llvm/Support/Debug.h"
 
 using namespace llvm;
 using namespace polly;
+
+static cl::opt<bool>
+AllowScalarDeps("polly-allow-scalar-deps",
+                cl::desc("Allow scalar dependences in SCoPs"),
+                cl::Hidden,  cl::init(false));
 
 //===----------------------------------------------------------------------===//
 // Statistics.
@@ -317,6 +323,29 @@ bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
 
 bool SCoPDetection::hasScalarDependency(Instruction &Inst,
                                         Region &RefRegion) const {
+  if (AllowScalarDeps) {
+    for (Instruction::use_iterator UI = Inst.use_begin(), UE = Inst.use_end();
+       UI != UE; ++UI)
+    if (Instruction *Use = dyn_cast<Instruction>(*UI))
+      if (!RefRegion.contains(Use->getParent())) {
+        // DirtyHack 1: PHINode user outside the SCoP is not allow, if this
+        // PHINode is induction variable, the scalar to array transform may break
+        // it and introduce a non-indvar PHINode, which is not allow in SCoP.
+        // This can be fix by:
+        // Introduce a IndependentBlockPrepare pass, which translate all PHINodes
+        // not in SCoP to array.
+        // The IndependentBlockPrepare pass can also split the entry block of
+        // the function to hold the alloca instruction created by scalar to array.
+        // and split the exit block of the SCoP so the new create load instruction
+        // for escape users will not break
+        // other SCoPs.
+        if (isa<PHINode>(Use))
+          return true;
+      }
+
+    return false;
+  }
+
   IndependentInstructionChecker Checker(RefRegion, LI);
 
   for (Instruction::op_iterator UI = Inst.op_begin(), UE = Inst.op_end();

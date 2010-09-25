@@ -40,6 +40,8 @@ struct IndependentBlocks : public FunctionPass {
   SCoPDetection *SD;
   LoopInfo *LI;
 
+  BasicBlock *AllocaBlock;
+
   static char ID;
 
   IndependentBlocks() : FunctionPass(ID) {}
@@ -128,6 +130,10 @@ struct IndependentBlocks : public FunctionPass {
 
   // Split the exit block to hold load instructions.
   bool splitExitBlock(Region *R);
+
+  bool translateScalarToArray(BasicBlock *BB, const Region *R);
+  bool translateScalarToArray(const Region *R);
+
   bool runOnFunction(Function &F);
   void verifyAnalysis() const;
   void verifySCoP(const Region *R) const;
@@ -177,7 +183,10 @@ void IndependentBlocks::moveOperandTree(Instruction *Inst, const Region *R,
 
       // If the SCoP Region does not contain N, skip it and all its operand and
       // continue. because we reach a "parameter".
-      if (!R->contains(Operand)) {
+      // FIXME: we must keep the predicate instruction inside the SCoP, otherwise
+      // it will be translated to a load instruction, and we can not handle load
+      // as affine predicate at this moment.
+      if (!R->contains(Operand) && !isa<TerminatorInst>(CurInst)) {
         DEBUG(dbgs() << "Out of region.\n");
         continue;
       }
@@ -364,6 +373,86 @@ bool IndependentBlocks::splitExitBlock(Region *R) {
   return true;
 }
 
+bool IndependentBlocks::translateScalarToArray(const Region *R) {
+  bool Changed = false;
+
+  for (Region::const_block_iterator SI = R->block_begin(), SE = R->block_end();
+       SI != SE; ++SI)
+    Changed |= translateScalarToArray((*SI)->getNodeAs<BasicBlock>(), R);
+
+  return Changed;
+}
+
+bool IndependentBlocks::translateScalarToArray(BasicBlock *BB,
+                                               const Region *R) {
+  bool changed = false;
+
+  SmallVector<Instruction*, 32> Insts;
+  for (BasicBlock::iterator II = BB->begin(), IE = --BB->end();
+       II != IE; ++II)
+    Insts.push_back(II);
+
+  while (!Insts.empty()) {
+    Instruction *Inst = Insts.pop_back_val();
+
+    if (isIndVar(Inst, LI))
+      continue;
+
+    SmallVector<Instruction*, 4> LoadInside, LoadOutside;
+    for (Instruction::use_iterator UI = Inst->use_begin(),
+         UE = Inst->use_end(); UI != UE; ++UI)
+      // Inst is referenced outside or referenced as an escaped operand.
+      if (Instruction *U = dyn_cast<Instruction>(*UI)) {
+        BasicBlock *UParent = U->getParent();
+
+        if (isEscapeUse(U, R))
+          LoadOutside.push_back(U);
+
+        if (isIndVar(U, LI))
+          continue;
+
+        if (R->contains(UParent) && isEscapeOperand(Inst, UParent, R))
+          LoadInside.push_back(U);
+      }      
+
+    if (!LoadOutside.empty() || !LoadInside.empty()) {
+      changed = true;
+
+      // Create the alloca.
+      AllocaInst *Slot = new AllocaInst(Inst->getType(), 0,
+                                        Inst->getName() + ".s2a",
+                                        AllocaBlock->begin());
+      assert(!isa<InvokeInst>(Inst) && "Unexpect Invoke in SCoP!");
+      // Store right after Inst.
+      BasicBlock::iterator StorePos = Inst;
+      (void) new StoreInst(Inst, Slot, ++StorePos);
+      
+      if (!LoadOutside.empty()) {
+        LoadInst *ExitLoad = new LoadInst(Slot, Inst->getName()+".loadoutside",
+                                          false, R->getExit()->getFirstNonPHI());
+
+        while (!LoadOutside.empty()) {
+          Instruction *U = LoadOutside.pop_back_val();
+          assert(!isa<PHINode>(U) && "Can not handle PHI node outside!");
+          SE->forgetValue(U);
+          U->replaceUsesOfWith(Inst, ExitLoad);
+        }
+      }
+      
+      while (!LoadInside.empty()) {
+        Instruction *U = LoadInside.pop_back_val();
+        assert(!isa<PHINode>(U) && "Can not handle PHI node outside!");
+        SE->forgetValue(U);
+        LoadInst *L = new LoadInst(Slot, Inst->getName()+".loadarray",
+                                   false, U);
+        U->replaceUsesOfWith(Inst, L);
+      }
+    }
+  }
+
+  return changed;
+}
+
 bool IndependentBlocks::isIndependentBlock(const Region *R,
                                            BasicBlock *BB) const {
   for (BasicBlock::iterator II = BB->begin(), IE = --BB->end();
@@ -418,6 +507,8 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
   // FIXME: If we set preserves cfg, the cfg only passes do not need to
   // be "addPreserved"?
   AU.addPreserved<DominatorTree>();
+  AU.addPreserved<DominanceFrontier>();
+  AU.addPreserved<PostDominatorTree>();
   AU.addRequired<RegionInfo>();
   AU.addPreserved<RegionInfo>();
   AU.addRequired<LoopInfo>();
@@ -435,6 +526,7 @@ bool IndependentBlocks::runOnFunction(llvm::Function &F) {
   SE = &getAnalysis<ScalarEvolution>();
 
   splitEntryBlock();
+  AllocaBlock = &F.getEntryBlock();
 
   bool Changed = false;
 
@@ -447,6 +539,12 @@ bool IndependentBlocks::runOnFunction(llvm::Function &F) {
     // This may change the RegionTree.
     Changed |= splitExitBlock(const_cast<Region*>(R));
   }
+
+  DEBUG(dbgs() << "Before Scalar to Array------->\n");
+  DEBUG(F.dump());
+
+  for (SCoPDetection::iterator I = SD->begin(), E = SD->end(); I != E; ++I)
+    Changed |= translateScalarToArray(*I);
 
   DEBUG(dbgs() << "After Independent Blocks------------->\n");
   DEBUG(F.dump());
