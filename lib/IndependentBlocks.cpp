@@ -33,15 +33,14 @@ using namespace polly;
 using namespace llvm;
 
 namespace {
-struct IndependentBlocks : public RegionPass {
-  Region *CurR;
+struct IndependentBlocks : public FunctionPass {
   ScalarEvolution *SE;
   SCoPDetection *SD;
   LoopInfo *LI;
 
   static char ID;
 
-  IndependentBlocks() : RegionPass(ID) {}
+  IndependentBlocks() : FunctionPass(ID) {}
 
   // Create new code for every instruction operator that can be expressed by a
   // SCEV.  Like this there are just two types of instructions left:
@@ -121,7 +120,7 @@ struct IndependentBlocks : public RegionPass {
   bool isIndependentBlock(const Region *R, BasicBlock *BB) const;
   bool areAllBlocksIndependent(const Region *R) const;
 
-  bool runOnRegion(Region *R, RGPassManager &RGM);
+  bool runOnFunction(Function &F);
   void verifyAnalysis() const;
   void verifySCoP(const Region *R) const;
   void getAnalysisUsage(AnalysisUsage &AU) const;
@@ -361,39 +360,33 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
 }
 
-bool IndependentBlocks::runOnRegion(Region *R, RGPassManager &RGM) {
+bool IndependentBlocks::runOnFunction(llvm::Function &F) {
   LI = &getAnalysis<LoopInfo>();
   SD = &getAnalysis<SCoPDetection>();
   SE = &getAnalysis<ScalarEvolution>();
 
-  if (!SD->isMaxRegionInSCoP(*R)) {
-    CurR = NULL;
-    return false;
+
+  bool Changed = false;
+
+  DEBUG(dbgs() << "Run IndepBlock on " << F.getName() << '\n');
+
+  for (SCoPDetection::iterator I = SD->begin(), E = SD->end(); I != E; ++I) {
+    const Region *R = *I;
+    Changed |= createIndependentBlocks(R);
+    Changed |= eliminateDeadCode(R);
   }
 
-  CurR = R;
-  bool Changed = createIndependentBlocks(CurR);
-
-  DEBUG(dbgs() << "Before Independent Blocks clean up------->\n");
-  DEBUG(CurR->getEntry()->getParent()->dump());
-
-  Changed |= eliminateDeadCode(CurR);
-
   DEBUG(dbgs() << "After Independent Blocks------------->\n");
-  DEBUG(CurR->getEntry()->getParent()->dump());
-  verifySCoP(CurR);
+  DEBUG(F.dump());
+
+  verifyAnalysis();
 
   return Changed;
 }
 
 void IndependentBlocks::verifyAnalysis() const {
-  if (!CurR)
-    return;
-
-  if (!SD->isMaxRegionInSCoP(*CurR))
-    return;
-
-  verifySCoP(CurR);
+  for (SCoPDetection::const_iterator I = SD->begin(), E = SD->end();I != E;++I)
+    verifySCoP(*I);
 }
 
 void IndependentBlocks::verifySCoP(const Region *R) const {
