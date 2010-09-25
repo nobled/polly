@@ -13,6 +13,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "polly/LinkAllPasses.h"
+#include "polly/Support/SCoPHelper.h"
 
 #include "llvm/Instruction.h"
 #include "llvm/Pass.h"
@@ -101,19 +102,11 @@ bool SCoPCodePrep::eliminatePHINodes(Function &F) {
 
         // As DemotePHIToStack does not support invoke edges, we have to leave
         // the PHINodes that have invoke edges.
-        bool hasInvoke = false;
-        for (unsigned i = 0, e = PN->getNumIncomingValues(); i < e; ++i)
-          if (InvokeInst *II = dyn_cast<InvokeInst>(PN->getIncomingValue(i)))
-            if (II->getParent() == PN->getIncomingBlock(i)) {
-              hasInvoke = true;
-              break;
-            }
-
-        if (!hasInvoke)
-          PNtoDel.push_back(PN);
-        else
+        if (hasInvokeEdge(PN))
           // And those PHINodes that we could not handle will also be preserved.
           PreservedPNs.push_back(PN);
+        else
+          PNtoDel.push_back(PN);
       }
 
   if (PNtoDel.empty())

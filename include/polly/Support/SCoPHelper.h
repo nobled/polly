@@ -21,6 +21,7 @@ namespace llvm {
   class ScalarEvolution;
   class SCEV;
   class Value;
+  class PHINode;
   class Region;
   class Pass;
   class BasicBlock;
@@ -63,6 +64,15 @@ namespace polly {
 
   bool isIndVar(const llvm::SCEV *Var, llvm::Region &RefRegion,
                 llvm::LoopInfo &LI, llvm::ScalarEvolution &SE);
+
+  /// @brief Check if the PHINode has any incoming Invoke edge.
+  ///
+  /// @param PN The PHINode to check.
+  ///
+  /// @return If the PHINode has an incoming BB that jumps to the parent BB
+  ///         of the PHINode with an invoke instruction, return true,
+  ///         otherwise, return false.
+  bool hasInvokeEdge(const llvm::PHINode *PN);
 
   llvm::Value *getPointerOperand(llvm::Instruction &Inst);
 
