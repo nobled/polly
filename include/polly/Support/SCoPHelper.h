@@ -65,6 +65,15 @@ namespace polly {
   bool isIndVar(const llvm::SCEV *Var, llvm::Region &RefRegion,
                 llvm::LoopInfo &LI, llvm::ScalarEvolution &SE);
 
+  /// @brief Check if the instruction I is the induction variable of a loop.
+  ///
+  /// @param I The instruction to check.
+  /// @param LI The LoopInfo analysis.
+  ///
+  /// @return Return true if I is the induction variable of a loop, false
+  ///         otherwise.
+  bool isIndVar(const llvm::Instruction *I, const llvm::LoopInfo *LI);
+
   /// @brief Check if the PHINode has any incoming Invoke edge.
   ///
   /// @param PN The PHINode to check.
@@ -73,6 +82,8 @@ namespace polly {
   ///         of the PHINode with an invoke instruction, return true,
   ///         otherwise, return false.
   bool hasInvokeEdge(const llvm::PHINode *PN);
+
+
 
   llvm::Value *getPointerOperand(llvm::Instruction &Inst);
 

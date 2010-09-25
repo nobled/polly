@@ -345,15 +345,13 @@ bool SCoPDetection::hasScalarDependency(Instruction &Inst,
 bool SCoPDetection::isValidInstruction(Instruction &Inst,
                                        Region &RefRegion) const {
   // Only canonical IVs are allowed.
-  if (isa<PHINode>(Inst)) {
-    Loop *L = LI->getLoopFor(Inst.getParent());
-    if (!L || L->getCanonicalInductionVariable() != &Inst) {
+  if (PHINode *PN = dyn_cast<PHINode>(&Inst))
+    if (!isIndVar(PN, LI)) {
       DEBUG(dbgs() << "Non canonical PHI node found: ";
             WriteAsOperand(dbgs(), &Inst, false);
             dbgs() << "\n");
       return false;
     }
-  }
 
   // Scalar dependencies are not allowed.
   if (hasScalarDependency(Inst, RefRegion)) {

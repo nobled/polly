@@ -13,6 +13,7 @@
 //
 #include "polly/LinkAllPasses.h"
 #include "polly/SCoPDetection.h"
+#include "polly/Support/SCoPHelper.h"
 
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/RegionInfo.h"
@@ -59,14 +60,6 @@ struct IndependentBlocks : public RegionPass {
   // Elimination on the SCoP to eliminate the scalar dependences come with
   // trivially dead instructions.
   bool eliminateDeadCode(const Region *R);
-
-  /// @brief Check if the instruction I is the induction variable of a loop.
-  ///
-  /// @param I The instruction to check.
-  ///
-  /// @return Return true if I is the induction variable of a loop, false
-  ///         otherwise.
-  bool isIV(const Instruction *I) const;
 
   //===--------------------------------------------------------------------===//
   /// Non trivial scalar dependences checking functions.
@@ -183,7 +176,7 @@ void IndependentBlocks::moveOperandTree(Instruction *Inst, const Region *R,
       }
 
       // No need to move induction variable.
-      if (isIV(Operand)) {
+      if (isIndVar(Operand, LI)) {
         DEBUG(dbgs() << "is IV.\n");
         continue;
       }
@@ -235,7 +228,7 @@ bool IndependentBlocks::createIndependentBlocks(BasicBlock *BB,
                                                 const Region *R) {
   std::vector<Instruction*> WorkList;
   for (BasicBlock::iterator II = BB->begin(), IE = BB->end(); II != IE; ++II)
-    if (!isSafeToMove(II) && !isIV(II))
+    if (!isSafeToMove(II) && !isIndVar(II, LI))
       WorkList.push_back(II);
 
   ReplacedMapType ReplacedMap;
@@ -283,12 +276,6 @@ bool IndependentBlocks::eliminateDeadCode(const Region *R) {
   return true;
 }
 
-bool IndependentBlocks::isIV(const Instruction *I) const {
-  Loop *L = LI->getLoopFor(I->getParent());
-
-  return L && I == L->getCanonicalInductionVariable();
-}
-
 bool IndependentBlocks::isEscapeUse(const Value *Use, const Region *R) {
   // Non-instruction user will never escape.
   if (!isa<Instruction>(Use)) return false;
@@ -305,7 +292,7 @@ bool IndependentBlocks::isEscapeOperand(const Value *Operand,
   if (OpInst == 0) return false;
 
   // Induction variables are valid operands.
-  if (isIV(OpInst)) return false;
+  if (isIndVar(OpInst, LI)) return false;
 
   // A value from a different BB is used in the same region.
   return R->contains(OpInst) && (OpInst->getParent() != CurBB);
@@ -317,7 +304,7 @@ bool IndependentBlocks::isIndependentBlock(const Region *R,
        II != IE; ++II) {
     Instruction *Inst = &*II;
 
-    if (isIV(Inst))
+    if (isIndVar(Inst, LI))
       continue;
 
     // A value inside the SCoP is referenced outside.
