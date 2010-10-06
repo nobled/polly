@@ -122,11 +122,11 @@ struct IndependentBlocks : public FunctionPass {
   bool isIndependentBlock(const Region *R, BasicBlock *BB) const;
   bool areAllBlocksIndependent(const Region *R) const;
 
-  // We need to split the entry block to hold allocas so the new instert alloca
-  // for scalar to array translation will not break the SCoPs.
+  // Split the entry block to store the newly inserted allocations outside of
+  // all SCoPs.
   void splitEntryBlock();
-  // We need to split the exit block to hold load instruction for escaped user
-  // otherwise the load instruction may break another SCoP.
+
+  // Split the exit block to hold load instructions.
   bool splitExitBlock(Region *R);
   bool runOnFunction(Function &F);
   void verifyAnalysis() const;
@@ -310,8 +310,7 @@ void IndependentBlocks::splitEntryBlock() {
   BasicBlock *OldEntry = TopLevelRegion->getEntry();
 
   // Find first non-alloca instruction and create insertion point. This is
-  // safe if block is well-formed: it always have terminator, otherwise
-  // we'll get an assertion.
+  // safe if block is well-formed: it always has a terminator.
   BasicBlock::iterator I = OldEntry->begin();
   while (isa<AllocaInst>(I)) ++I;
 
@@ -319,10 +318,10 @@ void IndependentBlocks::splitEntryBlock() {
   // update region tree.
   BasicBlock *NewEntry = SplitBlock(OldEntry, I, this);
 
-  // Replace the OldEntry with NewEntry in regions except the top level one.
+  // Replace the OldEntry with NewEntry in all regions except the top level one.
   Region *R = RI->getRegionFor(OldEntry);
   if (R != TopLevelRegion) {
-    // Update the BB map of region tree.
+    // Update the BB map of the region tree.
     RI->changeRegionFor(OldEntry, TopLevelRegion);
     RI->changeRegionFor(NewEntry, R);
 
@@ -335,32 +334,30 @@ void IndependentBlocks::splitEntryBlock() {
 }
 
 bool IndependentBlocks::splitExitBlock(Region *R) {
-  // Split the exit BB to place the load instruction of escaped users
+  // Split the exit BB to place the load instruction of escaped users.
   BasicBlock *ExitBB = R->getExit();
   Region *ExitRegion = RI->getRegionFor(ExitBB);
+
   if (ExitBB != ExitRegion->getEntry())
     return false;
 
   BasicBlock *NewExit = createSingleExitEdge(R, this);
 
-  // find the smallest region that exit at ExitBB.
-  bool ExitFound = false;
-  do {
-    ExitFound = false;
-    for (Region::iterator I = R->begin(), E = R->end(); I != E; ++I) {
-      Region *SubR = *I;
-      if (SubR->getExit() == ExitBB) {
-        R = SubR;
-        ExitFound = true;
-        break;
-      }
-    }
-  } while (ExitFound);
+  std::vector<Region*> toUpdate;
+  toUpdate.push_back(R);
 
-  // Update the exit node.
-  while (R->getExit() == ExitBB) {
-    R->replaceExit(NewExit);
-    R = R->getParent();
+  while (!toUpdate.empty()) {
+    Region *Reg = toUpdate.back();
+    toUpdate.pop_back();
+
+    for (Region::iterator I = Reg->begin(), E = Reg->end(); I != E; ++I) {
+      Region *SubR = *I;
+
+      if (SubR->getExit() == ExitBB)
+        toUpdate.push_back(SubR);
+    }
+
+    Reg->replaceExit(NewExit);
   }
 
   RI->changeRegionFor(NewExit, R);
