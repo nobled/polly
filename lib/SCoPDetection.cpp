@@ -457,6 +457,9 @@ bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
   // Is the loop count affine?
   const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
   if (!isValidAffineFunction(LoopCount, RefRegion, false)) {
+    DEBUG(dbgs() << "Non affine loop bound for loop: ";
+          WriteAsOperand(dbgs(), L->getHeader(), false);
+          dbgs() << "\n");
     STATSCOP(LoopBound);
     return false;
   }
