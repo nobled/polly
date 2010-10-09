@@ -1,5 +1,4 @@
-; RUN: opt  -O3 -loopsimplify -indvars -polly-analyze-ir  -print-top-scop-only -analyze %s | FileCheck %s
-; XFAIL: *
+; RUN: opt -mem2reg -loopsimplify -indvars -polly-prepare -polly-print -polly-allow-scalar-deps %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
 %struct._IO_FILE = type { i32, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, %struct._IO_marker*, %struct._IO_FILE*, i32, i32, i64, i16, i8, [1 x i8], i8*, i64, i8*, i8*, i8*, i8*, i64, i32, [20 x i8] }
@@ -75,4 +74,5 @@ return:                                           ; preds = %bb6, %bb6.us, %bb7.
   ret void
 }
 
-; CHECK: SCoP: entry => <Function Return>        Parameters: (%nx, %ny, ), Max Loop Depth: 2
+; CHECK: In function: 'scop_func' SCoP: entry.split => return:
+

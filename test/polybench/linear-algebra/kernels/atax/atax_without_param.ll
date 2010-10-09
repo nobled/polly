@@ -1,6 +1,4 @@
-; RUN: opt -O3 -indvars -polly-analyze-ir -polly-print-temp-scop-in-detail -print-top-scop-only  -analyze %s | FileCheck %s
-; XFAIL: *
-
+; RUN: opt -mem2reg -loopsimplify -indvars -polly-prepare -polly-print -polly-allow-scalar-deps %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
 %struct._IO_FILE = type { i32, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, %struct._IO_marker*, %struct._IO_FILE*, i32, i32, i64, i16, i8, [1 x i8], i8*, i64, i8*, i8*, i8*, i8*, i64, i32, [20 x i8] }
@@ -68,27 +66,4 @@ return:                                           ; preds = %bb9
   ret void
 }
 
-; CHECK: SCoP: bb.nph => return Parameters: (), Max Loop Depth: 2
-; CHECK: Bounds of Loop: bb.nph:        { 1 * {0,+,1}<%bb.nph> + 0 >= 0, -1 * {0,+,1}<%bb.nph> + 7999 >= 0}
-; CHECK:   BB: bb.nph{
-; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph> + 0]
-; CHECK:   }
-; CHECK:   Bounds of Loop: bb4: { 1 * {0,+,1}<%bb4> + 0 >= 0, -1 * {0,+,1}<%bb4> + 7999 >= 0}
-; CHECK:     BB: bb4{
-; CHECK:       Reads %4[]
-; CHECK:       Reads @A[8 * {0,+,1}<%bb4> + 64000 * {0,+,1}<%bb.nph> + 0]
-; CHECK:       Reads @x[8 * {0,+,1}<%bb4> + 0]
-; CHECK:       Writes %4[]
-; CHECK:     }
-; CHECK:   BB: bb8.loopexit{
-; CHECK:     Reads %4[]
-; CHECK:     Writes %.lcssa[]
-; CHECK:     Writes @tmp[8 * {0,+,1}<%bb.nph> + 0]
-; CHECK:   }
-; CHECK:   Bounds of Loop: bb7: { 1 * {0,+,1}<%bb7> + 0 >= 0, -1 * {0,+,1}<%bb7> + 7999 >= 0}
-; CHECK:     BB: bb7{
-; CHECK:       Reads @y[8 * {0,+,1}<%bb7> + 0]
-; CHECK:       Reads @A[64000 * {0,+,1}<%bb.nph> + 8 * {0,+,1}<%bb7> + 0]
-; CHECK:       Reads %.lcssa[]
-; CHECK:       Writes @y[8 * {0,+,1}<%bb7> + 0]
-; CHECK:     }
+; CHECK: In function: 'scop_func' SCoP: bb => return:

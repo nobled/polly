@@ -1,6 +1,4 @@
-; RUN: opt -O3 -indvars -polly-analyze-ir -polly-print-temp-scop-in-detail -print-top-scop-only  -analyze %s | FileCheck %s
-; XFAIL: *
-
+; RUN: opt -mem2reg -loopsimplify -indvars -polly-prepare -polly-detect -debug-only=polly-detect -polly-print -polly-allow-scalar-deps %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
 %struct._IO_FILE = type { i32, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, i8*, %struct._IO_marker*, %struct._IO_FILE*, i32, i32, i64, i16, i8, [1 x i8], i8*, i64, i8*, i8*, i8*, i8*, i64, i32, [20 x i8] }
@@ -79,25 +77,4 @@ return:                                           ; preds = %bb.nph26, %bb6, %en
   ret void
 }
 
-; CHECK: SCoP: bb.nph.us.preheader.us => return.loopexit13      Parameters: (%nj, %nk, %ni, ), Max Loop Depth: 3
-; CHECK: Bounds of Loop: bb.nph.us.preheader.us:        { 1 * {0,+,1}<%bb.nph.us.preheader.us> + 0 >= 0, 1 * %ni + -1 * {0,+,1}<%bb.nph.us.preheader.us> + -1 >= 0}
-; CHECK:   Bounds of Loop: bb.nph.us.us:        { 1 * {0,+,1}<%bb.nph.us.us> + 0 >= 0, 1 * %nj + -1 * {0,+,1}<%bb.nph.us.us> + -1 >= 0}
-; CHECK:     BB: bb.nph.us.us{
-; CHECK:       Reads @C[4096 * {0,+,1}<%bb.nph.us.preheader.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
-; CHECK:       Reads %5[]
-; CHECK:       Writes %17[]
-; CHECK:       Writes @C[4096 * {0,+,1}<%bb.nph.us.preheader.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
-; CHECK:     }
-; CHECK:     Bounds of Loop: bb2.us.us: { 1 * {0,+,1}<%bb2.us.us> + 0 >= 0, 1 * %nk + -1 * {0,+,1}<%bb2.us.us> + -1 >= 0}
-; CHECK:       BB: bb2.us.us{
-; CHECK:         Reads %17[]
-; CHECK:         Reads %14[]
-; CHECK:         Reads @A[8 * {0,+,1}<%bb2.us.us> + 4096 * {0,+,1}<%bb.nph.us.preheader.us> + 0]
-; CHECK:         Reads %6[]
-; CHECK:         Reads @B[4096 * {0,+,1}<%bb2.us.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
-; CHECK:         Writes %14[]
-; CHECK:       }
-; CHECK:     BB: bb4.us.us{
-; CHECK:       Reads %14[]
-; CHECK:       Writes @C[4096 * {0,+,1}<%bb.nph.us.preheader.us> + 8 * {0,+,1}<%bb.nph.us.us> + 0]
-; CHECK:     }
+; CHECK: In function: 'scop_func' SCoP: entry.split => return:

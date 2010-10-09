@@ -1,5 +1,4 @@
-; RUN: opt -O3 -indvars -polly-analyze-ir -polly-print-temp-scop-in-detail -analyze %s | FileCheck %s
-; XFAIL: *
+; RUN:  opt -mem2reg -loopsimplify -indvars -polly-prepare -polly-detect -debug-only=polly-detect -polly-print -polly-allow-scalar-deps %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
@@ -139,16 +138,4 @@ return:                                           ; preds = %bb18, %bb19.prehead
   ret void
 }
 
-; CHECK: SCoP: bb.nph40 => bb10.preheader       Parameters: (%n, ), Max Loop Depth: 2
-; CHECK: Bounds of Loop: bb.nph40:      { 1 * %n + -1 }
-; CHECK:   BB: bb.nph40{
-; CHECK:     Reads @u1[8 * {0,+,1}<%bb.nph40> + 0]
-; CHECK:     Reads @u2[8 * {0,+,1}<%bb.nph40> + 0]
-; CHECK:   }
-; CHECK:   Bounds of Loop: bb1: { 1 * %n + -1 }
-; CHECK:     BB: bb1{
-; CHECK:       Reads @A[32000 * {0,+,1}<%bb.nph40> + 8 * {0,+,1}<%bb1> + 0]
-; CHECK:       Reads @v1[8 * {0,+,1}<%bb1> + 0]
-; CHECK:       Reads @v2[8 * {0,+,1}<%bb1> + 0]
-; CHECK:       Writes @A[32000 * {0,+,1}<%bb.nph40> + 8 * {0,+,1}<%bb1> + 0]
-; CHECK:     }
+; CHECK: In function: 'scop_func' SCoP: entry.split => return:
