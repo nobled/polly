@@ -7,6 +7,7 @@ endif (OPENSCOP_FOUND)
 add_polly_library(LLVMPolly
   CLooG.cpp
   CodeGeneration.cpp
+  Dependences.cpp
   IndependentBlocks.cpp
   SCoPPrinter.cpp
   SCoPDetection.cpp

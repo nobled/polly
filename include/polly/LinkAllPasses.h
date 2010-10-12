@@ -36,6 +36,7 @@ namespace polly {
   llvm::RegionPass *createCLooGExporterPass();
   llvm::RegionPass *createCodeGenerationPass();
   llvm::Pass *createIndependentBlocksPass();
+  llvm::Pass *createDependencesPass();
   extern char &IndependentBlocksID;
 }
 
@@ -56,6 +57,7 @@ namespace {
       (void) polly::createSCoPCodePrepPass();
       (void) polly::createCLooGExporterPass();
       (void) polly::createIndependentBlocksPass();
+      (void) polly::createDependencesPass();
 
 #ifdef OPENSCOP_FOUND
       (void) polly::createSCoPExporterPass();
