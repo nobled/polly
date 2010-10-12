@@ -508,6 +508,6 @@ void SCoPDetection::releaseMemory() {
 
 char SCoPDetection::ID = 0;
 
-INITIALIZE_PASS(SCoPDetection, "polly-detect",
-                "Polly - Detect SCoPs in functions", true, true);
+static RegisterPass<SCoPDetection>
+X("polly-detect", "Polly - Detect SCoPs in functions");
 
