@@ -46,14 +46,21 @@ bb2:                                              ; preds = %bb, %entry
   ret i64 0
 }
 
-; CHECK: SCoP: bb => bb2        Parameters: (%n, ), Max Loop Depth: 1
-; CHECK: Bounds of Loop: bb:    { 1 * %n + -2 }
-; CHECK:   BB: bb{
-; CHECK:     Reads %.reg2mem[0]
-; CHECK:     Reads %k.05.reg2mem[0]
-; CHECK:     Writes %a[8 * {0,+,1}<%bb> + 8]
-; CHECK:     Reads %a[16 * {0,+,1}<%bb> + 16]
-; CHECK:     Reads %a[8 * {0,+,1}<%bb> + 32]
+; CHECK: SCoP: entry.split => bb2  Parameters: (%n, ), Max Loop Depth: 1
+; CHECK: Constrain of BB bb.nph: 1 * %n + -2 >= 0
+; CHECK: BB: bb.nph{
+; CHECK:   Reads %a[0]
 ; CHECK:     Writes %k.05.reg2mem[0]
 ; CHECK:     Writes %.reg2mem[0]
-; CHECK:   }
+; CHECK: }
+; CHECK: Constrain of Region bb => bb2:  1 * %n + -2 >= 0
+; CHECK: Bounds of Loop: bb: { 1 * %n + -2 }
+; CHECK: BB: bb{
+; CHECK:       Reads %.reg2mem[0]
+; CHECK:         Reads %k.05.reg2mem[0]
+; CHECK:         Writes %a[8 * {0,+,1}<%bb> + 8]
+; CHECK:         Reads %a[16 * {0,+,1}<%bb> + 16]
+; CHECK:         Reads %a[8 * {0,+,1}<%bb> + 32]
+; CHECK:         Writes %k.05.reg2mem[0]
+; CHECK:         Writes %.reg2mem[0]
+; CHECK:     }

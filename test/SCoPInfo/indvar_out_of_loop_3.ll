@@ -50,5 +50,4 @@ return:                                           ; preds = %bb3, %bb4.preheader
 }
 
 
-; CHECK: SCoP: bb3 => return     Parameters: (%m, %i0.0.lcssa.reload, ), Max Loop Depth: 1
-; CHECK: SCoP: bb => bb4.preheader
+; CHECK: SCoP: entry.split => bb4.preheader.region Parameters: (%m, %n, ), Max Loop

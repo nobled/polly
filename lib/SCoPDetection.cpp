@@ -30,7 +30,7 @@ using namespace polly;
 static cl::opt<bool>
 AllowScalarDeps("polly-allow-scalar-deps",
                 cl::desc("Allow scalar dependences in SCoPs"),
-                cl::Hidden,  cl::init(false));
+                cl::Hidden,  cl::init(true));
 
 //===----------------------------------------------------------------------===//
 // Statistics.
