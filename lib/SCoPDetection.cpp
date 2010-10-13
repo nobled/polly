@@ -82,7 +82,10 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
       assert(I->second->isOne() && "Only one as pointer coefficient allowed.");
       const SCEVUnknown *BaseAddr = dyn_cast<SCEVUnknown>(Var);
 
-      if (!BaseAddr) return false;
+      if (!BaseAddr || isa<UndefValue>(BaseAddr->getValue())) return false;
+
+      // BaseAddr must be invariant in SCoP.
+      if (!isParameter(BaseAddr, RefRegion, *LI, *SE)) return false;
 
       assert(!PointerExists && "Found second base pointer.");
       PointerExists = true;
@@ -276,6 +279,12 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
     // Handle cast instruction.
     if (isa<IntToPtrInst>(Inst) || isa<BitCastInst>(Inst)) {
       DEBUG(dbgs() << "Bad cast Inst!\n");
+      STATSCOP(Other);
+      return false;
+    }
+
+    if (isa<AllocaInst>(Inst)) {
+      DEBUG(dbgs() << "AllocaInst is not allowed!!\n");
       STATSCOP(Other);
       return false;
     }
