@@ -136,11 +136,17 @@ bool SCoPCodePrep::eliminatePHINodes(Function &F) {
 
 void SCoPCodePrep::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<LoopInfo>();
-  AU.setPreservesAll();
+
+  AU.addPreserved<LoopInfo>();
+  AU.addPreserved<RegionInfo>();
+  AU.addPreserved<DominatorTree>();
+  AU.addPreserved<DominanceFrontier>();
 }
 
 bool SCoPCodePrep::runOnFunction(Function &F) {
   LI = &getAnalysis<LoopInfo>();
+
+  splitEntryBlockForAlloca(&F.getEntryBlock(), this);
 
   eliminatePHINodes(F);
 

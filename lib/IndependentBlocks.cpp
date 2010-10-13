@@ -20,7 +20,6 @@
 #include "llvm/Analysis/RegionPass.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Analysis/ScalarEvolution.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/OwningPtr.h"
@@ -123,10 +122,6 @@ struct IndependentBlocks : public FunctionPass {
 
   bool isIndependentBlock(const Region *R, BasicBlock *BB) const;
   bool areAllBlocksIndependent(const Region *R) const;
-
-  // Split the entry block to store the newly inserted allocations outside of
-  // all SCoPs.
-  void splitEntryBlock();
 
   // Split the exit block to hold load instructions.
   bool splitExitBlock(Region *R);
@@ -314,20 +309,6 @@ bool IndependentBlocks::isEscapeOperand(const Value *Operand,
   return R->contains(OpInst) && (OpInst->getParent() != CurBB);
 }
 
-void IndependentBlocks::splitEntryBlock() {
-  Region *TopLevelRegion = RI->getTopLevelRegion();
-  BasicBlock *OldEntry = TopLevelRegion->getEntry();
-
-  // Find first non-alloca instruction. Every basic block has a non-alloc
-  // instruction, as every well formed basic block has a terminator.
-  BasicBlock::iterator I = OldEntry->begin();
-  while (isa<AllocaInst>(I)) ++I;
-
-  // SplitBlock updates DT, DF and LI.
-  BasicBlock *NewEntry = SplitBlock(OldEntry, I, this);
-  RI->splitBlock(NewEntry, OldEntry);
-}
-
 bool IndependentBlocks::splitExitBlock(Region *R) {
   // Split the exit BB to place the load instruction of escaped users.
   BasicBlock *ExitBB = R->getExit();
@@ -506,15 +487,27 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 bool IndependentBlocks::runOnFunction(llvm::Function &F) {
+  bool Changed = false;
+
   RI = &getAnalysis<RegionInfo>();
   LI = &getAnalysis<LoopInfo>();
   SD = &getAnalysis<SCoPDetection>();
   SE = &getAnalysis<ScalarEvolution>();
 
-  splitEntryBlock();
-  AllocaBlock = &F.getEntryBlock();
+  BasicBlock *EntryBlock = &F.getEntryBlock();
+  Region *R = RI->getRegionFor(EntryBlock);
 
-  bool Changed = false;
+  while (!R->isTopLevelRegion()) {
+    // If the entry block belong to any SCoP, split it.
+    if (SD->isMaxRegionInSCoP(*R)) {
+      splitEntryBlockForAlloca(EntryBlock, this);
+      break;
+    }
+    
+    R = R->getParent();
+  }
+
+  AllocaBlock = EntryBlock;
 
   DEBUG(dbgs() << "Run IndepBlock on " << F.getName() << '\n');
 

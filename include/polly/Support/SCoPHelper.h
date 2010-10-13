@@ -86,5 +86,13 @@ namespace polly {
   // Helper function for LLVM-IR about SCoP.
   llvm::BasicBlock *createSingleEntryEdge(llvm::Region *R, llvm::Pass *P);
   llvm::BasicBlock *createSingleExitEdge(llvm::Region *R, llvm::Pass *P);
+
+  /// @brief Split the entry block of a function to store the newly inserted
+  ///        allocations outside of all SCoPs.
+  ///
+  /// @param EntryBlock The entry block of the current function.
+  /// @param P          The pass that currently running.
+  ///
+  void splitEntryBlockForAlloca(llvm::BasicBlock *EntryBlock, llvm::Pass *P);
 }
 #endif

@@ -280,3 +280,15 @@ BasicBlock *polly::createSingleExitEdge(Region *R, Pass *P) {
 
   return SplitBlockPredecessors(BB, Preds.data(), Preds.size(), ".region", P);
 }
+
+void polly::splitEntryBlockForAlloca(BasicBlock *EntryBlock, Pass *P) {
+  // Find first non-alloca instruction. Every basic block has a non-alloc
+  // instruction, as every well formed basic block has a terminator.
+  BasicBlock::iterator I = EntryBlock->begin();
+  while (isa<AllocaInst>(I)) ++I;
+
+  // SplitBlock updates DT, DF and LI.
+  BasicBlock *NewEntry = SplitBlock(EntryBlock, I, P);
+  if (RegionInfo *RI = P->getAnalysisIfAvailable<RegionInfo>())
+    RI->splitBlock(NewEntry, EntryBlock);
+}
