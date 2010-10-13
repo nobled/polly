@@ -323,23 +323,9 @@ void IndependentBlocks::splitEntryBlock() {
   BasicBlock::iterator I = OldEntry->begin();
   while (isa<AllocaInst>(I)) ++I;
 
-  // SplitBlock will take care of DT, DF and LI, we need to
-  // update region tree.
+  // SplitBlock updates DT, DF and LI.
   BasicBlock *NewEntry = SplitBlock(OldEntry, I, this);
-
-  // Replace the OldEntry with NewEntry in all regions except the top level one.
-  Region *R = RI->getRegionFor(OldEntry);
-  if (R != TopLevelRegion) {
-    // Update the BB map of the region tree.
-    RI->setRegionFor(OldEntry, TopLevelRegion);
-    RI->setRegionFor(NewEntry, R);
-
-    do {
-      // Update the region entry.
-      R->replaceEntry(NewEntry);
-      R = R->getParent();
-    } while (R != TopLevelRegion);
-  }
+  RI->splitBlock(NewEntry, OldEntry);
 }
 
 bool IndependentBlocks::splitExitBlock(Region *R) {
