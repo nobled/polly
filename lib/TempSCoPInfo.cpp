@@ -112,10 +112,8 @@ polly_set *SCEVAffFunc::toConditionSet(polly_ctx *ctx,
    polly_set *ret = isl_set_from_basic_set(bset);
 
    if (getType() == Ne) {
-     // Subtract the set from the universe set to construct the inequality.
-     polly_basic_set *uni = isl_basic_set_universe(isl_dim_copy(dim));
-     polly_set *uni_set = isl_set_from_basic_set(uni);
-     ret = isl_set_subtract(uni_set, ret);
+     // Invert the equal condition to get the not equal condition.
+     ret = isl_set_complement(ret);
      DEBUG(dbgs() << "Ne:\n");
      DEBUG(isl_set_print(ret, stderr, 8, ISL_FORMAT_ISL));
    }
