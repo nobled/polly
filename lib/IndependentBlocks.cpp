@@ -331,8 +331,8 @@ void IndependentBlocks::splitEntryBlock() {
   Region *R = RI->getRegionFor(OldEntry);
   if (R != TopLevelRegion) {
     // Update the BB map of the region tree.
-    RI->changeRegionFor(OldEntry, TopLevelRegion);
-    RI->changeRegionFor(NewEntry, R);
+    RI->setRegionFor(OldEntry, TopLevelRegion);
+    RI->setRegionFor(NewEntry, R);
 
     do {
       // Update the region entry.
@@ -369,7 +369,7 @@ bool IndependentBlocks::splitExitBlock(Region *R) {
     Reg->replaceExit(NewExit);
   }
 
-  RI->changeRegionFor(NewExit, R);
+  RI->setRegionFor(NewExit, R);
   return true;
 }
 
