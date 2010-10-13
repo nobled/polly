@@ -318,8 +318,8 @@ void IndependentBlocks::splitEntryBlock() {
   Region *TopLevelRegion = RI->getTopLevelRegion();
   BasicBlock *OldEntry = TopLevelRegion->getEntry();
 
-  // Find first non-alloca instruction and create insertion point. This is
-  // safe if block is well-formed: it always has a terminator.
+  // Find first non-alloca instruction. Every basic block has a non-alloc
+  // instruction, as every well formed basic block has a terminator.
   BasicBlock::iterator I = OldEntry->begin();
   while (isa<AllocaInst>(I)) ++I;
 
