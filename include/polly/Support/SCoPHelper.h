@@ -57,8 +57,6 @@ namespace polly {
   // Functions for checking affine functions.
   bool isInvariant(const llvm::SCEV *S, llvm::Region &R);
 
-  bool isInvariant(const llvm::SCEV *S, llvm::Region &R);
-
   bool isParameter(const llvm::SCEV *Var, llvm::Region &RefRegion,
     llvm::LoopInfo &LI, llvm::ScalarEvolution &SE);
 
@@ -82,8 +80,6 @@ namespace polly {
   ///         of the PHINode with an invoke instruction, return true,
   ///         otherwise, return false.
   bool hasInvokeEdge(const llvm::PHINode *PN);
-
-
 
   llvm::Value *getPointerOperand(llvm::Instruction &Inst);
 
