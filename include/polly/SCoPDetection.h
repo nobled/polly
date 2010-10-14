@@ -134,6 +134,9 @@ public:
   static char ID;
   explicit SCoPDetection() : FunctionPass(ID), verifying(false) {}
 
+
+  RegionInfo *getRI() const { return RI; }
+
   /// @brief Is the region is the maximum region of a SCoP?
   ///
   /// @param R The Region to test if it is maximum.

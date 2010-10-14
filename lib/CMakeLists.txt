@@ -12,6 +12,7 @@ add_polly_library(LLVMPolly
   IndependentBlocks.cpp
   SCoPPrinter.cpp
   SCoPDetection.cpp
+  SCoPDOT.cpp
   SCoPInfo.cpp
   SCoPCodePrep.cpp
   TempSCoPInfo.cpp
