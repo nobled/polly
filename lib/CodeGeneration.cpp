@@ -10,7 +10,6 @@
 // Create LLVM IR code from CLooG AST.
 //
 //===----------------------------------------------------------------------===//
-//
 
 #define DEBUG_TYPE "polly-codegen"
 
@@ -18,29 +17,18 @@
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/SCoPHelper.h"
 #include "polly/CLooG.h"
-#include "polly/SCoPDetection.h"
 #include "polly/SCoPInfo.h"
 #include "polly/TempSCoPInfo.h"
-#include "llvm/ADT/APInt.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/RegionIterator.h"
-#include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
-
 
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"
 
 #include <vector>
-
-#ifdef _WINDOWS
-#define snprintf _snprintf
-#endif
 
 using namespace polly;
 using namespace llvm;
@@ -115,7 +103,6 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
 //                is used to update the operands of the statements.
 //                For new statements a relation old->new is inserted in this
 //                map.
-//
 static void copyBB(IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
                    DominatorTree *DT, const Region *R) {
   Function *F = Builder->GetInsertBlock()->getParent();
@@ -646,5 +633,5 @@ static RegisterPass<CodeGeneration>
 Z("polly-codegen", "Polly - Create LLVM-IR from the polyhedral information");
 
 RegionPass* polly::createCodeGenerationPass() {
-	return new CodeGeneration();
+  return new CodeGeneration();
 }
