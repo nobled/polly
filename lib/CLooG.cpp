@@ -170,9 +170,7 @@ static RegisterPass<CLooGExporter> A("polly-export-cloog",
                                     " (Writes a .cloog file for each SCoP)"
                                     );
 
-namespace polly {
-  llvm::RegionPass *createCLooGExporterPass() {
-    return new CLooGExporter();
-  }
+llvm::Pass* polly::createCLooGExporterPass() {
+  return new CLooGExporter();
 }
 

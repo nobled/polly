@@ -156,18 +156,18 @@ M("polly-dot", "Print SCoPs of function");
 static RegisterPass<SCoPOnlyPrinter>
 N("polly-dot-only", "Print SCoPs of function (with no function bodies)");
 
-Pass* polly::createSCoPViewerPass() {
+Pass* polly::createDOTViewerPass() {
   return new SCoPViewer();
 }
 
-Pass* polly::createSCoPOnlyViewerPass() {
+Pass* polly::createDOTOnlyViewerPass() {
   return new SCoPOnlyViewer();
 }
 
-Pass* polly::createSCoPPrinterPass() {
+Pass* polly::createDOTPrinterPass() {
   return new SCoPPrinter();
 }
 
-Pass* polly::createSCoPOnlyPrinterPass() {
+Pass* polly::createDOTOnlyPrinterPass() {
   return new SCoPOnlyPrinter();
 }

@@ -24,25 +24,32 @@ namespace llvm {
   class RegionPass;
 }
 
+using namespace llvm;
+
 namespace polly {
-  llvm::Pass *createSCoPCodePrepPass();
-  extern char &SCoPCodePrepID;
-  llvm::Pass *createAffSCEVItTesterPass();
-  llvm::Pass *createSCoPInfoPass();
-  llvm::Pass *createScopPrinterPass();
-  llvm::Pass *createScopCodeGenPass();
-  llvm::Pass *createSCoPExporterPass();
-  llvm::Pass *createSCoPImporterPass();
-  llvm::RegionPass *createCLooGExporterPass();
-  llvm::RegionPass *createCodeGenerationPass();
-  llvm::Pass *createIndependentBlocksPass();
-  llvm::Pass *createDependencesPass();
-  llvm::Pass *createSCoPViewerPass();
-  llvm::Pass *createSCoPOnlyViewerPass();
-  llvm::Pass *createSCoPPrinterPass();
-  llvm::Pass *createSCoPOnlyPrinterPass();
+  Pass *createAffSCEVItTesterPass();
+  Pass *createCLooGExporterPass();
+  Pass *createCodeGenerationPass();
+  Pass *createDependencesPass();
+  Pass *createDOTOnlyPrinterPass();
+  Pass *createDOTOnlyViewerPass();
+  Pass *createDOTPrinterPass();
+  Pass *createDOTViewerPass();
+  Pass *createIndependentBlocksPass();
+  Pass *createSCoPCodePrepPass();
+  Pass *createSCoPInfoPass();
+  Pass *createSCoPPrinterPass();
+
+#ifdef OPENSCOP_FOUND
+  Pass *createSCoPExporterPass();
+  Pass *createSCoPImporterPass();
+#endif
+
   extern char &IndependentBlocksID;
+  extern char &SCoPCodePrepID;
 }
+
+using namespace polly;
 
 namespace {
   struct PollyForcePassLinking {
@@ -54,23 +61,24 @@ namespace {
       if (std::getenv("bar") != (char*) -1)
         return;
 
-      (void) polly::createSCoPInfoPass();
-      (void) polly::createScopPrinterPass();
-      (void) polly::createAffSCEVItTesterPass();
-      (void) polly::createCodeGenerationPass();
-      (void) polly::createSCoPCodePrepPass();
-      (void) polly::createCLooGExporterPass();
-      (void) polly::createIndependentBlocksPass();
-      (void) polly::createDependencesPass();
-      (void) polly::createSCoPViewerPass();
-      (void) polly::createSCoPOnlyViewerPass();
-      (void) polly::createSCoPPrinterPass();
-      (void) polly::createSCoPOnlyPrinterPass();
+       createAffSCEVItTesterPass();
+       createCLooGExporterPass();
+       createCodeGenerationPass();
+       createDependencesPass();
+       createDOTOnlyPrinterPass();
+       createDOTOnlyViewerPass();
+       createDOTPrinterPass();
+       createDOTViewerPass();
+       createIndependentBlocksPass();
+       createSCoPCodePrepPass();
+       createSCoPInfoPass();
+       createSCoPPrinterPass();
 
 #ifdef OPENSCOP_FOUND
-      (void) polly::createSCoPExporterPass();
-      (void) polly::createSCoPImporterPass();
+       createSCoPExporterPass();
+       createSCoPImporterPass();
 #endif
+
     }
   } PollyForcePassLinking; // Force link by creating a global definition.
 }

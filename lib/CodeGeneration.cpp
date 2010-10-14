@@ -641,6 +641,6 @@ char CodeGeneration::ID = 1;
 static RegisterPass<CodeGeneration>
 Z("polly-codegen", "Polly - Create LLVM-IR from the polyhedral information");
 
-RegionPass* polly::createCodeGenerationPass() {
+Pass* polly::createCodeGenerationPass() {
   return new CodeGeneration();
 }

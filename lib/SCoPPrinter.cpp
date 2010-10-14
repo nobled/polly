@@ -70,6 +70,6 @@ char ScopPrinter::ID = 0;
 static RegisterPass<ScopPrinter>
 X("polly-print", "Polly - Print SCoP as C code to stdout");
 
-Pass* polly::createScopPrinterPass() {
+Pass* polly::createSCoPPrinterPass() {
   return new ScopPrinter();
 }
