@@ -1,4 +1,4 @@
-//===- CodeGen.cpp - Recreate LLVM IR from the SCoP.  ---------------------===//
+//===- SCoPPrinter.cpp - Print the CLAST of the SCoPs to stdout. ----------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Recreate LLVM IR from the SCoP.
+// Dump for each SCoP the clast to stdout.
+//
+// For each SCoP CLooG is called to generate a clast based on the current
+// SCoPinfo. The textual representation of this clast is dumped to stdout.
+// By calling -polly-import before -polly-print the SCoP can be modified and the
+// updated clast will be printed.
 //
 //===----------------------------------------------------------------------===//
 
