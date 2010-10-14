@@ -127,6 +127,7 @@ struct IndependentBlocks : public FunctionPass {
   bool splitExitBlock(Region *R);
 
   bool translateScalarToArray(BasicBlock *BB, const Region *R);
+  bool translateScalarToArray(Instruction *Inst, const Region *R);
   bool translateScalarToArray(const Region *R);
 
   bool runOnFunction(Function &F);
@@ -350,6 +351,67 @@ bool IndependentBlocks::translateScalarToArray(const Region *R) {
   return Changed;
 }
 
+bool IndependentBlocks::translateScalarToArray(Instruction *Inst,
+                                               const Region *R) {
+  bool changed = false;
+
+  if (isIndVar(Inst, LI))
+    return false;
+
+  SmallVector<Instruction*, 4> LoadInside, LoadOutside;
+  for (Instruction::use_iterator UI = Inst->use_begin(),
+       UE = Inst->use_end(); UI != UE; ++UI)
+    // Inst is referenced outside or referenced as an escaped operand.
+    if (Instruction *U = dyn_cast<Instruction>(*UI)) {
+      BasicBlock *UParent = U->getParent();
+
+      if (isEscapeUse(U, R))
+        LoadOutside.push_back(U);
+
+      if (isIndVar(U, LI))
+        return false;
+
+      if (R->contains(UParent) && isEscapeOperand(Inst, UParent, R))
+        LoadInside.push_back(U);
+    }
+
+  if (!LoadOutside.empty() || !LoadInside.empty()) {
+    changed = true;
+
+    // Create the alloca.
+    AllocaInst *Slot = new AllocaInst(Inst->getType(), 0,
+                                      Inst->getName() + ".s2a",
+                                      AllocaBlock->begin());
+    assert(!isa<InvokeInst>(Inst) && "Unexpect Invoke in SCoP!");
+    // Store right after Inst.
+    BasicBlock::iterator StorePos = Inst;
+    (void) new StoreInst(Inst, Slot, ++StorePos);
+
+    if (!LoadOutside.empty()) {
+      LoadInst *ExitLoad = new LoadInst(Slot, Inst->getName()+".loadoutside",
+                                        false, R->getExit()->getFirstNonPHI());
+
+      while (!LoadOutside.empty()) {
+        Instruction *U = LoadOutside.pop_back_val();
+        assert(!isa<PHINode>(U) && "Can not handle PHI node outside!");
+        SE->forgetValue(U);
+        U->replaceUsesOfWith(Inst, ExitLoad);
+      }
+    }
+
+    while (!LoadInside.empty()) {
+      Instruction *U = LoadInside.pop_back_val();
+      assert(!isa<PHINode>(U) && "Can not handle PHI node outside!");
+      SE->forgetValue(U);
+      LoadInst *L = new LoadInst(Slot, Inst->getName()+".loadarray",
+                                 false, U);
+      U->replaceUsesOfWith(Inst, L);
+    }
+  }
+
+  return changed;
+}
+
 bool IndependentBlocks::translateScalarToArray(BasicBlock *BB,
                                                const Region *R) {
   bool changed = false;
@@ -361,60 +423,7 @@ bool IndependentBlocks::translateScalarToArray(BasicBlock *BB,
 
   while (!Insts.empty()) {
     Instruction *Inst = Insts.pop_back_val();
-
-    if (isIndVar(Inst, LI))
-      continue;
-
-    SmallVector<Instruction*, 4> LoadInside, LoadOutside;
-    for (Instruction::use_iterator UI = Inst->use_begin(),
-         UE = Inst->use_end(); UI != UE; ++UI)
-      // Inst is referenced outside or referenced as an escaped operand.
-      if (Instruction *U = dyn_cast<Instruction>(*UI)) {
-        BasicBlock *UParent = U->getParent();
-
-        if (isEscapeUse(U, R))
-          LoadOutside.push_back(U);
-
-        if (isIndVar(U, LI))
-          continue;
-
-        if (R->contains(UParent) && isEscapeOperand(Inst, UParent, R))
-          LoadInside.push_back(U);
-      }
-
-    if (!LoadOutside.empty() || !LoadInside.empty()) {
-      changed = true;
-
-      // Create the alloca.
-      AllocaInst *Slot = new AllocaInst(Inst->getType(), 0,
-                                        Inst->getName() + ".s2a",
-                                        AllocaBlock->begin());
-      assert(!isa<InvokeInst>(Inst) && "Unexpect Invoke in SCoP!");
-      // Store right after Inst.
-      BasicBlock::iterator StorePos = Inst;
-      (void) new StoreInst(Inst, Slot, ++StorePos);
-
-      if (!LoadOutside.empty()) {
-        LoadInst *ExitLoad = new LoadInst(Slot, Inst->getName()+".loadoutside",
-                                          false, R->getExit()->getFirstNonPHI());
-
-        while (!LoadOutside.empty()) {
-          Instruction *U = LoadOutside.pop_back_val();
-          assert(!isa<PHINode>(U) && "Can not handle PHI node outside!");
-          SE->forgetValue(U);
-          U->replaceUsesOfWith(Inst, ExitLoad);
-        }
-      }
-
-      while (!LoadInside.empty()) {
-        Instruction *U = LoadInside.pop_back_val();
-        assert(!isa<PHINode>(U) && "Can not handle PHI node outside!");
-        SE->forgetValue(U);
-        LoadInst *L = new LoadInst(Slot, Inst->getName()+".loadarray",
-                                   false, U);
-        U->replaceUsesOfWith(Inst, L);
-      }
-    }
+    changed |= translateScalarToArray(Inst, R);
   }
 
   return changed;
