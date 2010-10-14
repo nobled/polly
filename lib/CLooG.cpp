@@ -1,4 +1,4 @@
-//===- CLooG.cpp - CLooG interface connector. -----------------------------===//
+//===- CLooG.cpp - CLooG interface ----------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,19 +7,26 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// CLooG interface connection.
+// CLooG[1] interface.
+//
+// The CLooG interface takes a SCoP and generates a CLooG AST (clast). This
+// clast can either be returned directly or it can be pretty printed to stdout.
+//
+// A typical clast output looks like this:
+//
+// for (c2 = max(0, ceild(n + m, 2); c2 <= min(511, floord(5 * n, 3)); c2++) {
+//   bb2(c2);
+// }
+//
+// [1] http://www.cloog.org/ - The Chunky Loop Generator
 //
 //===----------------------------------------------------------------------===//
 
 #include "polly/CLooG.h"
 #include "polly/LinkAllPasses.h"
 #include "polly/SCoPInfo.h"
-#include "cloog/cloog.h"
-#include "cloog/isl/domain.h"
 
-#ifdef _WINDOWS
-#define snprintf _snprintf
-#endif
+#include "cloog/isl/domain.h"
 
 using namespace llvm;
 using namespace polly;
@@ -94,8 +101,7 @@ CloogInput *CLooG::buildCloogInput() {
   CloogInput *Input = cloog_input_alloc (Context, Statements);
   return Input;
 }
-}
-
+} // End namespace polly.
 
 namespace {
 

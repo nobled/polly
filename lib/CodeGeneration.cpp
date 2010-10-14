@@ -19,6 +19,7 @@
 #include "polly/Support/SCoPHelper.h"
 #include "polly/CLooG.h"
 #include "polly/SCoPDetection.h"
+#include "polly/SCoPInfo.h"
 #include "polly/TempSCoPInfo.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
