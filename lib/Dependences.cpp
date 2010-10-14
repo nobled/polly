@@ -1,4 +1,4 @@
-//===- Dependency.cpp - Recreate LLVM IR from the SCoP.  ------------------===//
+//===- Dependency.cpp - Calculate dependency information for a SCoP.  -----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,16 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Calculate dependency information for a SCoP.
+// Calculate the data dependency relations for a SCoP using ISL.
+//
+// The integer set library (ISL) from Sven, has a integrated dependency analysis
+// to calculate data dependences. This pass takes advantage of this and
+// calculate those dependences a SCoP.
+//
+// The dependences in this pass are exact in terms that for a specific read
+// statement instance only the last write statement instance is returned. In
+// case of may writes a set of possible write instances is returned. This
+// analysis will never produce redundant dependences.
 //
 //===----------------------------------------------------------------------===//
 
