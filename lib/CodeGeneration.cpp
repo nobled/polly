@@ -1,4 +1,4 @@
-//===------ CodeGeneration.cpp - Create LLVM IR from the CLooG AST --------===//
+//===------ CodeGeneration.cpp - Code generate the SCoPs. -----------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,16 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Create LLVM IR code from CLooG AST.
+// The CodeGeneration pass takes a SCoP created by SCoPInfo and translates it
+// back to LLVM-IR using CLooG.
+//
+// The SCoP describes the high level memory behaviour of a control flow region.
+// Transformation passes can update the schedule (execution order) of statements
+// in the SCoP. CLooG is used to generate an abstract syntax tree (clast) that
+// reflects the updated execution order. This clast is used to create new
+// LLVM-IR that is computational equivalent to the original control flow region,
+// but executes its code in the new execution order defined by the changed
+// scattering.
 //
 //===----------------------------------------------------------------------===//
 
