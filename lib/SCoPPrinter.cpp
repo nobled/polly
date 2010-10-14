@@ -18,64 +18,51 @@
 
 #include "polly/CLooG.h"
 #include "polly/LinkAllPasses.h"
-#include "polly/Support/SCoPHelper.h"
 #include "polly/SCoPInfo.h"
-#include "llvm/Analysis/RegionPass.h"
-#include "llvm/Support/CFG.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
-
-#define CLOOG_INT_GMP 1
-#include "cloog/isl/domain.h"
-
-#ifdef _WINDOWS
-#define snprintf _snprintf
-#endif
 
 using namespace polly;
 using namespace llvm;
 
 namespace {
+  class ScopPrinter : public RegionPass {
 
-class ScopPrinter : public RegionPass {
+    SCoP *S;
 
-  SCoP *S;
+  public:
+    static char ID;
 
-public:
-  static char ID;
+    ScopPrinter() : RegionPass(ID), S(0) {}
 
-  ScopPrinter() : RegionPass(ID), S(0) {}
+    bool runOnRegion(Region *R, RGPassManager &RGM) {
+      S = getAnalysis<SCoPInfo>().getSCoP();
 
-  bool runOnRegion(Region *R, RGPassManager &RGM) {
-    S = getAnalysis<SCoPInfo>().getSCoP();
+      if (!S)
+        return false;
 
-    if (!S)
+      Function *F = S->getRegion().getEntry()->getParent();
+      fflush(stdout);
+
+      std::string output;
+      raw_string_ostream OS(output);
+      OS << "In function: '" << F->getNameStr() << "' SCoP: "
+        << S->getRegion().getNameStr() << ":\n";
+      fprintf(stdout, "%s", OS.str().c_str());
+
+      CLooG C = CLooG(S);
+      C.pprint();
+
       return false;
+    }
 
-    Function *F = S->getRegion().getEntry()->getParent();
-    fflush(stdout);
+    void print(raw_ostream &OS, const Module *) const {}
 
-    std::string output;
-    raw_string_ostream OS(output);
-    OS << "In function: '" << F->getNameStr() << "' SCoP: "
-      << S->getRegion().getNameStr() << ":\n";
-    fprintf(stdout, "%s", OS.str().c_str());
+    virtual void releaseMemory() { S = 0; }
 
-    CLooG C = CLooG(S);
-    C.pprint();
-
-    return false;
-  }
-
-  void print(raw_ostream &OS, const Module *) const {}
-
-  virtual void releaseMemory() { S = 0; }
-
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-    AU.addRequired<SCoPInfo>();
-    AU.setPreservesAll();
-  }
-};
+    virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+      AU.addRequired<SCoPInfo>();
+      AU.setPreservesAll();
+    }
+  };
 } //end anonymous namespace
 
 char ScopPrinter::ID = 0;
