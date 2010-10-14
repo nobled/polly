@@ -1,3 +1,4 @@
+set(MODULE TRUE)
 set(LLVM_NO_RTTI 1)
 
 if (OPENSCOP_FOUND)
@@ -19,3 +20,8 @@ add_polly_library(LLVMPolly
   Support/SCoPHelper.cpp
   ${POLLY_EXCHANGE_FILES}
   )
+
+set_target_properties(LLVMPolly
+  PROPERTIES
+  LINKER_LANGUAGE CXX
+  PREFIX "")
