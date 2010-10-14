@@ -380,7 +380,7 @@ bool IndependentBlocks::translateScalarToArray(BasicBlock *BB,
 
         if (R->contains(UParent) && isEscapeOperand(Inst, UParent, R))
           LoadInside.push_back(U);
-      }      
+      }
 
     if (!LoadOutside.empty() || !LoadInside.empty()) {
       changed = true;
@@ -393,7 +393,7 @@ bool IndependentBlocks::translateScalarToArray(BasicBlock *BB,
       // Store right after Inst.
       BasicBlock::iterator StorePos = Inst;
       (void) new StoreInst(Inst, Slot, ++StorePos);
-      
+
       if (!LoadOutside.empty()) {
         LoadInst *ExitLoad = new LoadInst(Slot, Inst->getName()+".loadoutside",
                                           false, R->getExit()->getFirstNonPHI());
@@ -405,7 +405,7 @@ bool IndependentBlocks::translateScalarToArray(BasicBlock *BB,
           U->replaceUsesOfWith(Inst, ExitLoad);
         }
       }
-      
+
       while (!LoadInside.empty()) {
         Instruction *U = LoadInside.pop_back_val();
         assert(!isa<PHINode>(U) && "Can not handle PHI node outside!");
@@ -503,7 +503,7 @@ bool IndependentBlocks::runOnFunction(llvm::Function &F) {
       splitEntryBlockForAlloca(EntryBlock, this);
       break;
     }
-    
+
     R = R->getParent();
   }
 
