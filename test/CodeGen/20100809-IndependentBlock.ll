@@ -1,4 +1,4 @@
-; RUN: opt -polly-codegen -disable-output %s
+; RUN: %opt -polly-codegen -disable-output %s
 define void @cfft2([2 x float]* %x) nounwind {
 entry:
   %d.1.reg2mem = alloca [2 x float]*              ; <[2 x float]**> [#uses=3]

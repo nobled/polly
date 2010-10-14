@@ -1,4 +1,4 @@
-; RUN: opt -print-scev-affine  -analyze < %s | FileCheck %s
+; RUN: %opt -print-scev-affine  -analyze < %s | FileCheck %s
 
 define i32 @f(i32 %a, i32 %b, i32 %c, i32 %d, i32* nocapture %x) nounwind readnone {
 entry:

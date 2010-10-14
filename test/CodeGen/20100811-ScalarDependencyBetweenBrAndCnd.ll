@@ -1,4 +1,4 @@
-; RUN: opt -polly-codegen -disable-output %s
+; RUN: %opt -polly-codegen -disable-output %s
 define void @main() nounwind {
 entry:
   br label %for.cond

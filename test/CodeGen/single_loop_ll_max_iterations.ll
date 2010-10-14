@@ -1,4 +1,4 @@
-; RUN: opt -polly-print -S < %s | FileCheck %s
+; RUN: %opt -polly-print -S < %s | FileCheck %s
 
 ; ModuleID = 'single_loop_ll_max_iterations.s'
 ;
