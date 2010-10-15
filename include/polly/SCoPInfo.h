@@ -14,7 +14,6 @@
 #ifndef POLLY_SCOP_INFO_H
 #define POLLY_SCOP_INFO_H
 
-#include "polly/PollyType.h"
 #include "llvm/Analysis/RegionPass.h"
 
 using namespace llvm;
@@ -26,6 +25,10 @@ namespace llvm {
   class Loop;
   class LoopInfo;
 }
+
+struct isl_map;
+struct isl_set;
+struct isl_ctx;
 
 namespace polly {
 
@@ -51,21 +54,21 @@ public:
   };
 
 private:
-  polly_map *AccessRelation;
+  isl_map *AccessRelation;
   enum AccessType Type;
 
   const Value* BaseAddr;
 
 public:
-  MemoryAccess(const Value *Base, AccessType AccType, polly_map *accRel)
+  MemoryAccess(const Value *Base, AccessType AccType, isl_map *accRel)
     : AccessRelation(accRel), Type(AccType), BaseAddr(Base) {}
 
   ~MemoryAccess();
 
   bool isRead() const { return Type == MemoryAccess::Read; }
 
-  polly_map *getAccessFunction() { return AccessRelation; }
-  polly_map *getAccessFunction() const { return AccessRelation; }
+  isl_map *getAccessFunction() { return AccessRelation; }
+  isl_map *getAccessFunction() const { return AccessRelation; }
 
   const Value *getBaseAddr() const {
     return BaseAddr;
@@ -116,11 +119,11 @@ class SCoPStmt {
   ///       S(i);
   ///
   ///     Domain: 0 <= i <= 100 + b
-  polly_set *Domain;
+  isl_set *Domain;
   /// The scattering map describes the order in which the different statements
   /// executed. The scattering is closely related to the one of CLooG. So have
   /// a look at cloog.org to find a complete description.
-  polly_map *Scattering;
+  isl_map *Scattering;
 
   typedef SmallVector<MemoryAccess*, 8> MemoryAccessVec;
   MemoryAccessVec MemAccs;
@@ -155,13 +158,13 @@ public:
   /// @brief Get the iteration domain of this SCoPStmt.
   ///
   /// @return The iteration domain of this SCoPStmt.
-  polly_set *getDomain() const { return Domain; }
+  isl_set *getDomain() const { return Domain; }
 
   /// @brief Get the scattering function of this SCoPStmt.
   ///
   /// @return The scattering function of this SCoPStmt.
-  polly_map *getScattering() const { return Scattering; }
-  void setScattering(polly_map *scattering) { Scattering = scattering; }
+  isl_map *getScattering() const { return Scattering; }
+  void setScattering(isl_map *scattering) { Scattering = scattering; }
 
   /// @brief Get the BasicBlock represented by this SCoPStmt.
   ///
@@ -236,10 +239,10 @@ class SCoP {
   ParamVecType Parameters;
 
   /// Constraints on parameters.
-  polly_set *Context;
+  isl_set *Context;
 
   ///
-  polly_ctx *ctx;
+  isl_ctx *ctx;
 
   /// Create the static control part with a region, max loop depth of this region
   /// and parameters used in this region.
@@ -324,7 +327,7 @@ public:
   /// @brief Get the constraint on parameter of this SCoP.
   ///
   /// @return The constraint on parameter of this SCoP.
-  inline polly_set *getContext() const { return Context; }
+  inline isl_set *getContext() const { return Context; }
 
   /// @name Statements Iterators
   ///
@@ -358,7 +361,7 @@ public:
   /// @brief Get the isl context of this static control part.
   ///
   /// @return The isl context of this static control part.
-  polly_ctx *getCtx() const { return ctx; }
+  isl_ctx *getCtx() const { return ctx; }
 };
 
 /// @brief Print SCoP scop to raw_ostream O.

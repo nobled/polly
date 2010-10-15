@@ -67,13 +67,13 @@ static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
     isl_int_set_si(v, 0);
 }
 
-polly_constraint *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
-                         polly_dim *dim,
+isl_constraint *SCEVAffFunc::toConditionConstrain(isl_ctx *ctx,
+                         isl_dim *dim,
                          const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
                          const SmallVectorImpl<const SCEV*> &Params) const {
    unsigned num_in = IndVars.size(), num_param = Params.size();
 
-   polly_constraint *c = 0;
+   isl_constraint *c = 0;
    if (getType() == GE)
      c = isl_inequality_alloc(isl_dim_copy(dim));
    else // "!= 0" and "== 0".
@@ -102,14 +102,14 @@ polly_constraint *SCEVAffFunc::toConditionConstrain(polly_ctx *ctx,
    return c;
 }
 
-polly_set *SCEVAffFunc::toConditionSet(polly_ctx *ctx,
-                         polly_dim *dim,
+isl_set *SCEVAffFunc::toConditionSet(isl_ctx *ctx,
+                         isl_dim *dim,
                          const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
                          const SmallVectorImpl<const SCEV*> &Params) const {
-   polly_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
-   polly_constraint *c = toConditionConstrain(ctx, dim, IndVars, Params);
+   isl_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
+   isl_constraint *c = toConditionConstrain(ctx, dim, IndVars, Params);
    bset = isl_basic_set_add_constraint(bset, c);
-   polly_set *ret = isl_set_from_basic_set(bset);
+   isl_set *ret = isl_set_from_basic_set(bset);
 
    if (getType() == Ne) {
      // Invert the equal condition to get the not equal condition.
@@ -121,11 +121,11 @@ polly_set *SCEVAffFunc::toConditionSet(polly_ctx *ctx,
    return ret;
 }
 
-polly_constraint *SCEVAffFunc::toAccessFunction(polly_dim* dim,
+isl_constraint *SCEVAffFunc::toAccessFunction(isl_dim* dim,
                                     const SmallVectorImpl<Loop*> &NestLoops,
                                     const SmallVectorImpl<const SCEV*> &Params,
                                     ScalarEvolution &SE) const {
-  polly_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+  isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
   isl_int v;
   isl_int_init(v);
 

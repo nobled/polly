@@ -65,10 +65,10 @@ class OpenSCoP {
   openscop_matrix_p createAccessMatrix(SCoPStmt *S, bool isRead);
   static int domainToMatrix_constraint(isl_constraint *c, void *user);
   static int domainToMatrix_basic_set(isl_basic_set *bset, void *user);
-  openscop_matrix_p domainToMatrix(polly_set *PS);
+  openscop_matrix_p domainToMatrix(isl_set *PS);
   static int scatteringToMatrix_constraint(isl_constraint *c, void *user);
   static int scatteringToMatrix_basic_map(isl_basic_map *bmap, void *user);
-  openscop_matrix_p scatteringToMatrix(polly_map *pmap);
+  openscop_matrix_p scatteringToMatrix(isl_map *pmap);
 
 public:
   OpenSCoP(SCoP *S);
@@ -274,10 +274,10 @@ int OpenSCoP::domainToMatrix_basic_set(isl_basic_set *bset, void *user) {
 ///
 /// @param PS The set to be translated
 /// @return A OpenSCoP Matrix
-openscop_matrix_p OpenSCoP::domainToMatrix(polly_set *PS) {
+openscop_matrix_p OpenSCoP::domainToMatrix(isl_set *PS) {
 
   // Create a canonical copy of this set.
-  polly_set *set = isl_set_copy(PS);
+  isl_set *set = isl_set_copy(PS);
   set = isl_set_compute_divs (set);
   set = isl_set_align_divs (set);
 
@@ -368,10 +368,10 @@ int OpenSCoP::scatteringToMatrix_basic_map(isl_basic_map *bmap, void *user) {
 ///
 /// @param map The map to be translated
 /// @return A OpenSCoP Matrix
-openscop_matrix_p OpenSCoP::scatteringToMatrix(polly_map *pmap) {
+openscop_matrix_p OpenSCoP::scatteringToMatrix(isl_map *pmap) {
 
   // Create a canonical copy of this set.
-  polly_map *map = isl_map_copy(pmap);
+  isl_map *map = isl_map_copy(pmap);
   map = isl_map_compute_divs (map);
   map = isl_map_align_divs (map);
 

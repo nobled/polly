@@ -55,15 +55,15 @@ void MemoryAccess::dump() const {
 void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
                                unsigned CurLoopDepth) {
   unsigned ScatDim = Parent.getMaxLoopDepth() * 2 + 1;
-  polly_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
+  isl_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
                                  CurLoopDepth, ScatDim);
-  polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+  isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
   isl_int v;
   isl_int_init(v);
 
   // Loop dimensions.
   for (unsigned i = 0; i < CurLoopDepth; ++i) {
-    polly_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+    isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, 1);
     isl_constraint_set_coefficient(c, isl_dim_out, 2 * i + 1, v);
     isl_int_set_si(v, -1);
@@ -74,7 +74,7 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
 
   // Constant dimensions
   for (unsigned i = 0; i < CurLoopDepth + 1; ++i) {
-    polly_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+    isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, -1);
     isl_constraint_set_coefficient(c, isl_dim_out, 2 * i, v);
     isl_int_set_si(v, Scatter[i]);
@@ -85,7 +85,7 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
 
   // Fill scattering dimensions.
   for (unsigned i = 2 * CurLoopDepth + 1; i < ScatDim ; ++i) {
-    polly_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+    isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, 1);
     isl_constraint_set_coefficient(c, isl_dim_out, i, v);
     isl_int_set_si(v, 0);
@@ -110,17 +110,17 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
 
   // At the moment, getelementptr translates multiple dimensions to
   // one dimension.
-  polly_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
+  isl_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
                                  NestLoops.size(), 1);
   for (AccFuncSetType::const_iterator I = AccFuncs->begin(),
        E = AccFuncs->end(); I != E; ++I) {
     const SCEVAffFunc &AffFunc = *I;
-    polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
-    polly_constraint *c;
+    isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+    isl_constraint *c;
 
     c = AffFunc.toAccessFunction(dim, NestLoops, Parent.getParams(), SE);
     bmap = isl_basic_map_add_constraint(bmap, c);
-    polly_map *map = isl_map_from_basic_map(bmap);
+    isl_map *map = isl_map_from_basic_map(bmap);
 
     MemoryAccess::AccessType AccessType;
     if (AffFunc.isRead())
@@ -134,9 +134,9 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
 }
 void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
                                              IndVarVec &IndVars) {
-  polly_dim *dim = isl_dim_set_alloc(Parent.getCtx(), Parent.getNumParams(),
+  isl_dim *dim = isl_dim_set_alloc(Parent.getCtx(), Parent.getNumParams(),
                                      IndVars.size());
-  polly_basic_set *bset = isl_basic_set_universe(dim);
+  isl_basic_set *bset = isl_basic_set_universe(dim);
 
   isl_int v;
   isl_int_init(v);
@@ -144,7 +144,7 @@ void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
   // Loop bounds.
   for (int i = 0, e = IndVars.size(); i != e; ++i) {
     const SCEVAffFunc &bound = tempSCoP.getLoopBound(IndVars[i]->getLoop());
-    polly_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
+    isl_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
 
     // Lower bound: IV >= 0.
     isl_int_set_si(v, 1);
@@ -166,7 +166,7 @@ void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
 void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
                                      const Region &CurRegion,
                                      IndVarVec &IndVars) {
-  polly_dim *dim = isl_set_get_dim(Domain);
+  isl_dim *dim = isl_set_get_dim(Domain);
 
   // Build BB condition constrains, by traveling up the region tree.
   // NOTE: This is only a temporary hack.
@@ -180,7 +180,7 @@ void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
       if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
         for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end();
              I != E; ++I) {
-          polly_set *c = (*I).toConditionSet(Parent.getCtx(), dim,
+          isl_set *c = (*I).toConditionSet(Parent.getCtx(), dim,
                                              IndVars, Parent.getParams());
           Domain = isl_set_intersect(Domain, c);
         }
@@ -293,7 +293,7 @@ SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &SE)
   ParamSetType &Params = tempSCoP.getParamSet();
   Parameters.insert(Parameters.begin(), Params.begin(), Params.end());
 
-  polly_dim *dim = isl_dim_set_alloc(ctx, getNumParams(), 0);
+  isl_dim *dim = isl_dim_set_alloc(ctx, getNumParams(), 0);
 
   // TODO: Insert relations between parameters.
   // TODO: Insert constraints on parameters.

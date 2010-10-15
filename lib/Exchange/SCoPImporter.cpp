@@ -57,7 +57,7 @@ char SCoPImporter::ID = 0;
 ///
 /// @return An isl constraint representing this integer array.
 isl_constraint *constraintFromMatrixRow(isl_int *row, isl_dim *dim) {
-  polly_constraint *c;
+  isl_constraint *c;
 
   unsigned NbOut = isl_dim_size(dim, isl_dim_out);
   unsigned NbIn = isl_dim_size(dim, isl_dim_in);
@@ -91,10 +91,10 @@ isl_constraint *constraintFromMatrixRow(isl_int *row, isl_dim *dim) {
 ///
 /// @return An isl map representing m.
 isl_map *mapFromMatrix(openscop_matrix_p m, isl_dim *dim) {
-  polly_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+  isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
 
   for (unsigned i = 0; i < m->NbRows; ++i) {
-    polly_constraint *c;
+    isl_constraint *c;
 
     c = constraintFromMatrixRow(m->p[i], dim);
     bmap = isl_basic_map_add_constraint(bmap, c);
@@ -116,7 +116,7 @@ isl_map *scatteringForStmt(openscop_matrix_p m, SCoPStmt *PollyStmt) {
   unsigned NbScattering = m->NbColumns - 2 - NbParam - NbIterators;
 
   isl_ctx *ctx = PollyStmt->getParent()->getCtx();
-  polly_dim *dim = isl_dim_alloc(ctx, NbParam, NbIterators, NbScattering);
+  isl_dim *dim = isl_dim_alloc(ctx, NbParam, NbIterators, NbScattering);
   isl_map *map = mapFromMatrix(m, dim);
   isl_dim_free(dim);
 

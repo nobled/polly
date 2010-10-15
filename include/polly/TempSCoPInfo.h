@@ -14,10 +14,14 @@
 #ifndef POLLY_TEMP_SCOP_EXTRACTION_H
 #define POLLY_TEMP_SCOP_EXTRACTION_H
 
-#include "polly/PollyType.h"
 #include "polly/SCoPDetection.h"
 
 #include "llvm/Analysis/RegionPass.h"
+
+struct isl_constraint;
+struct isl_dim;
+struct isl_ctx;
+struct isl_set;
 
 using namespace llvm;
 
@@ -87,7 +91,7 @@ public:
   /// @param Params   The parameters may appear in the affine function.
   ///
   /// @return         The isl_constrain represented by this affine function.
-  polly_constraint *toConditionConstrain(polly_ctx *ctx, polly_dim *dim,
+  isl_constraint *toConditionConstrain(isl_ctx *ctx, isl_dim *dim,
     const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
 
@@ -100,11 +104,11 @@ public:
   /// @param Params   The parameters may appear in the affine function.
   ///
   /// @return         The isl_set represented by this affine function.
-  polly_set *toConditionSet(polly_ctx *ctx, polly_dim *dim,
+  isl_set *toConditionSet(isl_ctx *ctx, isl_dim *dim,
     const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
 
-  polly_constraint *toAccessFunction(polly_dim* dim,
+  isl_constraint *toAccessFunction(isl_dim* dim,
     const SmallVectorImpl<Loop*> &NestLoops,
     const SmallVectorImpl<const SCEV*> &Params,
     ScalarEvolution &SE) const;
