@@ -7,7 +7,40 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Pass to detect the maximal static control parts (SCoPs) of a function.
+// Detect the maximal SCoPs of a function.
+//
+// A static control part (SCoP) is a subgraph of the control flow graph (CFG)
+// that only has statically known control flow and can therefore be described
+// within the polyhedral model.
+//
+// Every SCoP fullfills these restrictions:
+//
+// * It is a single entry single exit region
+//
+// * Only affine linear bounds in the loops
+//
+// Every natural loop in a SCoP must have a number of loop iterations that can
+// be described as an affine linear function in surrounding loop iterators or
+// parameters. (A parameter is a scalar that does not change its value during
+// execution of the SCoP).
+//
+// * Only comparisons of affine linear expressions in conditions
+//
+// * All loops and conditions perfectly nested
+//
+// The control flow needs to be structured such that it could be written using
+// just 'for' and 'if' statements, without the need for any 'goto', 'break' or
+// 'continue'.
+//
+// * Side effect free functions call
+//
+// Only function calls and intrinsics that do not have side effects are allowed
+// (readnone).
+//
+// The SCoP detection finds the largest SCoPs by checking if the largest
+// region is a SCoP. If this is not the case, its canonical subregions are
+// checked until a region is a SCoP. It is now tried to extend this SCoP by
+// creating a larger non canonical region.
 //
 //===----------------------------------------------------------------------===//
 
@@ -101,7 +134,8 @@ bool SCoPDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
   return !isMemoryAccess || PointerExists;
 }
 
-bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion) const {
+bool SCoPDetection::isValidCFG(BasicBlock &BB, Region &RefRegion,
+                               bool verifying) const {
   TerminatorInst *TI = BB.getTerminator();
 
   // Return instructions are only valid if the region is the top level region.
@@ -205,7 +239,8 @@ bool SCoPDetection::isValidCallInst(CallInst &CI) {
 }
 
 bool SCoPDetection::isValidMemoryAccess(Instruction &Inst,
-                                        Region &RefRegion) const {
+                                        Region &RefRegion,
+                                        bool verifying) const {
   Value *Ptr = getPointerOperand(Inst);
   const SCEV *AccessFunction = SE->getSCEV(Ptr);
 
@@ -244,7 +279,8 @@ bool SCoPDetection::hasScalarDependency(Instruction &Inst,
 }
 
 bool SCoPDetection::isValidInstruction(Instruction &Inst,
-                                       Region &RefRegion) const {
+                                       Region &RefRegion,
+                                       bool verifying) const {
   // Only canonical IVs are allowed.
   if (PHINode *PN = dyn_cast<PHINode>(&Inst))
     if (!isIndVar(PN, LI)) {
@@ -294,7 +330,7 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
 
   // Check the access function.
   if (isa<LoadInst>(Inst) || isa<StoreInst>(Inst))
-    return isValidMemoryAccess(Inst, RefRegion);
+    return isValidMemoryAccess(Inst, RefRegion, verifying);
 
   // We do not know this instruction, therefore we assume it is invalid.
   DEBUG(dbgs() << "Bad instruction found: ";
@@ -305,23 +341,25 @@ bool SCoPDetection::isValidInstruction(Instruction &Inst,
 }
 
 bool SCoPDetection::isValidBasicBlock(BasicBlock &BB,
-                                      Region &RefRegion) const {
-  if (!isValidCFG(BB, RefRegion))
+                                      Region &RefRegion,
+                                      bool verifying) const {
+  if (!isValidCFG(BB, RefRegion, verifying))
     return false;
 
   // Check all instructions, except the terminator instruction.
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I)
-    if (!isValidInstruction(*I, RefRegion))
+    if (!isValidInstruction(*I, RefRegion, verifying))
       return false;
 
   Loop *L = LI->getLoopFor(&BB);
-  if (L && L->getHeader() == &BB && !isValidLoop(L, RefRegion))
+  if (L && L->getHeader() == &BB && !isValidLoop(L, RefRegion, verifying))
     return false;
 
   return true;
 }
 
-bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion) const {
+bool SCoPDetection::isValidLoop(Loop *L, Region &RefRegion,
+                                bool verifying) const {
   PHINode *IndVar = L->getCanonicalInductionVariable();
   // No canonical induction variable.
   if (!IndVar) {
@@ -354,10 +392,10 @@ Region *SCoPDetection::expandRegion(Region &R) {
   while (TmpRegion) {
     DEBUG(dbgs() << "\t\tTrying " << TmpRegion->getNameStr() << "\n");
 
-    if (!allBlocksValid(*TmpRegion))
+    if (!allBlocksValid(*TmpRegion, false /*verifying*/))
       break;
 
-    if (isValidExit(*TmpRegion)) {
+    if (isValidExit(*TmpRegion, false /*verifying*/)) {
       if (CurrentRegion != &R)
         delete CurrentRegion;
 
@@ -383,7 +421,7 @@ Region *SCoPDetection::expandRegion(Region &R) {
 
 void SCoPDetection::findSCoPs(Region &R) {
 
-  if (isValidRegion(R)) {
+  if (isValidRegion(R, false /*verifying*/)) {
     ++ValidRegion;
     ValidRegions.insert(&R);
     return;
@@ -427,22 +465,23 @@ void SCoPDetection::findSCoPs(Region &R) {
   }
 }
 
-bool SCoPDetection::allBlocksValid(Region &R) const {
+bool SCoPDetection::allBlocksValid(Region &R, bool verifying) const {
   for (Region::block_iterator I = R.block_begin(), E = R.block_end(); I != E;
        ++I)
-    if (!isValidBasicBlock(*(I->getNodeAs<BasicBlock>()), R))
+    if (!isValidBasicBlock(*(I->getNodeAs<BasicBlock>()), R, verifying))
       return false;
 
   return true;
 }
 
-bool SCoPDetection::isValidExit(Region &R) const {
+bool SCoPDetection::isValidExit(Region &R, bool verifying) const {
   // PHI nodes are not allowed in the exit basic block.
   if (BasicBlock *Exit = R.getExit()) {
     BasicBlock::iterator I = Exit->begin();
     if (I != Exit->end() && isa<PHINode> (*I)) {
       DEBUG(dbgs() << "PHI node in exit";
             dbgs() << "\n");
+      STATSCOP(Other);
       return false;
     }
   }
@@ -450,7 +489,7 @@ bool SCoPDetection::isValidExit(Region &R) const {
   return true;
 }
 
-bool SCoPDetection::isValidRegion(Region &R) const {
+bool SCoPDetection::isValidRegion(Region &R, bool verifying) const {
   DEBUG(dbgs() << "Checking region: " << R.getNameStr() << "\n\t");
 
   // The toplevel region is no valid region.
@@ -460,10 +499,10 @@ bool SCoPDetection::isValidRegion(Region &R) const {
     return false;
   }
 
-  if (!allBlocksValid(R))
+  if (!allBlocksValid(R, verifying))
     return false;
 
-  if (!isValidExit(R))
+  if (!isValidExit(R, verifying))
     return false;
 
   DEBUG(dbgs() << "OK\n");
@@ -483,9 +522,7 @@ bool SCoPDetection::runOnFunction(llvm::Function &F) {
 
 void polly::SCoPDetection::verifyRegion(const Region &R) const {
   assert(isMaxRegionInSCoP(R) && "Expect R is a valid region.");
-  verifying = true;
-  isValidRegion(const_cast<Region&>(R));
-  verifying = false;
+  isValidRegion(const_cast<Region&>(R), true /*verifying*/);
 }
 
 void polly::SCoPDetection::verifyAnalysis() const {

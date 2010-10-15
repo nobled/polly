@@ -1,4 +1,4 @@
-//===--- polly/SCoPDetection.h - Detect SCoPs -------------------*- C++ -*-===//
+//===--- SCoPDetection.h - Detect SCoPs -------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,40 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Pass to detect the maximal static control parts (SCoPs) of a function.
+// Detect the maximal SCoPs of a function.
+//
+// A static control part (SCoP) is a subgraph of the control flow graph (CFG)
+// that only has statically known control flow and can therefore be described
+// within the polyhedral model.
+//
+// Every SCoP fullfills these restrictions:
+//
+// * It is a single entry single exit region
+//
+// * Only affine linear bounds in the loops
+//
+// Every natural loop in a SCoP must have a number of loop iterations that can
+// be described as an affine linear function in surrounding loop iterators or
+// parameters. (A parameter is a scalar that does not change its value during
+// execution of the SCoP).
+//
+// * Only comparisons of affine linear expressions in conditions
+//
+// * All loops and conditions perfectly nested
+//
+// The control flow needs to be structured such that it could be written using
+// just 'for' and 'if' statements, without the need for any 'goto', 'break' or
+// 'continue'.
+//
+// * Side effect free functions call
+//
+// Only function calls and intrinsics that do not have side effects are allowed
+// (readnone).
+//
+// The SCoP detection finds the largest SCoPs by checking if the largest
+// region is a SCoP. If this is not the case, its canonical subregions are
+// checked until a region is a SCoP. It is now tried to extend this SCoP by
+// creating a larger non canonical region.
 //
 //===----------------------------------------------------------------------===//
 
@@ -66,45 +99,83 @@ class SCoPDetection : public FunctionPass {
   /// @brief Check if all basic block in the region are valid.
   ///
   /// @param R The region to check.
+  /// @param verifying Should the SCoP be verified? In this case we error,
+  ///                  if this is no SCoP.
   /// @return True if all blocks in R are valid, false otherwise.
-  bool allBlocksValid(Region &R) const;
+  bool allBlocksValid(Region &R, bool verifying) const;
 
   /// @brief Check the exit block of a region is valid.
   ///
   /// @param R The region to check.
+  /// @param verifying Should the SCoP be verified? In this case we error,
+  ///                  if this is no SCoP.
   /// @return True if the exit of R is valid, false otherwise.
-  bool isValidExit(Region &R) const;
+  bool isValidExit(Region &R, bool verifying) const;
 
   /// @brief Check if a region is a SCoP.
   ///
   /// @param R The region to check.
+  /// @param verifying Should the SCoP be verified? In this case we error,
+  ///                  if this is no SCoP.
   /// @return True if R is a SCoP, false otherwise.
-  bool isValidRegion(Region &R) const;
+  bool isValidRegion(Region &R, bool verifying) const;
 
   /// @brief Check if a call instruction can be part of a SCoP.
+  ///
+  /// @param CI The call instruction to check.
+  /// @return True if the call instruction is valid, false otherwise.
   static bool isValidCallInst(CallInst &CI);
 
   /// @brief Check if a memory access can be part of a SCoP.
-  bool isValidMemoryAccess(Instruction &Inst, Region &RefRegion) const;
+  ///
+  /// @param Inst The instruction accessing the memory.
+  /// @param RefRegion The region in respect to which we check the access
+  ///                  function.
+  /// @param verifying Should the SCoP be verified? In this case we error,
+  ///                  if this is no SCoP.
+  /// @return True if the memory access is valid, false otherwise.
+  bool isValidMemoryAccess(Instruction &Inst, Region &RefRegion,
+                           bool verifying) const;
 
   /// @brief Check if an instruction has any non trivial scalar dependencies
   ///        as part of a SCoP.
+  ///
+  /// @param Inst The instruction to check.
+  /// @param RefRegion The region in respect to which we check the access
+  ///                  function.
+  /// @return True if the instruction has scalar dependences, false otherwise.
   bool hasScalarDependency(Instruction &Inst, Region &RefRegion) const;
 
   /// @brief Check if an instruction can be part of a SCoP.
-  bool isValidInstruction(Instruction &I, Region &RefRegion) const;
+  ///
+  /// @param Inst The instruction to check.
+  /// @param RefRegion The region in respect to which we check the instruction.
+  /// @param verifying Should the SCoP be verified? In this case we error,
+  ///                  if this is no SCoP.
+  /// @return True if the instruction is valid, false otherwise.
+  bool isValidInstruction(Instruction &I, Region &RefRegion,
+                          bool verifying) const;
 
   /// @brief Check if the BB can be part of a SCoP.
-  bool isValidBasicBlock(BasicBlock &BB, Region &RefRegion) const;
+  ///
+  /// @param BB The basic block to check.
+  /// @param verifying Should the SCoP be verified? In this case we error,
+  ///                  if this is no SCoP.
+  /// @return True if the basic block is valid, false otherwise.
+  bool isValidBasicBlock(BasicBlock &BB, Region &RefRegion,
+                         bool verifying) const;
 
   /// @brief Check if the control flow in a basic block is valid.
   ///
   /// @param BB The BB to check the control flow.
   /// @param RefRegion The region in respect to which we check the control
   ///                  flow.
+  /// @param verifying Should the SCoP be verified? In this case we error,
+  ///                  if this is no SCoP.
   ///
   /// @return True if the BB contains only valid control flow.
-  bool isValidCFG(BasicBlock &BB, Region &RefRegion) const;
+  bool isValidCFG(BasicBlock &BB, Region &RefRegion,
+                  bool verifying) const;
 
   /// @brief Check if the SCEV expression is a valid affine function
   ///
@@ -123,18 +194,20 @@ class SCoPDetection : public FunctionPass {
   ///
   /// @param L The loop to check.
   /// @param RefRegion The region we analyse the loop in.
+  /// @param verifying Should the SCoP be verified? In this case we error,
+  ///                  if this is no SCoP.
   ///
   /// @return True if the loop is valid in the region.
-  bool isValidLoop(Loop *L, Region &RefRegion) const;
-
-  /// This variable will point out the fail reason when we verifying SCoPs. 
-  mutable bool verifying;
+  bool isValidLoop(Loop *L, Region &RefRegion,
+                   bool verifying) const;
 
 public:
   static char ID;
   explicit SCoPDetection() : FunctionPass(ID), verifying(false) {}
 
-
+  /// @brief Get the RegionInfo stored in this pass.
+  ///
+  /// This was added to give the DOT printer easy access to this information.
   RegionInfo *getRI() const { return RI; }
 
   /// @brief Is the region is the maximum region of a SCoP?
