@@ -145,16 +145,18 @@ struct SCoPOnlyPrinter
 char SCoPOnlyPrinter::ID = 0;
 
 static RegisterPass<SCoPViewer>
-X("polly-view", "View SCoPs of function");
+X("polly-view","Polly - View SCoPs of function");
 
 static RegisterPass<SCoPOnlyViewer>
-Y("polly-view-only", "View SCoPs of function (with no function bodies)");
+Y("polly-view-only",
+  "Polly - View SCoPs of function (with no function bodies)");
 
 static RegisterPass<SCoPPrinter>
-M("polly-dot", "Print SCoPs of function");
+M("polly-dot", "Polly - Print SCoPs of function");
 
 static RegisterPass<SCoPOnlyPrinter>
-N("polly-dot-only", "Print SCoPs of function (with no function bodies)");
+N("polly-dot-only",
+  "Polly - Print SCoPs of function (with no function bodies)");
 
 Pass* polly::createDOTViewerPass() {
   return new SCoPViewer();

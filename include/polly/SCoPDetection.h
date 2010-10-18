@@ -203,7 +203,7 @@ class SCoPDetection : public FunctionPass {
 
 public:
   static char ID;
-  explicit SCoPDetection() : FunctionPass(ID), verifying(false) {}
+  explicit SCoPDetection() : FunctionPass(ID) {}
 
   /// @brief Get the RegionInfo stored in this pass.
   ///
