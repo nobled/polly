@@ -9,6 +9,9 @@
 //
 // Create a polyhedral description for a static control flow region.
 //
+// If a subgraph of the cfg of a function can be described by the polyhedral
+// model its polyhedral description is calculated. It is called SCoP.
+//
 //===----------------------------------------------------------------------===//
 //
 #ifndef POLLY_SCOP_INFO_H
@@ -32,7 +35,6 @@ struct isl_ctx;
 
 namespace polly {
 
-//===----------------------------------------------------------------------===//
 class SCoP;
 class SCoPInfo;
 class TempSCoP;
@@ -40,13 +42,32 @@ class TempSCoP;
 //===----------------------------------------------------------------------===//
 /// @brief Represent memory accesses in statements.
 class MemoryAccess {
-  //===-------------------------------------------------------------------===//
   // DO NOT IMPLEMENT
   MemoryAccess(const MemoryAccess &);
   // DO NOT IMPLEMENT
   const MemoryAccess &operator=(const MemoryAccess &);
 
 public:
+  /// @brief The access type of a memory access
+  ///
+  /// There are three kind of access types:
+  ///
+  /// * A read access
+  ///
+  /// A certain set of memory locations are read and may be used for internal
+  /// calculations.
+  ///
+  /// * A write access
+  ///
+  /// A certain set of memory locactions is definitely written. The old value is
+  /// replaced by a newly calculated value. The old value is not read or used at
+  /// all.
+  ///
+  /// * A may write access
+  ///
+  /// A certain set of memory locactions may be written. The memory location may
+  /// contain a new value if there is actually a write or the old value may
+  /// remain, if no write happens.
   enum AccessType {
     Read,
     Write,
@@ -65,6 +86,7 @@ public:
 
   ~MemoryAccess();
 
+  /// @brief Is this a read memory access?
   bool isRead() const { return Type == MemoryAccess::Read; }
 
   isl_map *getAccessFunction() { return AccessRelation; }
