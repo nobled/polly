@@ -28,7 +28,6 @@ AC_CONFIG_FILES(Makefile.common)
 
 dnl Configure project makefiles
 dnl List every Makefile that exists within your source tree
-AC_CONFIG_MAKEFILE(Makefile.tools.rules)
 
 dnl Quit if the source directory has already been configured.
 dnl NOTE: This relies upon undocumented autoconf behavior.
