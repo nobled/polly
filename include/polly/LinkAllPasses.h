@@ -30,13 +30,13 @@ namespace polly {
   Pass *createAffSCEVItTesterPass();
   Pass *createCLooGExporterPass();
   Pass *createCodeGenerationPass();
+  Pass *createCodePreperationPass();
   Pass *createDependencesPass();
   Pass *createDOTOnlyPrinterPass();
   Pass *createDOTOnlyViewerPass();
   Pass *createDOTPrinterPass();
   Pass *createDOTViewerPass();
   Pass *createIndependentBlocksPass();
-  Pass *createSCoPCodePrepPass();
   Pass *createSCoPInfoPass();
   Pass *createSCoPPrinterPass();
 
@@ -51,7 +51,7 @@ namespace polly {
 #endif
 
   extern char &IndependentBlocksID;
-  extern char &SCoPCodePrepID;
+  extern char &CodePreperationID;
 }
 
 using namespace polly;
@@ -69,13 +69,13 @@ namespace {
        createAffSCEVItTesterPass();
        createCLooGExporterPass();
        createCodeGenerationPass();
+       createCodePreperationPass();
        createDependencesPass();
        createDOTOnlyPrinterPass();
        createDOTOnlyViewerPass();
        createDOTPrinterPass();
        createDOTViewerPass();
        createIndependentBlocksPass();
-       createSCoPCodePrepPass();
        createSCoPInfoPass();
        createSCoPPrinterPass();
 

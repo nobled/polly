@@ -1,4 +1,4 @@
-//===---- SCoPCodePrep.cpp - Code preparation for SCoP Detect ---*- C++ -*-===//
+//===---- CodePreparation.cpp - Code preparation for SCoP Detection -------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -39,11 +39,11 @@ namespace {
 /// @brief SCoP Code Preparation - Perform some transforms to make scop detect
 /// easier.
 ///
-class SCoPCodePrep : public FunctionPass {
+class CodePreperation : public FunctionPass {
   // DO NOT IMPLEMENT.
-  SCoPCodePrep(const SCoPCodePrep &);
+  CodePreperation(const CodePreperation &);
   // DO NOT IMPLEMENT.
-  const SCoPCodePrep &operator=(const SCoPCodePrep &);
+  const CodePreperation &operator=(const CodePreperation &);
 
   // LoopInfo to compute canonical induction variable.
   LoopInfo *LI;
@@ -56,8 +56,8 @@ class SCoPCodePrep : public FunctionPass {
 public:
   static char ID;
 
-  explicit SCoPCodePrep() : FunctionPass(ID) {}
-  ~SCoPCodePrep();
+  explicit CodePreperation() : FunctionPass(ID) {}
+  ~CodePreperation();
 
   /// @name FunctionPass interface.
   //@{
@@ -71,16 +71,16 @@ public:
 }
 
 //===----------------------------------------------------------------------===//
-/// SCoPCodePrep implement.
+/// CodePreperation implement.
 
-void SCoPCodePrep::clear() {
+void CodePreperation::clear() {
 }
 
-SCoPCodePrep::~SCoPCodePrep() {
+CodePreperation::~CodePreperation() {
   clear();
 }
 
-bool SCoPCodePrep::eliminatePHINodes(Function &F) {
+bool CodePreperation::eliminatePHINodes(Function &F) {
   // The PHINodes that will be deleted.
   std::vector<PHINode*> PNtoDel;
   // The PHINodes that will be preserved.
@@ -134,7 +134,7 @@ bool SCoPCodePrep::eliminatePHINodes(Function &F) {
   return true;
 }
 
-void SCoPCodePrep::getAnalysisUsage(AnalysisUsage &AU) const {
+void CodePreperation::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<LoopInfo>();
 
   AU.addPreserved<LoopInfo>();
@@ -143,7 +143,7 @@ void SCoPCodePrep::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<DominanceFrontier>();
 }
 
-bool SCoPCodePrep::runOnFunction(Function &F) {
+bool CodePreperation::runOnFunction(Function &F) {
   LI = &getAnalysis<LoopInfo>();
 
   splitEntryBlockForAlloca(&F.getEntryBlock(), this);
@@ -153,21 +153,21 @@ bool SCoPCodePrep::runOnFunction(Function &F) {
   return false;
 }
 
-void SCoPCodePrep::releaseMemory() {
+void CodePreperation::releaseMemory() {
   clear();
 }
 
-void SCoPCodePrep::print(raw_ostream &OS, const Module *) const {
+void CodePreperation::print(raw_ostream &OS, const Module *) const {
 }
 
-char SCoPCodePrep::ID = 0;
+char CodePreperation::ID = 0;
 
-RegisterPass<SCoPCodePrep> X("polly-prepare",
+RegisterPass<CodePreperation> X("polly-prepare",
                               "Polly - Prepare code for polly.",
                               false, true);
 
-char &polly::SCoPCodePrepID = SCoPCodePrep::ID;
+char &polly::CodePreperationID = CodePreperation::ID;
 
-Pass *polly::createSCoPCodePrepPass() {
-  return new SCoPCodePrep();
+Pass *polly::createCodePreperationPass() {
+  return new CodePreperation();
 }
