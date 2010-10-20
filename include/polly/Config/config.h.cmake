@@ -14,5 +14,6 @@
 #define POLLY_CONFIG_H
 
 #cmakedefine OPENSCOP_FOUND
+#cmakedefine SCOPLIB_FOUND
 
 #endif

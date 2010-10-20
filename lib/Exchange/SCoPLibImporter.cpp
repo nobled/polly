@@ -1,4 +1,4 @@
-//===-- SCoPImporter.cpp  - Import SCoPs with openscop library ------------===//
+//===-- SCoPLibImporter.cpp  - Import SCoPs with scoplib. -----------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -13,13 +13,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/LinkAllPasses.h"
+
+#ifdef SCOPLIB_FOUND
+
 #include "polly/SCoPInfo.h"
 #include "llvm/Support/CommandLine.h"
 
-#ifdef OPENSCOP_FOUND
-
-#define OPENSCOP_INT_T_IS_MP
-#include "openscop/openscop.h"
+#define SCOPLIB_INT_T_IS_MP
+#include "scoplib/scop.h"
 
 #include "isl/isl_set.h"
 #include "isl/isl_constraint.h"
@@ -29,18 +30,18 @@ using namespace polly;
 
 namespace {
 static cl::opt<std::string>
-ImportDir("polly-import-dir",
+ImportDir("polly-import-scoplib-dir",
           cl::desc("The directory to import the .scop files from."), cl::Hidden,
           cl::value_desc("Directory path"), cl::ValueRequired, cl::init("."));
 static cl::opt<std::string>
-ImportPostfix("polly-import-postfix",
+ImportPostfix("polly-import-scoplib-postfix",
           cl::desc("Postfix to append to the import .scop files."), cl::Hidden,
           cl::value_desc("File postfix"), cl::ValueRequired, cl::init(""));
 
-struct SCoPImporter : public RegionPass {
+struct SCoPLibImporter : public RegionPass {
   static char ID;
   SCoP *S;
-  explicit SCoPImporter() : RegionPass(ID) {}
+  explicit SCoPLibImporter() : RegionPass(ID) {}
 
   std::string getFileName(Region *R) const;
   virtual bool runOnRegion(Region *R, RGPassManager &RGM);
@@ -50,8 +51,9 @@ struct SCoPImporter : public RegionPass {
 
 }
 
-char SCoPImporter::ID = 0;
+char SCoPLibImporter::ID = 0;
 
+namespace {
 /// @brief Create an isl constraint from a row of OpenSCoP integers.
 ///
 /// @param row An array of isl/OpenSCoP integers.
@@ -92,7 +94,7 @@ isl_constraint *constraintFromMatrixRow(isl_int *row, isl_dim *dim) {
 /// @param dim The dimensions that are contained in the OpenSCoP matrix.
 ///
 /// @return An isl map representing m.
-isl_map *mapFromMatrix(openscop_matrix_p m, isl_dim *dim) {
+isl_map *mapFromMatrix(scoplib_matrix_p m, isl_dim *dim) {
   isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
 
   for (unsigned i = 0; i < m->NbRows; ++i) {
@@ -111,7 +113,7 @@ isl_map *mapFromMatrix(openscop_matrix_p m, isl_dim *dim) {
 /// @param PollyStmt The statement to create the scattering for.
 ///
 /// @return An isl_map describing the scattering.
-isl_map *scatteringForStmt(openscop_matrix_p m, SCoPStmt *PollyStmt) {
+isl_map *scatteringForStmt(scoplib_matrix_p m, SCoPStmt *PollyStmt) {
 
   unsigned NbParam = PollyStmt->getNumParams();
   unsigned NbIterators = PollyStmt->getNumIterators();
@@ -129,8 +131,8 @@ isl_map *scatteringForStmt(openscop_matrix_p m, SCoPStmt *PollyStmt) {
 ///
 /// @param PollyStmt The statement to update.
 /// @param OStmt The OpenSCoP statement describing the new scattering.
-void updateScattering(SCoPStmt *PollyStmt, openscop_statement_p OStmt) {
-  assert(OStmt && "No openscop statement available");
+void updateScattering(SCoPStmt *PollyStmt, scoplib_statement_p OStmt) {
+  assert(OStmt && "No scoplib statement available");
   isl_map *m = scatteringForStmt(OStmt->schedule, PollyStmt);
   PollyStmt->setScattering(m);
 }
@@ -141,8 +143,8 @@ void updateScattering(SCoPStmt *PollyStmt, openscop_statement_p OStmt) {
 /// @S The SCoP to update
 /// @OSCoP The OpenSCoP data structure describing the new scattering.
 /// @return Returns false, if the update failed.
-bool updateScattering(SCoP *S, openscop_scop_p OSCoP) {
-  openscop_statement_p stmt = OSCoP->statement;
+bool updateScattering(SCoP *S, scoplib_scop_p OSCoP) {
+  scoplib_statement_p stmt = OSCoP->statement;
 
   for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
 
@@ -162,8 +164,8 @@ bool updateScattering(SCoP *S, openscop_scop_p OSCoP) {
 
   return true;
 }
-
-std::string SCoPImporter::getFileName(Region *R) const {
+}
+std::string SCoPLibImporter::getFileName(Region *R) const {
   std::string FunctionName = R->getEntry()->getParent()->getNameStr();
   std::string ExitName, EntryName;
 
@@ -185,9 +187,9 @@ std::string SCoPImporter::getFileName(Region *R) const {
   return FileName;
 }
 
-void SCoPImporter::print(raw_ostream &OS, const Module *) const {}
+void SCoPLibImporter::print(raw_ostream &OS, const Module *) const {}
 
-bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
+bool SCoPLibImporter::runOnRegion(Region *R, RGPassManager &RGM) {
   S = getAnalysis<SCoPInfo>().getSCoP();
 
   if (!S)
@@ -202,7 +204,7 @@ bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
     return false;
   }
 
-  openscop_scop_p scop = openscop_scop_read(F);
+  scoplib_scop_p scop = scoplib_scop_read(F);
   fclose(F);
 
   std::string FunctionName = R->getEntry()->getParent()->getNameStr();
@@ -218,18 +220,18 @@ bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
   return false;
 }
 
-void SCoPImporter::getAnalysisUsage(AnalysisUsage &AU) const {
+void SCoPLibImporter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
   AU.addRequired<SCoPInfo>();
 }
 
-static RegisterPass<SCoPImporter> A("polly-import",
-                                    "Polly - Import SCoPs with OpenSCoP library"
+static RegisterPass<SCoPLibImporter> A("polly-import-scoplib",
+                                    "Polly - Import SCoPs with SCoPLib library"
                                     " (Reads a .scop file for each SCoP)"
                                     );
 
-Pass *polly::createSCoPImporterPass() {
-  return new SCoPImporter();
+Pass *polly::createSCoPLibImporterPass() {
+  return new SCoPLibImporter();
 }
 
 #endif

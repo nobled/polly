@@ -28,11 +28,12 @@ endif
 
 # Do us work with scoplib?
 OPENSCOP_FOUND := @openscop_found@
+SCOPLIB_FOUND := @scoplib_found@
 
 # Set include directroys
 POLLY_INC :=  @gmp_inc@ @isl_inc@ @isl_isl_inc@ \
-              @cloog_inc@ @openscop_inc@
+              @cloog_inc@ @openscop_inc@ @scoplib_inc@
 
-POLLY_LD := @gmp_ld@ @isl_ld@ @cloog_ld@ @openscop_ld@
+POLLY_LD := @gmp_ld@ @isl_ld@ @cloog_ld@ @openscop_ld@ @scoplib_ld@
 
-POLLY_LIB := @gmp_lib@ @isl_lib@ @cloog_lib@ @openscop_lib@
+POLLY_LIB := @gmp_lib@ @isl_lib@ @cloog_lib@ @openscop_lib@ @scoplib_lib@

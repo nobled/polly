@@ -23,3 +23,6 @@
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
+
+/* Define if scoplib found */
+#undef SCOPLIB_FOUND

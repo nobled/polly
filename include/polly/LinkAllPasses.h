@@ -45,6 +45,11 @@ namespace polly {
   Pass *createSCoPImporterPass();
 #endif
 
+#ifdef SCOPLIB_FOUND
+  Pass *createSCoPLibExporterPass();
+  Pass *createSCoPLibImporterPass();
+#endif
+
   extern char &IndependentBlocksID;
   extern char &SCoPCodePrepID;
 }
@@ -77,6 +82,10 @@ namespace {
 #ifdef OPENSCOP_FOUND
        createSCoPExporterPass();
        createSCoPImporterPass();
+#endif
+#ifdef SCOPLIB_FOUND
+       createSCoPLibExporterPass();
+       createSCoPLibImporterPass();
 #endif
 
     }
