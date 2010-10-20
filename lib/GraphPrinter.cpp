@@ -1,4 +1,4 @@
-//===- SCoPDOT.cpp - Create a DOT output describing the SCoP. -------------===//
+//===- GraphPrinter.cpp - Create a DOT output describing the SCoP. --------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
