@@ -32,8 +32,9 @@ using namespace polly;
 namespace {
 static cl::opt<std::string>
 ExportDir("polly-export-scoplib-dir",
-          cl::desc("The directory to export the .scop files to."), cl::Hidden,
-          cl::value_desc("Directory path"), cl::ValueRequired, cl::init("."));
+          cl::desc("The directory to export the .scoplib files to."),
+          cl::Hidden, cl::value_desc("Directory path"), cl::ValueRequired,
+          cl::init("."));
 
 struct SCoPLibExporter : public RegionPass {
   static char ID;
@@ -342,7 +343,11 @@ int SCoPLib::scatteringToMatrix_constraint(isl_constraint *c, void *user) {
   isl_constraint_get_constant(c, &v);
   isl_int_set(vec->p[nb_in + nb_params + 1], v);
 
-  scoplib_matrix_insert_vector(m, vec, m->NbRows);
+  scoplib_vector_p null =
+    scoplib_vector_malloc(nb_params + nb_in + 2);
+
+  vec = scoplib_vector_sub(null, vec);
+  scoplib_matrix_insert_vector(m, vec, 0);
 
   return 0;
 }
@@ -383,9 +388,14 @@ scoplib_matrix_p SCoPLib::scatteringToMatrix(isl_map *pmap) {
   // Copy the content into the matrix.
   isl_map_foreach_basic_map(map, &scatteringToMatrix_basic_map, matrix);
 
+  // Only keep the relevant rows.
+  scoplib_matrix_p reduced = scoplib_matrix_ncopy(matrix,
+                                                  isl_map_n_in(pmap) * 2 + 1);
+
+  scoplib_matrix_free (matrix);
   isl_map_free(map);
 
-  return matrix;
+  return reduced;
 }
 
 /// Add an isl constraint to an SCoPLib matrix.
@@ -530,7 +540,7 @@ std::string SCoPLibExporter::getFileName(Region *R) const {
     ExitName = "FunctionExit";
 
   std::string RegionName = EntryName + "---" + ExitName;
-  std::string FileName = FunctionName + "___" + RegionName + ".scop";
+  std::string FileName = FunctionName + "___" + RegionName + ".scoplib";
 
   return FileName;
 }
@@ -570,7 +580,7 @@ void SCoPLibExporter::getAnalysisUsage(AnalysisUsage &AU) const {
 
 static RegisterPass<SCoPLibExporter> A("polly-export-scoplib",
                                     "Polly - Export SCoPs with SCoPLib library"
-                                    " (Writes a .scop file for each SCoP)"
+                                    " (Writes a .scoplib file for each SCoP)"
                                     );
 
 Pass *polly::createSCoPLibExporterPass() {
