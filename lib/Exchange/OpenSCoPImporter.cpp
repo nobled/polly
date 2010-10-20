@@ -1,4 +1,4 @@
-//===-- SCoPImporter.cpp  - Import SCoPs with openscop library ------------===//
+//===-- OpenSCoPImporter.cpp  - Import SCoPs with openscop library --------===//
 //
 //                     The LLVM Compiler Infrastructure
 //

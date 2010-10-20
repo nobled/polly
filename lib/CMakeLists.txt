@@ -2,7 +2,8 @@ set(MODULE TRUE)
 set(LLVM_NO_RTTI 1)
 
 if (OPENSCOP_FOUND)
-  set(POLLY_EXCHANGE_FILES Exchange/SCoPImporter.cpp Exchange/SCoPExporter.cpp)
+  set(POLLY_EXCHANGE_FILES
+      Exchange/OpenSCoPImporter.cpp Exchange/OpenSCoPExporter.cpp)
 endif (OPENSCOP_FOUND)
 if (SCOPLIB_FOUND)
   set(POLLY_SCOPLIB_FILES

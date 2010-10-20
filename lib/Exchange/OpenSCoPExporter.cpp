@@ -1,4 +1,4 @@
-//===-- SCoPExporter.cpp  - Export SCoPs with openscop library ------------===//
+//===-- OpenSCoPExporter.cpp  - Export SCoPs with openscop library --------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
