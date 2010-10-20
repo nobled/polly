@@ -16,6 +16,8 @@
 #include "polly/SCoPInfo.h"
 #include "llvm/Support/CommandLine.h"
 
+#ifdef OPENSCOP_FOUND
+
 #define OPENSCOP_INT_T_IS_MP
 #include "openscop/openscop.h"
 
@@ -229,3 +231,5 @@ static RegisterPass<SCoPImporter> A("polly-import",
 Pass *polly::createSCoPImporterPass() {
   return new SCoPImporter();
 }
+
+#endif

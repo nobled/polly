@@ -12,6 +12,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/LinkAllPasses.h"
+
+#ifdef OPENSCOP_FOUND
+
 #include "polly/SCoPInfo.h"
 
 #include "llvm/Support/CommandLine.h"
@@ -576,3 +579,6 @@ static RegisterPass<SCoPExporter> A("polly-export",
 Pass *polly::createSCoPExporterPass() {
   return new SCoPExporter();
 }
+
+#endif
+
