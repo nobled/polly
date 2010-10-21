@@ -1,4 +1,4 @@
-//===---------- TempSCoPExtraction.cpp  - Extract TempSCoPs -----*- C++ -*-===//
+//===---------- TempSCoPInfo.cpp  - Extract TempSCoPs ---------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Extract loop bounds, access functions and conditions express by SCEV in SCoP.
+// Collect information about the control flow regions detected by the SCoP
+// detection, such that this information can be translated info its polyhedral
+// representation.
 //
 //===----------------------------------------------------------------------===//
 

@@ -1,4 +1,4 @@
-//===-------- polly/TempSCoPExtraction.h - Extract TempSCoPs -----*- C++ -*-===//
+//===-------- polly/TempSCoPInfo.h - Extract TempSCoPs ----------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Detect SCoPs in LLVM Function;
+// Collect information about the control flow regions detected by the SCoP
+// detection, such that this information can be translated info its polyhedral
+// representation.
 //
 //===----------------------------------------------------------------------===//
 
