@@ -1,4 +1,4 @@
-//===--------- SCoPInfo.cpp  - Create SCoPs from LLVM IR ---------*- C++ -*-===//
+//===--------- SCoPInfo.cpp  - Create SCoPs from LLVM IR ------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,7 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Create a polyhedral description of the region.
+// Create a polyhedral description for a static control flow region.
+//
+// The pass creates a polyhedral description of the SCoPs detected by the SCoP
+// detection derived from their LLVM-IR code.
+//
+// This represantation is shared among several tools in the polyhedral
+// community, which are e.g. CLooG, Pluto, Loopo, Graphite.
 //
 //===----------------------------------------------------------------------===//
 
