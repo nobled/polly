@@ -318,7 +318,7 @@ class TempSCoPInfo : public RegionPass {
   // Build the affine function of the given condition
   void buildAffineCondition(Value &V, bool inverted,  SCEVAffFunc &FuncToBuild,
                             TempSCoP &SCoP) const;
-  
+
   // Return the temporary SCoP information of Region R, where R must be a valid
   // part of SCoP
   TempSCoP *getTempSCoP(Region &R);

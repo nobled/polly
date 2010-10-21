@@ -128,10 +128,12 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
     else
       AccessType = MemoryAccess::Write;
 
-    MemoryAccess *access = new MemoryAccess(AffFunc.getBaseAddr(), AccessType, map);
+    MemoryAccess *access = new MemoryAccess(AffFunc.getBaseAddr(), AccessType,
+                                            map);
     MemAccs.push_back(access);
   }
 }
+
 void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
                                              IndVarVec &IndVars) {
   isl_dim *dim = isl_dim_set_alloc(Parent.getCtx(), Parent.getNumParams(),
@@ -167,12 +169,11 @@ void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
                                      const Region &CurRegion,
                                      IndVarVec &IndVars) {
   isl_dim *dim = isl_set_get_dim(Domain);
-
-  // Build BB condition constrains, by traveling up the region tree.
-  // NOTE: This is only a temporary hack.
   const Region *TopR = tempSCoP.getMaxRegion().getParent(),
                *CurR = &CurRegion;
   const BasicBlock *CurEntry = BB;
+
+  // Build BB condition constrains, by traveling up the region tree.
   do {
     assert(CurR && "We exceed the top region?");
     // Skip when multiple regions share the same entry.
@@ -433,6 +434,7 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   if (TempSCoP *tempSCoP = getAnalysis<TempSCoPInfo>().getTempSCoP()) {
     // Statistics
     ++SCoPFound;
+
     if (tempSCoP->getMaxLoopDepth() > 0) ++RichSCoPFound;
 
     scop = new SCoP(*tempSCoP, *LI, *SE);
