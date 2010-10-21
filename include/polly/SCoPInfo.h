@@ -35,12 +35,14 @@ namespace llvm {
 struct isl_map;
 struct isl_set;
 struct isl_ctx;
+struct isl_dim;
 
 namespace polly {
 
 class SCoP;
 class SCoPInfo;
 class TempSCoP;
+class SCEVAffFunc;
 
 //===----------------------------------------------------------------------===//
 /// @brief Represent memory accesses in statements.
@@ -84,8 +86,8 @@ private:
   const Value* BaseAddr;
 
 public:
-  MemoryAccess(const Value *Base, AccessType AccType, isl_map *accRel)
-    : AccessRelation(accRel), Type(AccType), BaseAddr(Base) {}
+  MemoryAccess(const SCEVAffFunc &AffFunc, SmallVectorImpl<Loop*> &NestLoops,
+               SCoP &S, ScalarEvolution &SE);
 
   ~MemoryAccess();
 

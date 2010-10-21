@@ -17,9 +17,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/TempSCoPInfo.h"
-
 #include "polly/SCoPInfo.h"
+
+#include "polly/TempSCoPInfo.h"
 #include "polly/LinkAllPasses.h"
 #include "polly/Support/SCoPHelper.h"
 
@@ -42,6 +42,22 @@ STATISTIC(RichSCoPFound,   "Number of SCoPs containing a loop");
 //===----------------------------------------------------------------------===//
 MemoryAccess::~MemoryAccess() {
   isl_map_free(getAccessFunction());
+}
+
+MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc,
+                           SmallVectorImpl<Loop*> &NestLoops,
+                           SCoP &S, ScalarEvolution &SE) {
+  isl_dim *dim = isl_dim_alloc(S.getCtx(), S.getNumParams(),
+                               NestLoops.size(), 1);
+
+  isl_basic_map *bmap = isl_basic_map_universe(dim);
+  isl_constraint *c;
+
+  c = AffFunc.toAccessFunction(dim, NestLoops, S.getParams(), SE);
+  bmap = isl_basic_map_add_constraint(bmap, c);
+  AccessRelation = isl_map_from_basic_map(bmap);
+
+  Type = AffFunc.isRead() ? Read : Write;
 }
 
 void MemoryAccess::print(raw_ostream &OS) const {
@@ -105,39 +121,14 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
   Scattering = isl_map_from_basic_map(bmap);
 }
 
-
 void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
                              ScalarEvolution &SE, SmallVectorImpl<Loop*>
                              &NestLoops) {
   const AccFuncSetType *AccFuncs = tempSCoP.getAccessFunctions(BB);
 
-  if (!AccFuncs)
-    return;
-
-  // At the moment, getelementptr translates multiple dimensions to
-  // one dimension.
-  isl_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
-                                 NestLoops.size(), 1);
   for (AccFuncSetType::const_iterator I = AccFuncs->begin(),
-       E = AccFuncs->end(); I != E; ++I) {
-    const SCEVAffFunc &AffFunc = *I;
-    isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
-    isl_constraint *c;
-
-    c = AffFunc.toAccessFunction(dim, NestLoops, Parent.getParams(), SE);
-    bmap = isl_basic_map_add_constraint(bmap, c);
-    isl_map *map = isl_map_from_basic_map(bmap);
-
-    MemoryAccess::AccessType AccessType;
-    if (AffFunc.isRead())
-      AccessType = MemoryAccess::Read;
-    else
-      AccessType = MemoryAccess::Write;
-
-    MemoryAccess *access = new MemoryAccess(AffFunc.getBaseAddr(), AccessType,
-                                            map);
-    MemAccs.push_back(access);
-  }
+       E = AccFuncs->end(); I != E; ++I)
+    MemAccs.push_back(new MemoryAccess(*I, NestLoops, Parent, SE));
 }
 
 void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
