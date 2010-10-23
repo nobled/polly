@@ -145,19 +145,6 @@ Loop *polly::castToLoop(const Region &R, LoopInfo &LI) {
   return L;
 }
 
-// Get the Loop containing all bbs of this region, for ScalarEvolution
-// "getSCEVAtScope".
-Loop *polly::getScopeLoop(const Region &R, LoopInfo &LI) {
-  const Region *tempR = &R;
-  while (tempR) {
-    if (Loop *L = castToLoop(*tempR, LI))
-      return L;
-
-    tempR = tempR->getParent();
-  }
-  return 0;
-}
-
 Value *polly::getPointerOperand(Instruction &Inst) {
   if (LoadInst *load = dyn_cast<LoadInst>(&Inst))
     return load->getPointerOperand();

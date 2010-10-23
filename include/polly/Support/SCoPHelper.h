@@ -41,18 +41,6 @@ namespace polly {
   ///         return the loop, otherwise, return null.
   llvm::Loop *castToLoop(const llvm::Region &R, llvm::LoopInfo &LI);
 
-  /// @brief Get the Loop containing all bbs of this region,
-  ///
-  /// This function is mainly used to get the loop for ScalarEvolution
-  /// "getSCEVAtScope".
-  ///
-  /// @param R  The "Scope".
-  /// @param LI The LoopInfo to help the casting.
-  ///
-  /// @return If there is a loop that has the same entry and exit as R or its
-  ///          parent, return the loop, otherwise, return null.
-  llvm::Loop *getScopeLoop(const llvm::Region &R, llvm::LoopInfo &LI);
-
   //===----------------------------------------------------------------------===//
   // Functions for checking affine functions.
   bool isInvariant(const llvm::SCEV *S, llvm::Region &R);
