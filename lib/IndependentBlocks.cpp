@@ -367,7 +367,7 @@ bool IndependentBlocks::translateScalarToArray(Instruction *Inst,
         LoadOutside.push_back(U);
 
       if (isIndVar(U, LI))
-        return false;
+        continue;
 
       if (R->contains(UParent) && isEscapeOperand(Inst, UParent, R))
         LoadInside.push_back(U);
