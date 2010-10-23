@@ -375,12 +375,11 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
   if (L)
     NestLoops.push_back(L);
 
-  // TODO: Scattering function for non-linear CFG.
   unsigned loopDepth = NestLoops.size();
   assert(Scatter.size() > loopDepth && "Scatter not big enough!");
 
   for (Region::const_element_iterator I = CurRegion.element_begin(),
-      E = CurRegion.element_end(); I != E; ++I)
+       E = CurRegion.element_end(); I != E; ++I)
     if (I->isSubRegion())
       buildSCoP(tempSCoP, *(I->getNodeAs<Region>()), NestLoops, Scatter,
                 LI, SE);
@@ -390,27 +389,21 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
       if (isTrivialBB(BB, tempSCoP))
         continue;
 
-      // Build the statement.
-      SCoPStmt *stmt = new SCoPStmt(*this, tempSCoP, CurRegion, *BB,
-                                    NestLoops, Scatter, SE);
-
-      // Add the new statement to statements list.
-      Stmts.push_back(stmt);
+      Stmts.push_back(new SCoPStmt(*this, tempSCoP, CurRegion, *BB, NestLoops,
+                                   Scatter, SE));
 
       // Increasing the Scattering function is OK for the moment, because
-      // we are using a depth first iterator and the program is linear.
+      // we are using a depth first iterator and the program is well structured.
       ++Scatter[loopDepth];
     }
 
-  if (L) {
-    // Clear the scatter function when leaving the loop.
-    Scatter[loopDepth] = 0;
-    NestLoops.pop_back();
-    // To next loop.
-    ++Scatter[loopDepth-1];
-    // TODO: scattering function for non-linear CFG
-  }
+  if (!L)
+    return;
 
+  // Exiting a loop region.
+  Scatter[loopDepth] = 0;
+  NestLoops.pop_back();
+  ++Scatter[loopDepth-1];
 }
 
 //===----------------------------------------------------------------------===//
