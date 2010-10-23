@@ -16,10 +16,10 @@ add_polly_library(LLVMPolly
   CodePreparation.cpp
   CodeGeneration.cpp
   Dependences.cpp
-  GraphPrinter.cpp
   IndependentBlocks.cpp
   SCoPPrinter.cpp
   SCoPDetection.cpp
+  SCoPGraphPrinter.cpp
   SCoPInfo.cpp
   TempSCoPInfo.cpp
   Support/GmpConv.cpp
