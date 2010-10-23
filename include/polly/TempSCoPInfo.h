@@ -154,17 +154,14 @@ typedef std::map<const BasicBlock*, AccFuncSetType> AccFuncMapType;
 //===---------------------------------------------------------------------===//
 /// @brief SCoP represent with llvm objects.
 ///
-/// A helper class for remembering the parameter number and the max depth  in
+/// A helper class for remembering the parameter number and the max depth in
 /// this SCoP, and others context.
-///
 class TempSCoP {
   // The Region.
   Region &R;
 
   // Parameters used in this SCoP.
   ParamSetType Params;
-
-  // TODO: Constraints on parameters?
 
   // The max loop depth of this SCoP
   unsigned MaxLoopDepth;
@@ -274,12 +271,11 @@ class TempSCoPInfo : public RegionPass {
 
   // Current region
   Region *CurR;
+
   // Valid Regions for SCoP
   SCoPDetection *SD;
 
-  // FIXME: This is only a temporary hack, we need a standalone condition
-  // analysis and construction pass.
-  // For simple condition extraction support
+  // For condition extraction support.
   DominatorTree *DT;
   PostDominatorTree *PDT;
 
