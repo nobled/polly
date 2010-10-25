@@ -421,13 +421,14 @@ SCoP::~SCoP() {
 
 void SCoP::printContext(raw_ostream &OS) const {
   OS << "\tContext:\n";
-  if (Context) {
-    isl_set_print(Context, stderr, 12, ISL_FORMAT_ISL);
-    DEBUG(isl_set_dump(Context, stderr, 12));
-  }
-  else
-    OS << "\t\tn/a\n";
 
+  if (!Context) {
+    OS << "\t\tn/a\n\n";
+    return;
+  }
+
+  isl_set_print(Context, stderr, 12, ISL_FORMAT_ISL);
+  DEBUG(isl_set_dump(Context, stderr, 12));
   OS << "\n";
 }
 
