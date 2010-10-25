@@ -521,12 +521,13 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
 
   TempSCoP *tempSCoP = getAnalysis<TempSCoPInfo>().getTempSCoP();
 
+  // This region is no SCoP.
   if (!tempSCoP) {
     scop = 0;
     return false;
   }
 
-  // Statistics
+  // Statistics.
   ++SCoPFound;
   if (tempSCoP->getMaxLoopDepth() > 0) ++RichSCoPFound;
 
