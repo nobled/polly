@@ -50,6 +50,8 @@ MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc,
                            SCoP &S, ScalarEvolution &SE) {
   isl_dim *dim = isl_dim_alloc(S.getCtx(), S.getNumParams(),
                                NestLoops.size(), 1);
+  dim = isl_dim_set_tuple_name(dim, isl_dim_out, "memloc");
+  dim = isl_dim_set_tuple_name(dim, isl_dim_in, "iterators");
 
   isl_basic_map *bmap = isl_basic_map_universe(dim);
   isl_constraint *c;
@@ -124,6 +126,8 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
   unsigned ScatDim = Parent.getMaxLoopDepth() * 2 + 1;
   isl_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
                                  CurLoopDepth, ScatDim);
+  dim = isl_dim_set_tuple_name(dim, isl_dim_out, "scattering");
+  dim = isl_dim_set_tuple_name(dim, isl_dim_in, "iterators");
   isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
   isl_int v;
   isl_int_init(v);
@@ -236,6 +240,7 @@ void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
                                              IndVarVec &IndVars) {
   isl_dim *dim = isl_dim_set_alloc(Parent.getCtx(), Parent.getNumParams(),
                                      IndVars.size());
+  dim = isl_dim_set_tuple_name(dim, isl_dim_set, "iterators");
   isl_basic_set *bset = isl_basic_set_universe(dim);
 
   isl_int v;
