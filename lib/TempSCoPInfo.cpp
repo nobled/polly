@@ -34,8 +34,7 @@ using namespace polly;
 SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
                          ScalarEvolution *SE) : FuncType(Type) {
   assert(S && "S can not be null!");
-  assert(!isa<SCEVCouldNotCompute>(S)
-    && "Broken affine function in SCoP");
+  assert(!isa<SCEVCouldNotCompute>(S) && "Non affine function in SCoP");
 
   for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end();
        I != E; ++I) {
@@ -50,7 +49,7 @@ SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
       TransComp = I->second;
     else if (Var->getType()->isPointerTy()) { // Extract the base address.
       const SCEVUnknown *Addr = dyn_cast<SCEVUnknown>(Var);
-      assert(Addr && "Why we got a broken scev?");
+      assert(Addr && "Why did we get a broken scev?");
       BaseAddr = Addr->getValue();
     } else // Extract other affine components.
       LnrTrans.insert(*I);
@@ -90,6 +89,11 @@ void SCEVAffFunc::dump() const {
   print(errs());
 }
 
+inline raw_ostream &operator<<(raw_ostream &OS, const SCEVAffFunc &AffFunc) {
+  AffFunc.print(OS);
+  return OS;
+}
+
 /// Helper function to print the condition
 static void printBBCond(raw_ostream &OS, const BBCond &Cond) {
   assert(!Cond.empty() && "Unexpected empty condition!");
@@ -100,8 +104,14 @@ static void printBBCond(raw_ostream &OS, const BBCond &Cond) {
   }
 }
 
+inline raw_ostream &operator<<(raw_ostream &OS, const BBCond &Cond) {
+  printBBCond(OS, Cond);
+  return OS;
+}
+
+
 //===----------------------------------------------------------------------===//
-// LLVMSCoP Implement
+// TempSCoP implementation
 
 void TempSCoP::print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const {
   OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
@@ -119,60 +129,46 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
                            LoopInfo *LI, const Region *CurR,
                            unsigned ind) const {
   // Print the loop bounds,  if the current region is a loop.
-  // In form of IV >= 0, LoopCount - IV >= 0.
   LoopBoundMapType::const_iterator at = LoopBounds.find(castToLoop(*CurR, *LI));
   if (at != LoopBounds.end()) {
     OS.indent(ind) << "Bounds of Loop: " << at->first->getHeader()->getName()
       << ":\t{ ";
     at->second.print(OS, false);
     OS << " }\n";
-    // Increase the indent
     ind += 2;
   }
 
-  // Iterate the region nodes of this SCoP to print
-  // the access function and loop bounds
+  // Iterate over the region nodes of this SCoP to print the access functions
+  // and loop bounds.
   for (Region::const_element_iterator I = CurR->element_begin(),
-      E = CurR->element_end(); I != E; ++I) {
-    unsigned subInd = ind;
+       E = CurR->element_end(); I != E; ++I) {
     if (I->isSubRegion()) {
       Region *subR = I->getNodeAs<Region>();
-      // Print the condition
-      if (const BBCond *Cond = getBBCond(subR->getEntry())) {
-        OS << "Constrain of Region " << subR->getNameStr() << ":\t";
-        printBBCond(OS, *Cond);
-        OS << '\n';
-      }
-      printDetail(OS, SE, LI, subR, subInd);
+
+      if (const BBCond *Cond = getBBCond(subR->getEntry()))
+        OS << "Constrain of Region " << subR->getNameStr() << ":\t" << *Cond
+          << '\n';
+
+      printDetail(OS, SE, LI, subR, ind + 2);
     } else {
-      unsigned bb_ind = ind + 2;
       BasicBlock *BB = I->getNodeAs<BasicBlock>();
+
       if (BB != CurR->getEntry())
-        if (const BBCond *Cond = getBBCond(BB)) {
-          OS << "Constrain of BB " << BB->getName() << ":\t";
-          printBBCond(OS, *Cond);
-          OS << '\n';
-        }
+        if (const BBCond *Cond = getBBCond(BB))
+          OS << "Constrain of BB " << BB->getName() << ":\t" << *Cond << '\n';
 
       if (const AccFuncSetType *AccFunc = getAccessFunctions(BB)) {
         OS.indent(ind) << "BB: " << BB->getName() << "{\n";
+
         for (AccFuncSetType::const_iterator FI = AccFunc->begin(),
-            FE = AccFunc->end(); FI != FE; ++FI) {
-          FI->print(OS.indent(bb_ind));
-          OS << "\n";
-        }
+             FE = AccFunc->end(); FI != FE; ++FI)
+          OS.indent(ind + 2) << *FI << '\n';
+
         OS.indent(ind) << "}\n";
       }
     }
   }
 }
-
-//===----------------------------------------------------------------------===//
-// TempSCoP information extraction pass implement
-char TempSCoPInfo::ID = 0;
-
-static RegisterPass<TempSCoPInfo>
-X("polly-analyze-ir", "Polly - Analyse the LLVM-IR in the detected regions");
 
 void TempSCoPInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
                                        Region &R, ParamSetType &Params) const {
@@ -405,7 +401,7 @@ bool TempSCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
 
   TSCoP = NULL;
 
-  // Only analyse the maximal SCoPs.
+  // Only analyse maximal SCoPs.
   if (!SD->isMaxRegionInSCoP(*R)) return false;
 
   TSCoP = buildTempSCoP(*R);
@@ -435,3 +431,11 @@ void TempSCoPInfo::clear() {
     delete TSCoP;
   TSCoP = 0;
 }
+
+//===----------------------------------------------------------------------===//
+// TempSCoP information extraction pass implement
+char TempSCoPInfo::ID = 0;
+
+static RegisterPass<TempSCoPInfo>
+X("polly-analyze-ir", "Polly - Analyse the LLVM-IR in the detected regions");
+
