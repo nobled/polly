@@ -519,16 +519,18 @@ bool SCoPInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   LoopInfo *LI = &getAnalysis<LoopInfo>();
   ScalarEvolution *SE = &getAnalysis<ScalarEvolution>();
 
-  // Only build the SCoP, if the temporary SCoP information is available.
-  if (TempSCoP *tempSCoP = getAnalysis<TempSCoPInfo>().getTempSCoP()) {
-    // Statistics
-    ++SCoPFound;
+  TempSCoP *tempSCoP = getAnalysis<TempSCoPInfo>().getTempSCoP();
 
-    if (tempSCoP->getMaxLoopDepth() > 0) ++RichSCoPFound;
-
-    scop = new SCoP(*tempSCoP, *LI, *SE);
-  } else
+  if (!tempSCoP) {
     scop = 0;
+    return false;
+  }
+
+  // Statistics
+  ++SCoPFound;
+  if (tempSCoP->getMaxLoopDepth() > 0) ++RichSCoPFound;
+
+  scop = new SCoP(*tempSCoP, *LI, *SE);
 
   return false;
 }
