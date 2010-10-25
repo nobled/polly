@@ -412,20 +412,34 @@ int OpenSCoP::accessToMatrix_constraint(isl_constraint *c, void *user) {
   isl_int v;
   isl_int_init(v);
 
+  // The access dimension has to be one.
+  isl_constraint_get_coefficient(c, isl_dim_out, 0, &v);
+  assert(isl_int_is_one(v));
+  bool inverse = true ;
+
   // Assign variables
   for (int i = 0; i < nb_in; ++i) {
     isl_constraint_get_coefficient(c, isl_dim_in, i, &v);
+
+    if (inverse) isl_int_neg(v,v);
+
     isl_int_set(vec->p[i + 1], v);
   }
 
   // Assign parameters
   for (int i = 0; i < nb_params; ++i) {
     isl_constraint_get_coefficient(c, isl_dim_param, i, &v);
+
+    if (inverse) isl_int_neg(v,v);
+
     isl_int_set(vec->p[nb_in + i + 1], v);
   }
 
   // Assign constant
   isl_constraint_get_constant(c, &v);
+
+  if (inverse) isl_int_neg(v,v);
+
   isl_int_set(vec->p[nb_in + nb_params + 1], v);
 
   openscop_matrix_insert_vector(m, vec, m->NbRows);
