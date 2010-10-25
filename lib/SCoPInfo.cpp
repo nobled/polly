@@ -54,6 +54,7 @@ MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc,
   isl_basic_map *bmap = isl_basic_map_universe(dim);
   isl_constraint *c;
 
+  BaseAddr = AffFunc.getBaseAddr();
   c = toAccessFunction(AffFunc, dim, NestLoops, S.getParams(), SE);
   bmap = isl_basic_map_add_constraint(bmap, c);
   AccessRelation = isl_map_from_basic_map(bmap);
