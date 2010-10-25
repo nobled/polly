@@ -176,6 +176,62 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
     MemAccs.push_back(new MemoryAccess(*I, NestLoops, Parent, SE));
 }
 
+isl_constraint *SCoPStmt::toConditionConstrain(const SCEVAffFunc &AffFunc,
+  isl_dim *dim,
+  const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
+  const SmallVectorImpl<const SCEV*> &Params) const {
+
+  unsigned num_in = IndVars.size(), num_param = Params.size();
+
+  isl_constraint *c = 0;
+  if (AffFunc.getType() == SCEVAffFunc::GE)
+    c = isl_inequality_alloc(isl_dim_copy(dim));
+  else // "!= 0" and "== 0".
+    c = isl_equality_alloc(isl_dim_copy(dim));
+
+  isl_int v;
+  isl_int_init(v);
+
+  // Set the coefficient for induction variables.
+  for (unsigned i = 0, e = num_in; i != e; ++i) {
+    setCoefficient(AffFunc.getCoeff(IndVars[i]), v, false, AffFunc.isSigned());
+    isl_constraint_set_coefficient(c, isl_dim_set, i, v);
+  }
+
+  // Set the coefficient of parameters
+  for (unsigned i = 0, e = num_param; i != e; ++i) {
+    setCoefficient(AffFunc.getCoeff(Params[i]), v, false, AffFunc.isSigned());
+    isl_constraint_set_coefficient(c, isl_dim_param, i, v);
+  }
+
+  // Set the constant.
+  setCoefficient(AffFunc.getTransComp(), v, false, AffFunc.isSigned());
+  isl_constraint_set_constant(c, v);
+  isl_int_clear(v);
+
+  return c;
+}
+
+isl_set *SCoPStmt::toConditionSet(const SCEVAffFunc &AffFunc,
+  isl_dim *dim, const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
+  const SmallVectorImpl<const SCEV*> &Params) const {
+
+  isl_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
+  isl_constraint *c = toConditionConstrain(AffFunc, dim, IndVars, Params);
+  bset = isl_basic_set_add_constraint(bset, c);
+  isl_set *ret = isl_set_from_basic_set(bset);
+
+  if (AffFunc.getType() == SCEVAffFunc::Ne) {
+    // Invert the equal condition to get the not equal condition.
+    ret = isl_set_complement(ret);
+    DEBUG(dbgs() << "Ne:\n");
+    DEBUG(isl_set_print(ret, stderr, 8, ISL_FORMAT_ISL));
+  }
+
+  return ret;
+}
+
+
 void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
                                              IndVarVec &IndVars) {
   isl_dim *dim = isl_dim_set_alloc(Parent.getCtx(), Parent.getNumParams(),
@@ -196,8 +252,7 @@ void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
     bset = isl_basic_set_add_constraint(bset, c);
 
     // Upper bound: IV <= NumberOfIterations.
-    c = bound.toConditionConstrain(Parent.getCtx(), dim, IndVars,
-                                   Parent.getParams());
+    c = toConditionConstrain(bound, dim, IndVars, Parent.getParams());
     isl_int_set_si(v, -1);
     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
     bset = isl_basic_set_add_constraint(bset, c);
@@ -223,8 +278,7 @@ void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
       if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
         for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end();
              I != E; ++I) {
-          isl_set *c = (*I).toConditionSet(Parent.getCtx(), dim,
-                                             IndVars, Parent.getParams());
+          isl_set *c = toConditionSet(*I,dim, IndVars, Parent.getParams());
           Domain = isl_set_intersect(Domain, c);
         }
     CurEntry = CurR->getEntry();

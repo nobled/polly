@@ -25,8 +25,6 @@
 #define DEBUG_TYPE "polly-analyze-ir"
 #include "llvm/Support/Debug.h"
 
-#include "isl_constraint.h"
-
 using namespace llvm;
 using namespace polly;
 
@@ -57,70 +55,6 @@ SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
     } else // Extract other affine components.
       LnrTrans.insert(*I);
   }
-}
-
-static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
-                           bool isSigned = true) {
-  if (Coeff) {
-    const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
-    const APInt &CI = C->getValue()->getValue();
-    MPZ_from_APInt(v, negative ? (-CI) : CI, isSigned);
-  } else
-    isl_int_set_si(v, 0);
-}
-
-isl_constraint *SCEVAffFunc::toConditionConstrain(isl_ctx *ctx,
-                         isl_dim *dim,
-                         const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
-                         const SmallVectorImpl<const SCEV*> &Params) const {
-   unsigned num_in = IndVars.size(), num_param = Params.size();
-
-   isl_constraint *c = 0;
-   if (getType() == GE)
-     c = isl_inequality_alloc(isl_dim_copy(dim));
-   else // "!= 0" and "== 0".
-     c = isl_equality_alloc(isl_dim_copy(dim));
-
-   isl_int v;
-   isl_int_init(v);
-
-   // Set the coefficient for induction variables.
-   for (unsigned i = 0, e = num_in; i != e; ++i) {
-     setCoefficient(getCoeff(IndVars[i]), v, false, isSigned);
-     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
-   }
-
-   // Set the coefficient of parameters
-   for (unsigned i = 0, e = num_param; i != e; ++i) {
-     setCoefficient(getCoeff(Params[i]), v, false, isSigned);
-     isl_constraint_set_coefficient(c, isl_dim_param, i, v);
-   }
-
-   // Set the constant.
-   setCoefficient(TransComp, v, false, isSigned);
-   isl_constraint_set_constant(c, v);
-   isl_int_clear(v);
-
-   return c;
-}
-
-isl_set *SCEVAffFunc::toConditionSet(isl_ctx *ctx,
-                         isl_dim *dim,
-                         const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
-                         const SmallVectorImpl<const SCEV*> &Params) const {
-   isl_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
-   isl_constraint *c = toConditionConstrain(ctx, dim, IndVars, Params);
-   bset = isl_basic_set_add_constraint(bset, c);
-   isl_set *ret = isl_set_from_basic_set(bset);
-
-   if (getType() == Ne) {
-     // Invert the equal condition to get the not equal condition.
-     ret = isl_set_complement(ret);
-     DEBUG(dbgs() << "Ne:\n");
-     DEBUG(isl_set_print(ret, stderr, 8, ISL_FORMAT_ISL));
-   }
-
-   return ret;
 }
 
 void SCEVAffFunc::print(raw_ostream &OS, bool PrintInequality) const {

@@ -214,6 +214,15 @@ class SCoPStmt {
           SmallVectorImpl<unsigned> &Scatter,
           ScalarEvolution &SE);
 
+  isl_constraint *toConditionConstrain(const SCEVAffFunc &AffFunc,
+    isl_dim *dim,
+    const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
+    const SmallVectorImpl<const SCEV*> &Params) const;
+
+  isl_set *toConditionSet(const SCEVAffFunc &AffFunc,
+    isl_dim *dim, const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
+    const SmallVectorImpl<const SCEV*> &Params) const;
+
   friend class SCoP;
 public:
   // The loop IVS.

@@ -20,11 +20,6 @@
 
 #include "llvm/Analysis/RegionPass.h"
 
-struct isl_constraint;
-struct isl_dim;
-struct isl_ctx;
-struct isl_set;
-
 using namespace llvm;
 
 namespace polly {
@@ -41,7 +36,7 @@ class SCEVAffFunc {
   // { Variable, Coefficient }
   typedef std::map<const SCEV*, const SCEV*> LnrTransSet;
   LnrTransSet LnrTrans;
-  bool isSigned;
+  bool has_sign;
 
 public:
   // The type of the scev affine function
@@ -65,18 +60,18 @@ private:
 
 public:
   /// @brief Create a new SCEV affine function.
-  explicit SCEVAffFunc() : TransComp(0), isSigned(true), BaseAddr(0),
+  explicit SCEVAffFunc() : TransComp(0), has_sign(true), BaseAddr(0),
     FuncType(None) {}
 
   /// @brief Create a new SCEV affine function with memory access type or
   ///        condition type
 
   explicit SCEVAffFunc(SCEVAffFuncType Type, Value* baseAddr = 0)
-    : TransComp(0), isSigned(true), BaseAddr(baseAddr), FuncType(Type) {}
+    : TransComp(0), has_sign(true), BaseAddr(baseAddr), FuncType(Type) {}
 
   SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, ScalarEvolution *SE);
 
-  void setUnsigned() {isSigned=false;}
+  void setUnsigned() {has_sign = false;}
 
   // getCoeff - Get the Coefficient of a given variable.
   const SCEV *getCoeff(const SCEV *Var) const {
@@ -88,31 +83,7 @@ public:
     return TransComp;
   }
 
-  /// @brief Build a constraint from an affine condition
-  ///       (affine function + inequality modifier ).
-  ///
-  /// @param ctx      The context of isl objects.
-  /// @param dim      The dimension of the constraint.
-  /// @param IndVars  The induction variable may appear in the affine function.
-  /// @param Params   The parameters may appear in the affine function.
-  ///
-  /// @return         The isl_constrain represented by this affine function.
-  isl_constraint *toConditionConstrain(isl_ctx *ctx, isl_dim *dim,
-    const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
-    const SmallVectorImpl<const SCEV*> &Params) const;
-
-  /// @brief Build a constraint from an affine condition
-  ///       (affine function + inequality modifier ).
-  ///
-  /// @param ctx      The context of isl objects.
-  /// @param dim      The dimension of the isl set.
-  /// @param IndVars  The induction variable may appear in the affine function.
-  /// @param Params   The parameters may appear in the affine function.
-  ///
-  /// @return         The isl_set represented by this affine function.
-  isl_set *toConditionSet(isl_ctx *ctx, isl_dim *dim,
-    const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
-    const SmallVectorImpl<const SCEV*> &Params) const;
+  bool isSigned() const { return has_sign; }
 
   bool isDataRef() const {
     return FuncType == ReadMem || FuncType == WriteMem;
