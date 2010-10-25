@@ -21,6 +21,7 @@
 
 #include "polly/TempSCoPInfo.h"
 #include "polly/LinkAllPasses.h"
+#include "polly/Support/GmpConv.h"
 #include "polly/Support/SCoPHelper.h"
 
 #include "llvm/ADT/Statistic.h"
@@ -53,11 +54,54 @@ MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc,
   isl_basic_map *bmap = isl_basic_map_universe(dim);
   isl_constraint *c;
 
-  c = AffFunc.toAccessFunction(dim, NestLoops, S.getParams(), SE);
+  c = toAccessFunction(AffFunc, dim, NestLoops, S.getParams(), SE);
   bmap = isl_basic_map_add_constraint(bmap, c);
   AccessRelation = isl_map_from_basic_map(bmap);
 
   Type = AffFunc.isRead() ? Read : Write;
+}
+
+static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
+                           bool isSigned = true) {
+  if (Coeff) {
+    const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
+    const APInt &CI = C->getValue()->getValue();
+    MPZ_from_APInt(v, negative ? (-CI) : CI, isSigned);
+  } else
+    isl_int_set_si(v, 0);
+}
+
+isl_constraint *MemoryAccess::toAccessFunction(const SCEVAffFunc &AffFunc,
+  isl_dim* dim, const SmallVectorImpl<Loop*> &NestLoops,
+  const SmallVectorImpl<const SCEV*> &Params, ScalarEvolution &SE) const {
+
+  isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+  isl_int v;
+  isl_int_init(v);
+
+  isl_int_set_si(v, 1);
+  isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
+
+  // Do not touch the current iterator.
+  for (unsigned i = 0, e = NestLoops.size(); i != e; ++i) {
+    Loop *L = NestLoops[i];
+    Value *IndVar = L->getCanonicalInductionVariable();
+    setCoefficient(AffFunc.getCoeff(SE.getSCEV(IndVar)), v, true);
+    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
+  }
+
+  // Setup the coefficient of parameters
+  for (unsigned i = 0, e = Params.size(); i != e; ++i) {
+    setCoefficient(AffFunc.getCoeff(Params[i]), v, true);
+    isl_constraint_set_coefficient(c, isl_dim_param, i, v);
+  }
+
+  // Set the const.
+  setCoefficient(AffFunc.getTransComp(), v, true);
+  isl_constraint_set_constant(c, v);
+  isl_int_clear(v);
+
+  return c;
 }
 
 void MemoryAccess::print(raw_ostream &OS) const {

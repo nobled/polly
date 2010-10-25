@@ -63,12 +63,6 @@ private:
   Value *BaseAddr;
   SCEVAffFuncType FuncType;
 
-  // getCoeff - Get the Coefficient of a given variable.
-  const SCEV *getCoeff(const SCEV *Var) const {
-    LnrTransSet::const_iterator At = LnrTrans.find(Var);
-    return At == LnrTrans.end() ? 0 : At->second;
-  }
-
 public:
   /// @brief Create a new SCEV affine function.
   explicit SCEVAffFunc() : TransComp(0), isSigned(true), BaseAddr(0),
@@ -83,6 +77,16 @@ public:
   SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, ScalarEvolution *SE);
 
   void setUnsigned() {isSigned=false;}
+
+  // getCoeff - Get the Coefficient of a given variable.
+  const SCEV *getCoeff(const SCEV *Var) const {
+    LnrTransSet::const_iterator At = LnrTrans.find(Var);
+    return At == LnrTrans.end() ? 0 : At->second;
+  }
+
+  const SCEV *getTransComp() const {
+    return TransComp;
+  }
 
   /// @brief Build a constraint from an affine condition
   ///       (affine function + inequality modifier ).
@@ -109,11 +113,6 @@ public:
   isl_set *toConditionSet(isl_ctx *ctx, isl_dim *dim,
     const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
-
-  isl_constraint *toAccessFunction(isl_dim* dim,
-    const SmallVectorImpl<Loop*> &NestLoops,
-    const SmallVectorImpl<const SCEV*> &Params,
-    ScalarEvolution &SE) const;
 
   bool isDataRef() const {
     return FuncType == ReadMem || FuncType == WriteMem;

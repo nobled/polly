@@ -36,6 +36,7 @@ struct isl_map;
 struct isl_set;
 struct isl_ctx;
 struct isl_dim;
+struct isl_constraint;
 
 namespace polly {
 
@@ -84,6 +85,11 @@ private:
   enum AccessType Type;
 
   const Value* BaseAddr;
+  isl_constraint *toAccessFunction(const SCEVAffFunc &AffFunc,
+                                   isl_dim* dim,
+                                   const SmallVectorImpl<Loop*> &NestLoops,
+                                   const SmallVectorImpl<const SCEV*> &Params,
+                                   ScalarEvolution &SE) const;
 
 public:
   MemoryAccess(const SCEVAffFunc &AffFunc, SmallVectorImpl<Loop*> &NestLoops,

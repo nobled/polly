@@ -123,39 +123,6 @@ isl_set *SCEVAffFunc::toConditionSet(isl_ctx *ctx,
    return ret;
 }
 
-isl_constraint *SCEVAffFunc::toAccessFunction(isl_dim* dim,
-                                    const SmallVectorImpl<Loop*> &NestLoops,
-                                    const SmallVectorImpl<const SCEV*> &Params,
-                                    ScalarEvolution &SE) const {
-  isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
-  isl_int v;
-  isl_int_init(v);
-
-  isl_int_set_si(v, 1);
-  isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
-
-  // Do not touch the current iterator.
-  for (unsigned i = 0, e = NestLoops.size(); i != e; ++i) {
-    Loop *L = NestLoops[i];
-    Value *IndVar = L->getCanonicalInductionVariable();
-    setCoefficient(getCoeff(SE.getSCEV(IndVar)), v, true);
-    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
-  }
-
-  // Setup the coefficient of parameters
-  for (unsigned i = 0, e = Params.size(); i != e; ++i) {
-    setCoefficient(getCoeff(Params[i]), v, true);
-    isl_constraint_set_coefficient(c, isl_dim_param, i, v);
-  }
-
-  // Set the const.
-  setCoefficient(TransComp, v, true);
-  isl_constraint_set_constant(c, v);
-  isl_int_clear(v);
-
-  return c;
-}
-
 void SCEVAffFunc::print(raw_ostream &OS, bool PrintInequality) const {
   // Print BaseAddr.
   if (isDataRef()) {
