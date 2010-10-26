@@ -25,6 +25,9 @@
 
 #include "llvm/Analysis/RegionPass.h"
 
+#define DEBUG_TYPE "polly-dependences"
+#include "llvm/Support/Debug.h"
+
 #include <isl_flow.h>
 
 using namespace polly;
@@ -36,10 +39,16 @@ class Dependences : public RegionPass {
 
   SCoP *S;
 
+  isl_union_map *must_dep, *may_dep;
+  isl_union_set *must_no_source, *may_no_source;
+
 public:
   static char ID;
 
-  Dependences() : RegionPass(ID), S(0) {}
+  Dependences() : RegionPass(ID), S(0) {
+    must_dep = may_dep = NULL;
+    must_no_source = may_no_source = NULL;
+  }
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     S = getAnalysis<SCoPInfo>().getSCoP();
@@ -47,12 +56,123 @@ public:
     if (!S)
       return false;
 
+    isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
+
+    isl_union_map *sink = isl_union_map_empty(isl_dim_copy(dim));
+    isl_union_map *must_source = isl_union_map_empty(isl_dim_copy(dim));
+    isl_union_map *may_source = isl_union_map_empty(isl_dim_copy(dim));
+    isl_union_map *schedule = isl_union_map_empty(dim);
+
+    if (must_dep)
+      isl_union_map_free(must_dep);
+
+    if (may_dep)
+      isl_union_map_free(may_dep);
+
+    if (must_no_source)
+      isl_union_set_free(must_no_source);
+
+    if (may_no_source)
+      isl_union_set_free(may_no_source);
+
+    must_dep = may_dep = NULL;
+    must_no_source = may_no_source = NULL;
+
+    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+      SCoPStmt *Stmt = *SI;
+
+      for (SCoPStmt::memacc_iterator MI = Stmt->memacc_begin(),
+           ME = Stmt->memacc_end(); MI != ME; ++MI) {
+        isl_set *domcp = isl_set_copy(Stmt->getDomain());
+        isl_map *accdom = isl_map_copy((*MI)->getAccessFunction());
+        accdom = isl_map_intersect_domain(accdom, domcp);
+        if ((*MI)->isRead())
+          isl_union_map_add_map(sink, accdom);
+        else
+          isl_union_map_add_map(must_source, accdom);
+      }
+
+      isl_union_map_add_map(schedule, isl_map_copy(Stmt->getScattering()));
+    }
+
+    DEBUG(
+      isl_printer *p = isl_printer_to_str(S->getCtx());
+
+      errs().indent(4) << "Sink:\n";
+      isl_printer_print_union_map(p, sink);
+      errs().indent(8) << isl_printer_get_str(p) << "\n";
+      isl_printer_flush(p);
+
+      errs().indent(4) << "Must Source:\n";
+      isl_printer_print_union_map(p, must_source);
+      errs().indent(8) << isl_printer_get_str(p) << "\n";
+      isl_printer_flush(p);
+
+      errs().indent(4) << "May Source:\n";
+      isl_printer_print_union_map(p, may_source);
+      errs().indent(8) << isl_printer_get_str(p) << "\n";
+      isl_printer_flush(p);
+
+      errs().indent(4) << "Schedule:\n";
+      isl_printer_print_union_map(p, schedule);
+      errs().indent(8) << isl_printer_get_str(p) << "\n";
+      isl_printer_flush(p);
+
+      isl_printer_free(p));
+
+    isl_union_map_compute_flow(sink, must_source, may_source, schedule,
+                               &must_dep, &may_dep, &must_no_source,
+                               &may_no_source);
     return false;
   }
 
-  void print(raw_ostream &OS, const Module *) const {}
+  void print(raw_ostream &OS, const Module *) const {
+    if (!S)
+      return;
 
-  virtual void releaseMemory() { S = 0; }
+    isl_printer *p = isl_printer_to_str(S->getCtx());
+
+    OS.indent(4) << "Must dependences:\n";
+    isl_printer_print_union_map(p, must_dep);
+    OS.indent(8) << isl_printer_get_str(p) << "\n";
+    isl_printer_flush(p);
+
+    OS.indent(4) << "May dependences:\n";
+    isl_printer_print_union_map(p, may_dep);
+    OS.indent(8) << isl_printer_get_str(p) << "\n";
+    isl_printer_flush(p);
+
+    OS.indent(4) << "Must no source:\n";
+    isl_printer_print_union_set(p, must_no_source);
+    OS.indent(8) << isl_printer_get_str(p) << "\n";
+    isl_printer_flush(p);
+
+    OS.indent(4) << "May no source:\n";
+    isl_printer_print_union_set(p, may_no_source);
+    OS.indent(8) << isl_printer_get_str(p) << "\n";
+    isl_printer_flush(p);
+
+    isl_printer_free(p);
+  }
+
+  virtual void releaseMemory() {
+    S = 0;
+
+    if (must_dep)
+      isl_union_map_free(must_dep);
+
+    if (may_dep)
+      isl_union_map_free(may_dep);
+
+    if (must_no_source)
+      isl_union_set_free(must_no_source);
+
+    if (may_no_source)
+      isl_union_set_free(may_no_source);
+
+    must_dep = may_dep = NULL;
+    must_no_source = may_no_source = NULL;
+  }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<SCoPInfo>();
