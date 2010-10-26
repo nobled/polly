@@ -85,14 +85,30 @@ public:
            ME = Stmt->memacc_end(); MI != ME; ++MI) {
         isl_set *domcp = isl_set_copy(Stmt->getDomain());
         isl_map *accdom = isl_map_copy((*MI)->getAccessFunction());
+
+        const char *DomainName = isl_map_get_tuple_name(accdom, isl_dim_in);
+        const char *ArrayName = isl_map_get_tuple_name(accdom, isl_dim_out);
+
+        std::string DN = DomainName;
+        std::string AN = ArrayName;
+
+        std::string Combined = DN + "__" + AN;
+
         accdom = isl_map_intersect_domain(accdom, domcp);
+
+        accdom = isl_map_set_tuple_name(accdom, isl_dim_in, Combined.c_str());
+
         if ((*MI)->isRead())
           isl_union_map_add_map(sink, accdom);
         else
           isl_union_map_add_map(must_source, accdom);
-      }
 
-      isl_union_map_add_map(schedule, isl_map_copy(Stmt->getScattering()));
+        isl_map *scattering = isl_map_copy(Stmt->getScattering());
+        scattering = isl_map_set_tuple_name(scattering, isl_dim_in,
+                                            Combined.c_str());
+
+        isl_union_map_add_map(schedule, scattering);
+      }
     }
 
     DEBUG(
@@ -138,6 +154,7 @@ public:
       return;
 
     isl_printer *p = isl_printer_to_str(S->getCtx());
+    //isl_printer_set_output_format(p, ISL_FORMAT_POLYLIB);
 
     OS.indent(4) << "Must dependences:\n";
     isl_printer_print_union_map(p, must_dep);
