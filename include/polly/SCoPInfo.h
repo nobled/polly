@@ -93,7 +93,7 @@ private:
 
 public:
   MemoryAccess(const SCEVAffFunc &AffFunc, SmallVectorImpl<Loop*> &NestLoops,
-               SCoP &S, ScalarEvolution &SE);
+               SCoP &S, ScalarEvolution &SE, const char *BaseName);
 
   ~MemoryAccess();
 
@@ -227,6 +227,7 @@ class SCoPStmt {
 public:
   // The loop IVS.
   std::vector<PHINode*> IVS;
+  const char *BaseName;
 
   ~SCoPStmt();
 

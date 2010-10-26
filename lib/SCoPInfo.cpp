@@ -47,21 +47,29 @@ MemoryAccess::~MemoryAccess() {
 
 MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc,
                            SmallVectorImpl<Loop*> &NestLoops,
-                           SCoP &S, ScalarEvolution &SE) {
+                           SCoP &S, ScalarEvolution &SE,
+                           const char *IteratorName) {
   isl_dim *dim = isl_dim_alloc(S.getCtx(), S.getNumParams(),
                                NestLoops.size(), 1);
-  dim = isl_dim_set_tuple_name(dim, isl_dim_out, "memloc");
-  dim = isl_dim_set_tuple_name(dim, isl_dim_in, "iterators");
+  BaseAddr = AffFunc.getBaseAddr();
+
+  std::string name;
+  raw_string_ostream OS(name);
+  WriteAsOperand(OS, getBaseAddr(), false);
+  name = OS.str();
+
+  dim = isl_dim_set_tuple_name(dim, isl_dim_out, name.c_str());
+  dim = isl_dim_set_tuple_name(dim, isl_dim_in, IteratorName);
 
   isl_basic_map *bmap = isl_basic_map_universe(dim);
   isl_constraint *c;
 
-  BaseAddr = AffFunc.getBaseAddr();
   c = toAccessFunction(AffFunc, dim, NestLoops, S.getParams(), SE);
   bmap = isl_basic_map_add_constraint(bmap, c);
   AccessRelation = isl_map_from_basic_map(bmap);
 
   Type = AffFunc.isRead() ? Read : Write;
+
 }
 
 static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
@@ -128,7 +136,7 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
   isl_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
                                  CurLoopDepth, ScatDim);
   dim = isl_dim_set_tuple_name(dim, isl_dim_out, "scattering");
-  dim = isl_dim_set_tuple_name(dim, isl_dim_in, "iterators");
+  dim = isl_dim_set_tuple_name(dim, isl_dim_in, BaseName);
   isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
   isl_int v;
   isl_int_init(v);
@@ -178,7 +186,7 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
 
   for (AccFuncSetType::const_iterator I = AccFuncs->begin(),
        E = AccFuncs->end(); I != E; ++I)
-    MemAccs.push_back(new MemoryAccess(*I, NestLoops, Parent, SE));
+    MemAccs.push_back(new MemoryAccess(*I, NestLoops, Parent, SE, BaseName));
 }
 
 isl_constraint *SCoPStmt::toConditionConstrain(const SCEVAffFunc &AffFunc,
@@ -241,7 +249,7 @@ void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
                                              IndVarVec &IndVars) {
   isl_dim *dim = isl_dim_set_alloc(Parent.getCtx(), Parent.getNumParams(),
                                      IndVars.size());
-  dim = isl_dim_set_tuple_name(dim, isl_dim_set, "iterators");
+  dim = isl_dim_set_tuple_name(dim, isl_dim_set, BaseName);
   isl_basic_set *bset = isl_basic_set_universe(dim);
 
   isl_int v;
@@ -322,6 +330,12 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
     assert(PN && "Non canonical IV in SCoP!");
     IVS[i] = PN;
   }
+
+  std::string name;
+  raw_string_ostream OS(name);
+  WriteAsOperand(OS, &bb, false);
+  name = OS.str();
+  BaseName = name.c_str();
 
   buildIterationDomain(tempSCoP, CurRegion, SE);
   buildScattering(Scatter, NestLoops.size());
