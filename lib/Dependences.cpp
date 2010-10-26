@@ -123,6 +123,13 @@ public:
     isl_union_map_compute_flow(sink, must_source, may_source, schedule,
                                &must_dep, &may_dep, &must_no_source,
                                &may_no_source);
+
+    // Remove redundant statements.
+    must_dep = isl_union_map_coalesce(must_dep);
+    may_dep = isl_union_map_coalesce(may_dep);
+    must_no_source = isl_union_set_coalesce(must_no_source);
+    may_no_source = isl_union_set_coalesce(may_no_source);
+
     return false;
   }
 
