@@ -108,12 +108,13 @@ isl_constraint *MemoryAccess::toAccessFunction(const SCEVAffFunc &AffFunc,
 }
 
 void MemoryAccess::print(raw_ostream &OS) const {
-  OS << (isRead() ? "Reads" : "Writes") << " ";
+  OS.indent(12) << (isRead() ? "Reads" : "Writes") << " ";
   WriteAsOperand(OS, getBaseAddr(), false);
   OS << " at:\n";
-  isl_map_print(getAccessFunction(), stderr, 20, ISL_FORMAT_ISL);
-  DEBUG(OS << "\n");
-  DEBUG(isl_map_dump(getAccessFunction(), stderr, 20));
+  isl_printer *p = isl_printer_to_str(isl_map_get_ctx(getAccessFunction()));
+  isl_printer_print_map(p, getAccessFunction());
+  OS.indent(16) << isl_printer_get_str(p) << "\n";
+  isl_printer_free(p);
 }
 
 void MemoryAccess::dump() const {
@@ -354,33 +355,32 @@ SCoPStmt::~SCoPStmt() {
 }
 
 void SCoPStmt::print(raw_ostream &OS) const {
-  OS << "\tStatement " << BB->getNameStr() << ":\n";
+  OS << "\t" << BB->getNameStr() << "\n";
+  isl_printer *p = isl_printer_to_str(Parent.getCtx());
 
-  OS << "\t\tDomain:\n";
+  OS.indent(12) << "Domain:\n";
+
   if (Domain) {
-    isl_set_print(Domain, stderr, 20, ISL_FORMAT_ISL);
-    DEBUG(OS << "\n");
-    DEBUG(isl_set_dump(Domain, stderr, 20));
+    isl_printer_print_set(p, Domain);
+    OS.indent(16) << isl_printer_get_str(p) << "\n";
   } else
-    OS << "\t\t\tn/a\n";
+    OS.indent(16) << "n/a\n";
 
-  OS << "\n";
+  OS.indent(12) << "Scattering:\n";
 
-  OS << "\t\t Scattering:\n";
-  if (Scattering) {
-    isl_map_print(Scattering, stderr, 20, ISL_FORMAT_ISL);
-    DEBUG(OS << "\n");
-    DEBUG(isl_map_dump(Scattering, stderr, 20));
+  isl_printer_flush(p);
+
+  if (Domain) {
+    isl_printer_print_map(p, Scattering);
+    OS.indent(16) << isl_printer_get_str(p) << "\n";
   } else
-    OS << "\t\t\tn/a\n";
-
-  OS << "\n";
+    OS.indent(16) << "n/a\n";
 
   for (MemoryAccessVec::const_iterator I = MemAccs.begin(), E = MemAccs.end();
-      I != E; ++I) {
+      I != E; ++I)
     (*I)->print(OS);
-    OS << "\n";
-  }
+
+  isl_printer_free(p);
 }
 
 void SCoPStmt::dump() const { print(dbgs()); }
@@ -425,40 +425,32 @@ SCoP::~SCoP() {
 }
 
 void SCoP::printContext(raw_ostream &OS) const {
-  OS << "\tContext:\n";
+  OS << "Context:\n";
 
   if (!Context) {
-    OS << "\t\tn/a\n\n";
+    OS.indent(4) << "n/a\n\n";
     return;
   }
 
-  isl_set_print(Context, stderr, 12, ISL_FORMAT_ISL);
-  DEBUG(isl_set_dump(Context, stderr, 12));
-  OS << "\n";
+  isl_printer *p = isl_printer_to_str(getCtx());
+  isl_printer_print_set(p, Context);
+  OS.indent(4) << isl_printer_get_str(p) << "\n";
+  isl_printer_free(p);
 }
 
 void SCoP::printStatements(raw_ostream &OS) const {
   OS << "Statements {\n";
 
   for (const_iterator SI = begin(), SE = end();SI != SE; ++SI)
-    OS << (**SI) << "\n";
+    OS.indent(4) << (**SI);
 
-  OS << "}\n";
+  OS.indent(4) << "}\n";
 }
 
 
 void SCoP::print(raw_ostream &OS) const {
-  // Parameters.
-  OS << "SCoP: " << R.getNameStr() << "\tParameters: (";
-  for (const_param_iterator PI = param_begin(), PE = param_end();
-        PI != PE; ++PI)
-    OS << **PI << ", ";
-
-  OS << "), Max Loop Depth: "<< MaxLoopDepth <<"\n";
-
-  printContext(OS);
-  printStatements(OS);
-
+  printContext(OS.indent(4));
+  printStatements(OS.indent(4));
 }
 
 void SCoP::dump() const { print(dbgs()); }
