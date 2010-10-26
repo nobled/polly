@@ -120,7 +120,7 @@ isl_map *scatteringForStmt(openscop_matrix_p m, SCoPStmt *PollyStmt) {
   isl_ctx *ctx = PollyStmt->getParent()->getCtx();
   isl_dim *dim = isl_dim_alloc(ctx, NbParam, NbIterators, NbScattering);
   dim = isl_dim_set_tuple_name(dim, isl_dim_out, "scattering");
-  dim = isl_dim_set_tuple_name(dim, isl_dim_in, "iterators");
+  dim = isl_dim_set_tuple_name(dim, isl_dim_in, PollyStmt->getBaseName());
   isl_map *map = mapFromMatrix(m, dim);
   isl_dim_free(dim);
 

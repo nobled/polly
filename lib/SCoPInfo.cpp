@@ -136,7 +136,7 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
   isl_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
                                  CurLoopDepth, ScatDim);
   dim = isl_dim_set_tuple_name(dim, isl_dim_out, "scattering");
-  dim = isl_dim_set_tuple_name(dim, isl_dim_in, BaseName);
+  dim = isl_dim_set_tuple_name(dim, isl_dim_in, getBaseName());
   isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
   isl_int v;
   isl_int_init(v);
@@ -186,7 +186,8 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
 
   for (AccFuncSetType::const_iterator I = AccFuncs->begin(),
        E = AccFuncs->end(); I != E; ++I)
-    MemAccs.push_back(new MemoryAccess(*I, NestLoops, Parent, SE, BaseName));
+    MemAccs.push_back(new MemoryAccess(*I, NestLoops, Parent, SE,
+                                       getBaseName()));
 }
 
 isl_constraint *SCoPStmt::toConditionConstrain(const SCEVAffFunc &AffFunc,
@@ -249,7 +250,7 @@ void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
                                              IndVarVec &IndVars) {
   isl_dim *dim = isl_dim_set_alloc(Parent.getCtx(), Parent.getNumParams(),
                                      IndVars.size());
-  dim = isl_dim_set_tuple_name(dim, isl_dim_set, BaseName);
+  dim = isl_dim_set_tuple_name(dim, isl_dim_set, getBaseName());
   isl_basic_set *bset = isl_basic_set_universe(dim);
 
   isl_int v;
@@ -331,11 +332,9 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
     IVS[i] = PN;
   }
 
-  std::string name;
-  raw_string_ostream OS(name);
+  raw_string_ostream OS(BaseName);
   WriteAsOperand(OS, &bb, false);
-  name = OS.str();
-  BaseName = name.c_str();
+  BaseName = OS.str();
 
   buildIterationDomain(tempSCoP, CurRegion, SE);
   buildScattering(Scatter, NestLoops.size());

@@ -224,10 +224,10 @@ class SCoPStmt {
     const SmallVectorImpl<const SCEV*> &Params) const;
 
   friend class SCoP;
+  std::string BaseName;
 public:
   // The loop IVS.
   std::vector<PHINode*> IVS;
-  const char *BaseName;
 
   ~SCoPStmt();
 
@@ -258,6 +258,8 @@ public:
   unsigned getNumScattering();
 
   SCoP *getParent() { return &Parent; }
+
+  const char*getBaseName() const { return BaseName.c_str(); }
 
   /// @brief Get the induction variable of the loop a given level.
   ///
