@@ -184,7 +184,7 @@ std::string SCoPImporter::getFileName(Region *R) const {
   std::string RegionName = EntryName + "---" + ExitName;
   std::string FileName = FunctionName + "___" + RegionName + ".scop";
 
-  return FileName;
+  return FileName + ImportPostfix;
 }
 
 void SCoPImporter::print(raw_ostream &OS, const Module *) const {}
@@ -195,7 +195,7 @@ bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
   if (!S)
     return false;
 
-  std::string FileName = ImportDir + "/" + getFileName(R) + ImportPostfix;
+  std::string FileName = ImportDir + "/" + getFileName(R);
   FILE *F = fopen(FileName.c_str(), "r");
 
   if (!F) {
@@ -209,7 +209,7 @@ bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
 
   std::string FunctionName = R->getEntry()->getParent()->getNameStr();
   errs() << "Reading SCoP '" << R->getNameStr() << "' in function '"
-    << FunctionName << "' from '" << FileName << ImportPostfix << "'.\n";
+    << FunctionName << "' from '" << FileName << "'.\n";
 
   bool UpdateSuccessfull = updateScattering(S, scop);
 

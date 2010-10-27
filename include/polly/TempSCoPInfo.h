@@ -102,6 +102,18 @@ public:
   void dump() const;
 };
 
+class Comparison {
+
+  SCEVAffFunc *LHS;
+  SCEVAffFunc *RHS;
+
+  ICmpInst::Predicate *Pred;
+
+public:
+  Comparison(SCEVAffFunc *lhs, SCEVAffFunc *rhs, ICmpInst::Predicate *pred)
+    : LHS(lhs), RHS(rhs), Pred(pred) {}
+};
+
 //===---------------------------------------------------------------------===//
 /// Types
 // The condition of a Basicblock, combine brcond with "And" operator.
