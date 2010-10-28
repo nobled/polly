@@ -1,4 +1,31 @@
-#modify from clang cmakelist.txt
+# Check if this is a in tree build.
+if (NOT DEFINED LLVM_MAIN_SRC_DIR)
+  project(Polly)
+  cmake_minimum_required(VERSION 2.8)
+
+  # Where is LLVM installed?
+  set(LLVM_INSTALL_ROOT "" CACHE PATH "Root of LLVM install.")
+  # Check if the LLVM_INSTALL_ROOT valid.
+  if( NOT EXISTS ${LLVM_INSTALL_ROOT}/include/llvm )
+    message(FATAL_ERROR "LLVM_INSTALL_ROOT (${LLVM_INSTALL_ROOT}) is not a valid LLVM installation.")
+  endif(NOT EXISTS ${LLVM_INSTALL_ROOT}/include/llvm)
+
+  # Add the CMakefile of the installed LLVM to help config polly.
+  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${LLVM_INSTALL_ROOT}/share/llvm/cmake")
+  include(LLVM)
+
+  # Now set the header paths.
+  execute_process(COMMAND "${LLVM_INSTALL_ROOT}/bin/llvm-config" --includedir
+                  OUTPUT_VARIABLE LLVM_INCLUDE_DIR
+                  OUTPUT_STRIP_TRAILING_WHITESPACE)
+  include_directories( ${LLVM_INCLUDE_DIR} )
+
+  # And then set the cxx flags.
+  execute_process(COMMAND "${LLVM_INSTALL_ROOT}/bin/llvm-config" --cxxflags
+                  OUTPUT_VARIABLE LLVM_CXX_FLAGS
+                  OUTPUT_STRIP_TRAILING_WHITESPACE)
+  set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${LLVM_CXX_FLAGS})
+endif(NOT DEFINED LLVM_MAIN_SRC_DIR)
 
 set(POLLY_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(POLLY_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
@@ -96,15 +123,6 @@ macro(add_polly_library name)
     ARCHIVE DESTINATION lib${LLVM_LIBDIR_SUFFIX})
 endmacro(add_polly_library)
 
-macro(add_polly_executable name)
-  set(srcs ${ARGN})
-  if(MSVC_IDE)
-    file( GLOB_RECURSE headers *.h *.td *.def)
-    set(srcs ${srcs} ${headers})
-  endif(MSVC_IDE)
-  add_llvm_executable( ${name} ${srcs} )
-endmacro(add_polly_executable)
-
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_BINARY_DIR}/include
@@ -125,5 +143,5 @@ add_subdirectory(test)
 
 
 configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/include/polly/Config/config.h.cmake
-                ${LLVM_BINARY_DIR}/include/polly/Config/config.h )
+                ${POLLY_BINARY_DIR}/include/polly/Config/config.h )
 
