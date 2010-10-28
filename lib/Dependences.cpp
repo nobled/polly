@@ -28,6 +28,7 @@
 #define DEBUG_TYPE "polly-dependences"
 #include "llvm/Support/Debug.h"
 
+#ifdef ISL_DEPENDENCE_SUPPORT
 #include <isl_flow.h>
 
 using namespace polly;
@@ -213,3 +214,4 @@ X("polly-dependences", "Polly - Calculate dependences for SCoP");
 Pass* polly::createDependencesPass() {
   return new Dependences();
 }
+#endif
