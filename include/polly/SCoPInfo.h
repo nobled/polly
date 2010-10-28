@@ -325,9 +325,6 @@ class SCoP {
   /// Constraints on parameters.
   isl_set *Context;
 
-  ///
-  isl_ctx *ctx;
-
   /// Create the static control part with a region, max loop depth of this region
   /// and parameters used in this region.
   explicit SCoP(TempSCoP &TempSCoP, LoopInfo &LI, ScalarEvolution &SE);
@@ -445,7 +442,7 @@ public:
   /// @brief Get the isl context of this static control part.
   ///
   /// @return The isl context of this static control part.
-  isl_ctx *getCtx() const { return ctx; }
+  isl_ctx *getCtx() const;
 };
 
 /// @brief Print SCoP scop to raw_ostream O.

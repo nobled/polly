@@ -403,7 +403,7 @@ void SCoPStmt::dump() const { print(dbgs()); }
 SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &SE)
            : R(tempSCoP.getMaxRegion()),
            MaxLoopDepth(tempSCoP.getMaxLoopDepth()) {
-  ctx = isl_ctx_alloc();
+  isl_ctx *ctx = isl_ctx_alloc();
 
   ParamSetType &Params = tempSCoP.getParamSet();
   Parameters.insert(Parameters.begin(), Params.begin(), Params.end());
@@ -467,6 +467,8 @@ void SCoP::print(raw_ostream &OS) const {
 }
 
 void SCoP::dump() const { print(dbgs()); }
+
+isl_ctx *SCoP::getCtx() const { return isl_set_get_ctx(Context); }
 
 bool SCoP::isTrivialBB(BasicBlock *BB, TempSCoP &tempSCoP) {
   if (tempSCoP.getAccessFunctions(BB))
