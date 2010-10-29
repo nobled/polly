@@ -10,9 +10,23 @@ if (NOT DEFINED LLVM_MAIN_SRC_DIR)
     message(FATAL_ERROR "LLVM_INSTALL_ROOT (${LLVM_INSTALL_ROOT}) is not a valid LLVM installation.")
   endif(NOT EXISTS ${LLVM_INSTALL_ROOT}/include/llvm)
 
-  # Add the CMakefile of the installed LLVM to help config polly.
-  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${LLVM_INSTALL_ROOT}/share/llvm/cmake")
-  include(LLVM)
+  # Get the system librarys that will link into LLVM.
+  function(get_system_libs return_var)
+    # Returns in `return_var' a list of system libraries used by LLVM.
+    if( NOT MSVC )
+      if( MINGW )
+        set(system_libs ${system_libs} imagehlp psapi)
+      elseif( CMAKE_HOST_UNIX )
+        if( HAVE_LIBDL )
+          set(system_libs ${system_libs} ${CMAKE_DL_LIBS})
+        endif()
+        if( LLVM_ENABLE_THREADS AND HAVE_LIBPTHREAD )
+          set(system_libs ${system_libs} pthread)
+        endif()
+      endif( MINGW )
+    endif( NOT MSVC )
+    set(${return_var} ${system_libs} PARENT_SCOPE)
+  endfunction(get_system_libs)
 
   # Now set the header paths.
   execute_process(COMMAND "${LLVM_INSTALL_ROOT}/bin/llvm-config" --includedir
