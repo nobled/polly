@@ -85,7 +85,7 @@ AS_IF([test "x$isl_inc" != "x"],
   [AC_SUBST([isl_isl_inc],["$isl_inc/isl"])])
 
 dnl Find cloog
-find_lib_and_headers([cloog], [cloog/version.h], [cloog-isl], [required])
+find_lib_and_headers([cloog], [cloog/isl/cloog.h], [cloog-isl], [required])
 
 dnl Check if Scoplib there
 find_lib_and_headers([openscop], [openscop/scop.h], [openscop])

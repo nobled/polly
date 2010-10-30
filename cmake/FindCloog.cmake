@@ -1,4 +1,4 @@
-FIND_PATH(CLOOG_INCLUDE_DIR cloog/cloog.h)
+FIND_PATH(CLOOG_INCLUDE_DIR cloog/isl/cloog.h)
 
 FIND_LIBRARY(CLOOG_LIBRARY NAMES cloog-isl)
 
