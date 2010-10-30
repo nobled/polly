@@ -85,7 +85,11 @@ AS_IF([test "x$isl_inc" != "x"],
   [AC_SUBST([isl_isl_inc],["$isl_inc/isl"])])
 
 dnl Find cloog
+saved_CXXFLAGS=$CXXFLAGS
+CXXFLAGS="$CXXFLAGS $isl_inc/isl"
 find_lib_and_headers([cloog], [cloog/isl/cloog.h], [cloog-isl], [required])
+CXXFLAGS=$saved_CXXFLAGS
+
 
 dnl Check if Scoplib there
 find_lib_and_headers([openscop], [openscop/scop.h], [openscop])
