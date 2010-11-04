@@ -31,8 +31,10 @@ using namespace polly;
 //===----------------------------------------------------------------------===//
 /// Helper Class
 
-SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
-                         ScalarEvolution *SE) : FuncType(Type), has_sign(true) {
+SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, Region &R,
+                         ParamSetType &Params, LoopInfo *LI,
+                         ScalarEvolution *SE)
+    : FuncType(Type), has_sign(true) {
   assert(S && "S can not be null!");
   assert(!isa<SCEVCouldNotCompute>(S) && "Non affine function in SCoP");
 
@@ -40,19 +42,28 @@ SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type,
        I != E; ++I) {
     // The constant part must be a SCEVConstant.
     // TODO: support sizeof in coefficient.
-    assert(isa<SCEVConstant>(I->second) && "Expect SCEVConst in coefficient!");
+    assert(isa<SCEVConstant>(I->second)
+           && "Expected SCEVConst in coefficient!");
 
     const SCEV *Var = I->first;
-    // Extract the constant part
-    if (isa<SCEVConstant>(Var))
-      // Add the translation component
+
+    if (isa<SCEVConstant>(Var)) // Extract the constant part.
+      // Add the translation component.
       TransComp = I->second;
     else if (Var->getType()->isPointerTy()) { // Extract the base address.
       const SCEVUnknown *Addr = dyn_cast<SCEVUnknown>(Var);
-      assert(Addr && "Why did we get a broken scev?");
+      assert(Addr && "Broken SCEV detected!");
       BaseAddr = Addr->getValue();
-    } else // Extract other affine components.
+    } else  { // Extract other affine components.
       LnrTrans.insert(*I);
+
+      if (isIndVar(Var, R, *LI, *SE))
+        continue;
+
+      assert(isParameter(Var, R, *LI, *SE)
+               && "Found non affine function in SCoP!");
+      Params.insert(Var);
+    }
   }
 }
 

@@ -69,7 +69,17 @@ public:
   explicit SCEVAffFunc(SCEVAffFuncType Type, Value* baseAddr = 0)
     : TransComp(0), has_sign(true), BaseAddr(baseAddr), FuncType(Type) {}
 
-  SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, ScalarEvolution *SE);
+  /// @brief Construct a new SCEVAffFunc from a SCEV
+  ///
+  /// @param S The SCEV that should be translated.
+  /// @param Type The type of this affine function.
+  /// @param R The region in which the affine function is evaluated.
+  /// @param Param A set of parameters, where new parameters found in this
+  ///        affine function will be added.
+  /// @param LI A pointer to a current LoopInfo analysis.
+  /// @param SE A pointer to a current ScalarEvolution analysis.
+  SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, Region &R,
+              ParamSetType &Param, LoopInfo *LI, ScalarEvolution *SE);
 
   void setUnsigned() {has_sign = false;}
 
