@@ -44,6 +44,7 @@ class SCoP;
 class SCoPInfo;
 class TempSCoP;
 class SCEVAffFunc;
+class Comparison;
 
 //===----------------------------------------------------------------------===//
 /// @brief Represent memory accesses in statements.
@@ -219,7 +220,7 @@ class SCoPStmt {
     const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
 
-  isl_set *toConditionSet(const SCEVAffFunc &AffFunc,
+  isl_set *toConditionSet(const Comparison &Cmp,
     isl_dim *dim, const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
     const SmallVectorImpl<const SCEV*> &Params) const;
 

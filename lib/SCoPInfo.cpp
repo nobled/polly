@@ -226,25 +226,131 @@ isl_constraint *SCoPStmt::toConditionConstrain(const SCEVAffFunc &AffFunc,
   return c;
 }
 
-isl_set *SCoPStmt::toConditionSet(const SCEVAffFunc &AffFunc,
-  isl_dim *dim, const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
-  const SmallVectorImpl<const SCEV*> &Params) const {
+static isl_map *getValueOf(const SCEVAffFunc &AffFunc,
+  isl_dim *dim,
+  const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
+  const SmallVectorImpl<const SCEV*> &Params) {
 
-  isl_basic_set *bset = isl_basic_set_universe(isl_dim_copy(dim));
-  isl_constraint *c = toConditionConstrain(AffFunc, dim, IndVars, Params);
-  bset = isl_basic_set_add_constraint(bset, c);
-  isl_set *ret = isl_set_from_basic_set(bset);
+  unsigned num_in = IndVars.size(), num_param = Params.size();
 
-  if (AffFunc.getType() == SCEVAffFunc::Ne) {
-    // Invert the equal condition to get the not equal condition.
-    ret = isl_set_complement(ret);
-    DEBUG(dbgs() << "Ne:\n");
-    DEBUG(isl_set_print(ret, stderr, 8, ISL_FORMAT_ISL));
+  const char *dimname = isl_dim_get_tuple_name(dim, isl_dim_set);
+  dim = isl_dim_alloc(isl_dim_get_ctx(dim), num_param,
+                      isl_dim_size(dim, isl_dim_set), 1);
+  isl_dim_set_tuple_name(dim, isl_dim_in, dimname);
+
+  assert(AffFunc.getType() == SCEVAffFunc::Eq && "AffFunc is not an equality");
+
+  isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+
+  isl_int v;
+  isl_int_init(v);
+
+  // Set single output dimension.
+  isl_int_set_si(v, -1);
+  isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
+
+  // Set the coefficient for induction variables.
+  for (unsigned i = 0, e = num_in; i != e; ++i) {
+    setCoefficient(AffFunc.getCoeff(IndVars[i]), v, false, AffFunc.isSigned());
+    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
   }
 
-  return ret;
+  // Set the coefficient of parameters
+  for (unsigned i = 0, e = num_param; i != e; ++i) {
+    setCoefficient(AffFunc.getCoeff(Params[i]), v, false, AffFunc.isSigned());
+    isl_constraint_set_coefficient(c, isl_dim_param, i, v);
+  }
+
+  // Set the constant.
+  setCoefficient(AffFunc.getTransComp(), v, false, AffFunc.isSigned());
+  isl_constraint_set_constant(c, v);
+  isl_int_clear(v);
+
+  isl_basic_map *BasicMap = isl_basic_map_universe(isl_dim_copy(dim));
+  BasicMap = isl_basic_map_add_constraint(BasicMap, c);
+  return isl_map_from_basic_map(BasicMap);
 }
 
+static isl_map *MapValueToLHS(isl_ctx *Context, unsigned ParameterNumber) {
+  std::string MapString;
+  isl_map *Map;
+
+  MapString = "{[i0] -> [i0, o1]}";
+  Map = isl_map_read_from_str(Context, MapString.c_str(), -1);
+  return isl_map_add_dims(Map, isl_dim_param, ParameterNumber);
+}
+
+static isl_map *MapValueToRHS(isl_ctx *Context, unsigned ParameterNumber) {
+  std::string MapString;
+  isl_map *Map;
+
+  MapString = "{[i0] -> [o0, i0]}";
+  Map = isl_map_read_from_str(Context, MapString.c_str(), -1);
+  return isl_map_add_dims(Map, isl_dim_param, ParameterNumber);
+}
+
+static isl_set *getComparison(isl_ctx *Context, const ICmpInst::Predicate Pred,
+                              unsigned ParameterNumber) {
+  std::string SetString;
+
+  switch (Pred) {
+  case ICmpInst::ICMP_EQ:
+    SetString = "{[i0, i1] : i0 = i1}";
+    break;
+  case ICmpInst::ICMP_NE:
+    SetString = "{[i0, i1] : i0 + 1 <= i1; [i0, i1] : i0 - 1 >= i1}";
+    break;
+  case ICmpInst::ICMP_SLT:
+    SetString = "{[i0, i1] : i0 + 1 <= i1}";
+    break;
+  case ICmpInst::ICMP_ULT:
+    SetString = "{[i0, i1] : i0 + 1 <= i1}";
+    break;
+  case ICmpInst::ICMP_SGT:
+    SetString = "{[i0, i1] : i0 >= i1 + 1}";
+    break;
+  case ICmpInst::ICMP_UGT:
+    SetString = "{[i0, i1] : i0 >= i1 + 1}";
+    break;
+  case ICmpInst::ICMP_SLE:
+    SetString = "{[i0, i1] : i0 <= i1}";
+    break;
+  case ICmpInst::ICMP_ULE:
+    SetString = "{[i0, i1] : i0 <= i1}";
+    break;
+  case ICmpInst::ICMP_SGE:
+    SetString = "{[i0, i1] : i0 >= i1}";
+    break;
+  case ICmpInst::ICMP_UGE:
+    SetString = "{[i0, i1] : i0 >= i1}";
+    break;
+  default:
+    llvm_unreachable("Non integer predicate not supported");
+  }
+
+  isl_set *Set = isl_set_read_from_str(Context, SetString.c_str(), -1);
+  return isl_set_add_dims(Set, isl_dim_param, ParameterNumber);
+}
+
+isl_set *SCoPStmt::toConditionSet(const Comparison &Comp, isl_dim *dim,
+  const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
+  const SmallVectorImpl<const SCEV*> &Params) const {
+
+  isl_ctx *Context = isl_dim_get_ctx(dim);
+  unsigned ParameterNumber = Params.size();
+
+  isl_map *LHSValue = getValueOf(*Comp.getLHS(), dim, IndVars, Params);
+  isl_map *RHSValue = getValueOf(*Comp.getRHS(), dim, IndVars, Params);
+  isl_map *MapToLHS = MapValueToLHS(Context, ParameterNumber);
+  isl_map *MapToRHS = MapValueToRHS(Context, ParameterNumber);
+  isl_map *LHSValueAtLHS = isl_map_apply_range(LHSValue, MapToLHS);
+  isl_map *RHSValueAtRHS = isl_map_apply_range(RHSValue, MapToRHS);
+  isl_map *BothValues = isl_map_intersect(LHSValueAtLHS, RHSValueAtRHS);
+  isl_set *Comparison = getComparison(Context, Comp.getPred(), ParameterNumber);
+  isl_map *ComparedValues = isl_map_intersect_range(BothValues, Comparison);
+  isl_set *RemainingSet = isl_map_domain(ComparedValues);
+  return RemainingSet;
+}
 
 void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
                                              IndVarVec &IndVars) {
@@ -289,13 +395,14 @@ void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
   do {
     assert(CurR && "We exceed the top region?");
     // Skip when multiple regions share the same entry.
-    if (CurEntry != CurR->getEntry())
+    if (CurEntry != CurR->getEntry()) {
       if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
         for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end();
              I != E; ++I) {
           isl_set *c = toConditionSet(*I,dim, IndVars, Parent.getParams());
           Domain = isl_set_intersect(Domain, c);
         }
+    }
     CurEntry = CurR->getEntry();
     CurR = CurR->getParent();
   } while (TopR != CurR);

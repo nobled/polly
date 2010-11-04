@@ -105,6 +105,10 @@ inline raw_ostream &operator<<(raw_ostream &OS, const SCEVAffFunc &AffFunc) {
   return OS;
 }
 
+void Comparison::print(raw_ostream &OS) const {
+  // Not yet implemented.
+}
+
 /// Helper function to print the condition
 static void printBBCond(raw_ostream &OS, const BBCond &Cond) {
   assert(!Cond.empty() && "Unexpected empty condition!");
@@ -155,18 +159,9 @@ void TempSCoP::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
        E = CurR->element_end(); I != E; ++I) {
     if (I->isSubRegion()) {
       Region *subR = I->getNodeAs<Region>();
-
-      if (const BBCond *Cond = getBBCond(subR->getEntry()))
-        OS << "Constrain of Region " << subR->getNameStr() << ":\t" << *Cond
-          << '\n';
-
       printDetail(OS, SE, LI, subR, ind + 2);
     } else {
       BasicBlock *BB = I->getNodeAs<BasicBlock>();
-
-      if (BB != CurR->getEntry())
-        if (const BBCond *Cond = getBBCond(BB))
-          OS << "Constrain of BB " << BB->getName() << ":\t" << *Cond << '\n';
 
       if (const AccFuncSetType *AccFunc = getAccessFunctions(BB)) {
         OS.indent(ind) << "BB: " << BB->getName() << "{\n";
@@ -270,25 +265,28 @@ void TempSCoPInfo::buildLoopBounds(TempSCoP &SCoP) {
 }
 
 void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
-                                         SCEVAffFunc &FuncToBuild,
+                                         Comparison **Comp,
                                          TempSCoP &SCoP) const {
+  Region &R = SCoP.getMaxRegion();
+  ParamSetType &Params = SCoP.getParamSet();
   if (ConstantInt *C = dyn_cast<ConstantInt>(&V)) {
     // If this is always true condition, we will create 1 >= 0,
     // otherwise we will create 1 == 0.
+    SCEVAffFunc *AffLHS = new SCEVAffFunc(SE->getConstant(C->getType(), 0),
+                                          SCEVAffFunc::Eq, R, Params, LI, SE);
+    SCEVAffFunc *AffRHS = new SCEVAffFunc(SE->getConstant(C->getType(), 1),
+                                          SCEVAffFunc::Eq, R, Params, LI, SE);
     if (C->isOne() == inverted)
-      FuncToBuild.FuncType = SCEVAffFunc::Eq;
+      *Comp = new Comparison(AffRHS, AffLHS, ICmpInst::ICMP_NE);
     else
-      FuncToBuild.FuncType = SCEVAffFunc::GE;
-
-    buildAffineFunction(SE->getConstant(C->getType(), 1), FuncToBuild,
-                        SCoP.getMaxRegion(), SCoP.getParamSet());
-    FuncToBuild.setUnsigned();
+      *Comp = new Comparison(AffLHS, AffLHS, ICmpInst::ICMP_EQ);
 
     return;
   }
 
   ICmpInst *ICmp = dyn_cast<ICmpInst>(&V);
   assert(ICmp && "Only ICmpInst of constant as condition supported!");
+
   const SCEV *LHS = SE->getSCEV(ICmp->getOperand(0)),
              *RHS = SE->getSCEV(ICmp->getOperand(1));
 
@@ -298,57 +296,32 @@ void TempSCoPInfo::buildAffineCondition(Value &V, bool inverted,
   if (inverted)
     Pred = ICmpInst::getInversePredicate(Pred);
 
-  switch (Pred) {
-  case ICmpInst::ICMP_EQ:
-    FuncToBuild.FuncType = SCEVAffFunc::Eq;
-    break;
-  case ICmpInst::ICMP_NE:
-    FuncToBuild.FuncType = SCEVAffFunc::Ne;
-    break;
-  case ICmpInst::ICMP_SLT:
-  case ICmpInst::ICMP_ULT:
-    // A < B => B > A
-    std::swap(LHS, RHS);
-    // goto case ICmpInst::ICMP_UGT:
-  case ICmpInst::ICMP_SGT:
-  case ICmpInst::ICMP_UGT:
-    // A > B ==> A >= B + 1
-    // FIXME: NSW or NUW?
-    RHS = SE->getAddExpr(RHS, SE->getConstant(RHS->getType(), 1));
-    FuncToBuild.FuncType = SCEVAffFunc::GE;
-    break;
-  case ICmpInst::ICMP_SLE:
-  case ICmpInst::ICMP_ULE:
-    // A <= B ==> B => A
-    std::swap(LHS, RHS);
-    // goto case ICmpInst::ICMP_UGE:
-  case ICmpInst::ICMP_SGE:
-  case ICmpInst::ICMP_UGE:
-    FuncToBuild.FuncType = SCEVAffFunc::GE;
-    break;
-  default:
-    llvm_unreachable("Unknown Predicate!");
-  }
+  SCEVAffFunc *AffLHS = new SCEVAffFunc(LHS, SCEVAffFunc::Eq, R, Params, LI,
+                                        SE);
+  SCEVAffFunc *AffRHS = new SCEVAffFunc(RHS, SCEVAffFunc::Eq, R, Params, LI,
+                                        SE);
 
   switch (Pred) {
   case ICmpInst::ICMP_UGT:
   case ICmpInst::ICMP_UGE:
   case ICmpInst::ICMP_ULT:
   case ICmpInst::ICMP_ULE:
-    FuncToBuild.setUnsigned();
+    // TODO: At the moment we need to see everything as signed. This is an
+    //       correctness issue that needs to be solved.
+    //AffLHS->setUnsigned();
+    //AffRHS->setUnsigned();
     break;
   default:
     break;
   }
 
-  // Transform A >= B to A - B >= 0
-  buildAffineFunction(SE->getMinusSCEV(LHS, RHS), FuncToBuild,
-                      SCoP.getMaxRegion(), SCoP.getParamSet());
+  *Comp = new Comparison(AffLHS, AffRHS, Pred);
 }
 
 void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
                                   TempSCoP &SCoP) {
   BBCond Cond;
+
   DomTreeNode *BBNode = DT->getNode(BB), *EntryNode = DT->getNode(RegionEntry);
   assert(BBNode && EntryNode && "Get null node while building condition!");
 
@@ -372,8 +345,9 @@ void TempSCoPInfo::buildCondition(BasicBlock *BB, BasicBlock *RegionEntry,
     // Is BB on the ELSE side of the branch?
     bool inverted = DT->dominates(Br->getSuccessor(1), BB);
 
-    Cond.push_back(SCEVAffFunc());
-    buildAffineCondition(*(Br->getCondition()), inverted, Cond.back(), SCoP);
+    Comparison *Cmp;
+    buildAffineCondition(*(Br->getCondition()), inverted, &Cmp, SCoP);
+    Cond.push_back(*Cmp);
   }
 
   if (!Cond.empty())

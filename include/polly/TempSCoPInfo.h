@@ -117,17 +117,23 @@ class Comparison {
   SCEVAffFunc *LHS;
   SCEVAffFunc *RHS;
 
-  ICmpInst::Predicate *Pred;
+  ICmpInst::Predicate Pred;
 
 public:
-  Comparison(SCEVAffFunc *lhs, SCEVAffFunc *rhs, ICmpInst::Predicate *pred)
+  Comparison(SCEVAffFunc *lhs, SCEVAffFunc *rhs, ICmpInst::Predicate pred)
     : LHS(lhs), RHS(rhs), Pred(pred) {}
+
+  SCEVAffFunc *getLHS() const { return LHS; }
+  SCEVAffFunc *getRHS() const { return RHS; }
+
+  ICmpInst::Predicate getPred() const { return Pred; }
+  void print(raw_ostream &OS) const;
 };
 
 //===---------------------------------------------------------------------===//
 /// Types
 // The condition of a Basicblock, combine brcond with "And" operator.
-typedef SmallVector<SCEVAffFunc, 4> BBCond;
+typedef SmallVector<Comparison, 4> BBCond;
 
 /// Maps from a loop to the affine function expressing its backedge taken count.
 /// The backedge taken count already enough to express iteration domain as we
@@ -168,9 +174,9 @@ class TempSCoP {
   friend class TempSCoPInfo;
 
   explicit TempSCoP(Region &r, LoopBoundMapType &loopBounds,
-    BBCondMapType &BBCnds, AccFuncMapType &accFuncMap)
-    : R(r), MaxLoopDepth(0),
-    LoopBounds(loopBounds), BBConds(BBCnds), AccFuncMap(accFuncMap) {}
+                    BBCondMapType &BBCmps, AccFuncMapType &accFuncMap)
+    : R(r), MaxLoopDepth(0), LoopBounds(loopBounds), BBConds(BBCmps),
+    AccFuncMap(accFuncMap) {}
 public:
 
   /// @name Information about this Temporary SCoP.
@@ -303,10 +309,10 @@ class TempSCoPInfo : public RegionPass {
   /// @param RegionEntry  The entry block of the Smallest Region that containing
   ///                     BB
   /// @param Cond         The built condition
-  void buildCondition(BasicBlock *BB, BasicBlock *RegionEntry, TempSCoP &SCoP);
+  void buildCondition(BasicBlock *BB, BasicBlock *Region, TempSCoP &SCoP);
 
   // Build the affine function of the given condition
-  void buildAffineCondition(Value &V, bool inverted,  SCEVAffFunc &FuncToBuild,
+  void buildAffineCondition(Value &V, bool inverted, Comparison **Comp,
                             TempSCoP &SCoP) const;
 
   // Return the temporary SCoP information of Region R, where R must be a valid
