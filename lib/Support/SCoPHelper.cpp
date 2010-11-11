@@ -27,9 +27,8 @@ using namespace llvm;
 
 
 namespace {
-// Checks if a SCEV is invariant in a region. This is if all
-// Values are referenced in this SCEV are defined outside the
-// region.
+// Checks if a SCEV is invariant in a region. This is if all Values are
+// referenced in this SCEV are defined outside the region.
 class InvariantChecker: SCEVVisitor<InvariantChecker, bool> {
   Region &R;
 
