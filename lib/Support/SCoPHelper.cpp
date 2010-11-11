@@ -1,4 +1,4 @@
-//===- SCoPHelper.cpp - Some Helper Functions for SCoP.  -------------------===//
+//===- SCoPHelper.cpp - Some Helper Functions for SCoP.  ------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
