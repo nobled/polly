@@ -82,7 +82,7 @@ public:
   }
 
   bool visitAddRecExpr(const SCEVAddRecExpr *S) {
-    // Check if the addrec contains in the region.
+    // Check if the addrec is contained in the region.
     if (R.contains(S->getLoop()))
       return false;
 
