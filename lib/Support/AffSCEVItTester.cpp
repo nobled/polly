@@ -1,4 +1,4 @@
-//===- AffSCEVItTester.cpp - Test the affine scev itertor. ------------------===//
+//===- AffSCEVItTester.cpp - Test the affine scev itertor. ----------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
