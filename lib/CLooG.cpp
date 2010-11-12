@@ -70,6 +70,7 @@ void CLooG::buildCloogOptions() {
   Options = cloog_options_malloc(State);
   Options->quiet = 1;
   Options->strides = 1;
+  Options->save_domains = 1;
 }
 
 CloogUnionDomain *CLooG::buildCloogUnionDomain() {
