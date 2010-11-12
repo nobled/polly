@@ -1,4 +1,4 @@
-; RUN: %opt -polly-prepare -polly-analyze-ir -analyze %s | FileCheck %s
+; RUN: %opt -polly-prepare -polly-scops -analyze %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-linux-gnu"
@@ -46,21 +46,37 @@ bb2:                                              ; preds = %bb, %entry
   ret i64 0
 }
 
-; CHECK: SCoP: entry.split => bb2  Parameters: (%n, ), Max Loop Depth: 1
-; CHECK: Constrain of BB bb.nph: 1 * %n + -2 >= 0
-; CHECK: BB: bb.nph{
-; CHECK:   Reads %a[0]
-; CHECK:     Writes %k.05.reg2mem[0]
-; CHECK:     Writes %.reg2mem[0]
-; CHECK: }
-; CHECK: Constrain of Region bb => bb2:  1 * %n + -2 >= 0
-; CHECK: Bounds of Loop: bb: { 1 * %n + -2 }
-; CHECK: BB: bb{
-; CHECK:       Reads %.reg2mem[0]
-; CHECK:         Reads %k.05.reg2mem[0]
-; CHECK:         Writes %a[8 * {0,+,1}<%bb> + 8]
-; CHECK:         Reads %a[16 * {0,+,1}<%bb> + 16]
-; CHECK:         Reads %a[8 * {0,+,1}<%bb> + 32]
-; CHECK:         Writes %k.05.reg2mem[0]
-; CHECK:         Writes %.reg2mem[0]
+; CHECK:     Context:
+; CHECK:     [p0] -> { [] }
+; CHECK:     Statements {
+; CHECK:     	bb.nph
+; CHECK:             Domain:
+; CHECK:                 [p0] -> { %bb.nph[] : p0 >= 2 }
+; CHECK:             Scattering:
+; CHECK:                 [p0] -> { %bb.nph[] -> scattering[0, 0, 0] }
+; CHECK:             Reads %a at:
+; CHECK:                 [p0] -> { %bb.nph[] -> %a[0] }
+; CHECK:             Writes %k.05.reg2mem at:
+; CHECK:                 [p0] -> { %bb.nph[] -> %k.05.reg2mem[0] }
+; CHECK:             Writes %.reg2mem at:
+; CHECK:                 [p0] -> { %bb.nph[] -> %.reg2mem[0] }
+; CHECK:     	bb
+; CHECK:             Domain:
+; CHECK:                 [p0] -> { %bb[i0] : i0 >= 0 and i0 <= -2 + p0 and p0 >= 2 }
+; CHECK:             Scattering:
+; CHECK:                 [p0] -> { %bb[i0] -> scattering[1, i0, 0] }
+; CHECK:             Reads %.reg2mem at:
+; CHECK:                 [p0] -> { %bb[i0] -> %.reg2mem[0] }
+; CHECK:             Reads %k.05.reg2mem at:
+; CHECK:                 [p0] -> { %bb[i0] -> %k.05.reg2mem[0] }
+; CHECK:             Writes %a at:
+; CHECK:                 [p0] -> { %bb[i0] -> %a[8 + 8i0] }
+; CHECK:             Reads %a at:
+; CHECK:                 [p0] -> { %bb[i0] -> %a[16 + 16i0] }
+; CHECK:             Reads %a at:
+; CHECK:                 [p0] -> { %bb[i0] -> %a[32 + 8i0] }
+; CHECK:             Writes %k.05.reg2mem at:
+; CHECK:                 [p0] -> { %bb[i0] -> %k.05.reg2mem[0] }
+; CHECK:             Writes %.reg2mem at:
+; CHECK:                 [p0] -> { %bb[i0] -> %.reg2mem[0] }
 ; CHECK:     }
