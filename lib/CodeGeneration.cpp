@@ -47,12 +47,6 @@ namespace polly {
 typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
 
-static cl::opt<bool>
-OnlyIndependentBlocks("polly-codegen-only-independent-blocks",
-                cl::desc("Only generate the independent blocks, but not create "
-                         "the new loops."),
-                cl::Hidden,  cl::init(false));
-
 // Create a new loop.
 //
 // @param Builder The builder used to create the loop.  It also defines the
