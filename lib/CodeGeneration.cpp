@@ -384,14 +384,15 @@ public:
       codegen(b->body);
   }
 
-  void codegen_sequential(struct clast_for *f) {
-    APInt stride = APInt_from_MPZ(f->stride);
+  /// @brief Create a classical sequential loop.
+  void codegenForSequential(struct clast_for *f) {
+    APInt Stride = APInt_from_MPZ(f->stride);
     PHINode *IV;
     Value *IncrementedIV;
     BasicBlock *AfterBB;
     Value *LB = ExpGen.codegen(f->LB);
     Value *UB = ExpGen.codegen(f->UB);
-    createLoop(Builder, LB, UB, stride, IV, AfterBB, IncrementedIV, DT);
+    createLoop(Builder, LB, UB, Stride, IV, AfterBB, IncrementedIV, DT);
     (CharMap)[f->iterator] = IV;
 
     if (f->body)
@@ -404,19 +405,31 @@ public:
     Builder->SetInsertPoint(AfterBB);
   }
 
-  bool is_parallel(struct clast_for *f) {
+  /// @brief Check if a loop is parallel
+  ///
+  /// Detect if a clast_for loop can be executed in parallel.
+  ///
+  /// @param f The clast for loop to check.
+  bool isParallelFor(struct clast_for *f) {
+
+    // TODO: Implement the correct analysis. At the moment we just trust the
+    // information given at the command line.
     std::string DimName(f->iterator);
     return DimName == ParallelDimension;
   }
 
-  void codegen_openmp_parallel(struct clast_for *f) {
-    APInt stride = APInt_from_MPZ(f->stride);
+  /// @brief Create an OpenMP parallel for loop.
+  ///
+  /// This loop reflects a loop as if it would have been created by an OpenMP
+  /// statement.
+  void codegenForOpenMP(struct clast_for *f) {
+    APInt Stride = APInt_from_MPZ(f->stride);
     PHINode *IV;
     Value *IncrementedIV;
     BasicBlock *AfterBB;
     Value *LB = ExpGen.codegen(f->LB);
     Value *UB = ExpGen.codegen(f->UB);
-    createLoop(Builder, LB, UB, stride, IV, AfterBB, IncrementedIV, DT);
+    createLoop(Builder, LB, UB, Stride, IV, AfterBB, IncrementedIV, DT);
     (CharMap)[f->iterator] = IV;
 
     if (f->body)
@@ -433,10 +446,10 @@ public:
   }
 
   void codegen(struct clast_for *f) {
-    if (is_parallel(f))
-      codegen_openmp_parallel(f);
+    if (isParallelFor(f))
+      codegenForOpenMP(f);
     else
-      codegen_sequential(f);
+      codegenForSequential(f);
   }
 
   Value *codegen(struct clast_equation *eq) {
