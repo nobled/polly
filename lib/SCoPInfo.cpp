@@ -45,53 +45,41 @@ MemoryAccess::~MemoryAccess() {
   isl_map_free(getAccessFunction());
 }
 
+isl_basic_map *MemoryAccess::createBasicAccessMap(SCoPStmt *Statement) {
+  isl_dim *dim = isl_dim_alloc(Statement->getIslContext(),
+                               Statement->getNumParams(),
+                               Statement->getNumIterators(), 1);
+  std::string name;
+  raw_string_ostream OS(name);
+  WriteAsOperand(OS, getBaseAddr(), false);
+  name = OS.str();
+
+  dim = isl_dim_set_tuple_name(dim, isl_dim_out, name.c_str());
+  dim = isl_dim_set_tuple_name(dim, isl_dim_in, Statement->getBaseName());
+
+  return isl_basic_map_universe(dim);
+}
+
 MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc,
                            SmallVectorImpl<Loop*> &NestLoops,
                            SCoPStmt *Statement, ScalarEvolution &SE) {
   BaseAddr = AffFunc.getBaseAddr();
   Type = AffFunc.isRead() ? Read : Write;
 
-  // Create access relation
-  SCoP *S = Statement->getParent();
-  isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(),
-                               NestLoops.size(), 1);
-
-  std::string name;
-  raw_string_ostream OS(name);
-  WriteAsOperand(OS, getBaseAddr(), false);
-  name = OS.str();
-
-  dim = isl_dim_set_tuple_name(dim, isl_dim_out, name.c_str());
-  dim = isl_dim_set_tuple_name(dim, isl_dim_in, Statement->getBaseName());
-
-  isl_basic_map *bmap = isl_basic_map_universe(dim);
-  isl_constraint *c;
-
-  c = toAccessFunction(AffFunc, dim, NestLoops, S->getParams(), SE);
-  bmap = isl_basic_map_add_constraint(bmap, c);
-  AccessRelation = isl_map_from_basic_map(bmap);
+  isl_basic_map *BasicAccessMap = createBasicAccessMap(Statement);
+  isl_dim *dim = isl_basic_map_get_dim(BasicAccessMap);
+  isl_constraint *c = toAccessFunction(AffFunc, dim, NestLoops,
+                                       Statement->getParent()->getParams(), SE);
+  BasicAccessMap = isl_basic_map_add_constraint(BasicAccessMap, c);
+  AccessRelation = isl_map_from_basic_map(BasicAccessMap);
 }
 
 MemoryAccess::MemoryAccess(const Value *BaseAddress, SCoPStmt *Statement) {
   BaseAddr = BaseAddress;
   Type = Read;
 
-  // Create access relation
-  SCoP *S = Statement->getParent();
-  isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(),
-                               Statement->getNumIterators(), 1);
-
-  std::string name;
-  raw_string_ostream OS(name);
-  WriteAsOperand(OS, getBaseAddr(), false);
-  name = OS.str();
-
-  dim = isl_dim_set_tuple_name(dim, isl_dim_out, name.c_str());
-  dim = isl_dim_set_tuple_name(dim, isl_dim_in, Statement->getBaseName());
-
-  isl_basic_map *bmap = isl_basic_map_universe(dim);
-
-  AccessRelation = isl_map_from_basic_map(bmap);
+  isl_basic_map *BasicAccessMap = createBasicAccessMap(Statement);
+  AccessRelation = isl_map_from_basic_map(BasicAccessMap);
 }
 
 static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
@@ -535,6 +523,10 @@ unsigned SCoPStmt::getNumScattering() {
 
 PHINode *SCoPStmt::getIVatLevel(unsigned L) {
   return IVS[L];
+}
+
+isl_ctx *SCoPStmt::getIslContext() {
+  return Parent.getCtx();
 }
 
 SCoPStmt::~SCoPStmt() {

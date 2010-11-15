@@ -33,6 +33,7 @@ namespace llvm {
 }
 
 struct isl_map;
+struct isl_basic_map;
 struct isl_set;
 struct isl_ctx;
 struct isl_dim;
@@ -92,6 +93,7 @@ private:
                                    const SmallVectorImpl<Loop*> &NestLoops,
                                    const SmallVectorImpl<const SCEV*> &Params,
                                    ScalarEvolution &SE) const;
+  isl_basic_map *createBasicAccessMap(SCoPStmt *Statement);
 
 public:
   // @brief Create an affine memory access.
@@ -248,6 +250,9 @@ public:
   std::vector<PHINode*> IVS;
 
   ~SCoPStmt();
+
+  /// @brief Get an isl_ctx pointer.
+  isl_ctx *getIslContext();
 
   /// @brief Get the iteration domain of this SCoPStmt.
   ///
