@@ -145,12 +145,9 @@ openscop_statement_p OpenSCoP::initializeStatement(SCoPStmt *stmt) {
   Stmt->schedule = scatteringToMatrix(stmt->getScattering());
 
   // Statement name
-  std::string entryName;
-  raw_string_ostream OS(entryName);
-  WriteAsOperand(OS, stmt->getBasicBlock(), false);
-  entryName = OS.str();
-  Stmt->body = (char*)malloc(sizeof(char) * (entryName.size() + 1));
-  strcpy(Stmt->body, entryName.c_str());
+  const char* entryName = stmt->getBaseName();
+  Stmt->body = (char*)malloc(sizeof(char) * (strlen(entryName) + 1));
+  strcpy(Stmt->body, entryName);
 
   // Iterator names
   Stmt->nb_iterators = isl_set_n_dim(stmt->getDomain());
@@ -171,6 +168,8 @@ openscop_statement_p OpenSCoP::initializeStatement(SCoPStmt *stmt) {
 void OpenSCoP::initializeStatements() {
   for (SCoP::reverse_iterator SI = PollySCoP->rbegin(), SE = PollySCoP->rend();
        SI != SE; ++SI) {
+    if ((*SI)->isFinalRead())
+      continue;
     openscop_statement_p stmt = initializeStatement(*SI);
     stmt->next = openscop->statement;
     openscop->statement = stmt;

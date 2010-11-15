@@ -13,7 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/LinkAllPasses.h"
+
+#include "polly/Dependences.h"
 #include "polly/SCoPInfo.h"
+
 #include "llvm/Support/CommandLine.h"
 
 #ifdef OPENSCOP_FOUND
@@ -28,26 +31,29 @@ using namespace llvm;
 using namespace polly;
 
 namespace {
-static cl::opt<std::string>
-ImportDir("polly-import-dir",
-          cl::desc("The directory to import the .scop files from."), cl::Hidden,
-          cl::value_desc("Directory path"), cl::ValueRequired, cl::init("."));
-static cl::opt<std::string>
-ImportPostfix("polly-import-postfix",
-          cl::desc("Postfix to append to the import .scop files."), cl::Hidden,
-          cl::value_desc("File postfix"), cl::ValueRequired, cl::init(""));
+  static cl::opt<std::string>
+    ImportDir("polly-import-dir",
+              cl::desc("The directory to import the .scop files from."),
+              cl::Hidden, cl::value_desc("Directory path"), cl::ValueRequired,
+              cl::init("."));
+  static cl::opt<std::string>
+    ImportPostfix("polly-import-postfix",
+                  cl::desc("Postfix to append to the import .scop files."),
+                  cl::Hidden, cl::value_desc("File postfix"), cl::ValueRequired,
+                  cl::init(""));
 
-struct SCoPImporter : public RegionPass {
-  static char ID;
-  SCoP *S;
-  explicit SCoPImporter() : RegionPass(ID) {}
+  struct SCoPImporter : public RegionPass {
+    static char ID;
+    SCoP *S;
+    Dependences *D;
+    explicit SCoPImporter() : RegionPass(ID) {}
+    bool updateScattering(SCoP *S, openscop_scop_p OSCoP);
 
-  std::string getFileName(Region *R) const;
-  virtual bool runOnRegion(Region *R, RGPassManager &RGM);
-  virtual void print(raw_ostream &OS, const Module *) const;
-  void getAnalysisUsage(AnalysisUsage &AU) const;
-};
-
+    std::string getFileName(Region *R) const;
+    virtual bool runOnRegion(Region *R, RGPassManager &RGM);
+    virtual void print(raw_ostream &OS, const Module *) const;
+    void getAnalysisUsage(AnalysisUsage &AU) const;
+  };
 }
 
 char SCoPImporter::ID = 0;
@@ -127,14 +133,39 @@ isl_map *scatteringForStmt(openscop_matrix_p m, SCoPStmt *PollyStmt) {
   return map;
 }
 
-/// @brief Update the scattering in PollyStmt.
+typedef Dependences::StatementToIslMapTy StatementToIslMapTy;
+
+/// @brief Read the new scattering from the OpenSCoP description.
 ///
-/// @param PollyStmt The statement to update.
-/// @param OStmt The OpenSCoP statement describing the new scattering.
-void updateScattering(SCoPStmt *PollyStmt, openscop_statement_p OStmt) {
-  assert(OStmt && "No openscop statement available");
-  isl_map *m = scatteringForStmt(OStmt->schedule, PollyStmt);
-  PollyStmt->setScattering(m);
+/// @S      The SCoP to update
+/// @OSCoP  The OpenSCoP data structure describing the new scattering.
+/// @return A map that contains for each Statement the new scattering.
+StatementToIslMapTy *readScattering(SCoP *S, openscop_scop_p OSCoP) {
+  StatementToIslMapTy &NewScattering = *(new StatementToIslMapTy());
+  openscop_statement_p stmt = OSCoP->statement;
+
+  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+
+    if ((*SI)->isFinalRead())
+      continue;
+
+    if (!stmt) {
+      errs() << "Not enough statements available in OpenSCoP file\n";
+      delete &NewScattering;
+      return NULL;
+    }
+
+    NewScattering[*SI] = scatteringForStmt(stmt->schedule, *SI);
+    stmt = stmt->next;
+  }
+
+  if (stmt) {
+    errs() << "Too many statements in OpenSCoP file\n";
+    delete &NewScattering;
+    return NULL;
+  }
+
+  return &NewScattering;
 }
 
 /// @brief Update the scattering in a SCoP using the OpenSCoP description of
@@ -143,23 +174,23 @@ void updateScattering(SCoPStmt *PollyStmt, openscop_statement_p OStmt) {
 /// @S The SCoP to update
 /// @OSCoP The OpenSCoP data structure describing the new scattering.
 /// @return Returns false, if the update failed.
-bool updateScattering(SCoP *S, openscop_scop_p OSCoP) {
-  openscop_statement_p stmt = OSCoP->statement;
+bool SCoPImporter::updateScattering(SCoP *S, openscop_scop_p OSCoP) {
+  StatementToIslMapTy *NewScattering = readScattering(S, OSCoP);
 
-  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+  if (!NewScattering)
+    return false;
 
-    if (!stmt) {
-      errs() << "Not enough statements available in OpenSCoP file\n";
-      return false;
-    }
-
-    updateScattering(*SI, stmt);
-    stmt = stmt->next;
+  if (!D->isValidScattering(NewScattering)) {
+    errs() << "OpenSCoP file contains a scattering that changes the "
+      << "dependences.\n";
+    return false;
   }
 
-  if (stmt) {
-    errs() << "Too many statements in OpenSCoP file\n";
-    return false;
+  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+    SCoPStmt *Stmt = *SI;
+
+    if (NewScattering->find(Stmt) != NewScattering->end())
+      Stmt->setScattering((*NewScattering)[Stmt]);
   }
 
   return true;
@@ -191,6 +222,7 @@ void SCoPImporter::print(raw_ostream &OS, const Module *) const {}
 
 bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
   S = getAnalysis<SCoPInfo>().getSCoP();
+  D = &getAnalysis<Dependences>();
 
   if (!S)
     return false;
@@ -223,6 +255,7 @@ bool SCoPImporter::runOnRegion(Region *R, RGPassManager &RGM) {
 void SCoPImporter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
   AU.addRequired<SCoPInfo>();
+  AU.addRequired<Dependences>();
 }
 
 static RegisterPass<SCoPImporter> A("polly-import",

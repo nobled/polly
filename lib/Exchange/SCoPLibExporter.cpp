@@ -174,6 +174,10 @@ scoplib_statement_p SCoPLib::initializeStatement(SCoPStmt *stmt) {
 void SCoPLib::initializeStatements() {
   for (SCoP::reverse_iterator SI = PollySCoP->rbegin(), SE = PollySCoP->rend();
        SI != SE; ++SI) {
+
+    if ((*SI)->isFinalRead())
+      continue;
+
     scoplib_statement_p stmt = initializeStatement(*SI);
     stmt->next = scoplib->statement;
     scoplib->statement = stmt;

@@ -139,6 +139,10 @@ namespace polly {
     return false;
   }
 
+  bool Dependences::isValidScattering(StatementToIslMapTy *NewScatterings) {
+    return true;
+  }
+
   void Dependences::print(raw_ostream &OS, const Module *) const {
     if (!S)
       return;

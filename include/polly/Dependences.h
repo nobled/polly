@@ -25,14 +25,18 @@
 
 #include "llvm/Analysis/RegionPass.h"
 
+#include <map>
+
 struct isl_union_map;
 struct isl_union_set;
+struct isl_map;
 
 using namespace llvm;
 
 namespace polly {
 
   class SCoP;
+  class SCoPStmt;
 
   class Dependences : public RegionPass {
 
@@ -43,8 +47,10 @@ namespace polly {
 
   public:
     static char ID;
+    typedef std::map<SCoPStmt*, isl_map*> StatementToIslMapTy;
 
     Dependences();
+    bool isValidScattering(StatementToIslMapTy *NewScatterings);
 
     bool runOnRegion(Region *R, RGPassManager &RGM);
     void print(raw_ostream &OS, const Module *) const;
