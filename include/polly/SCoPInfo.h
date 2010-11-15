@@ -96,6 +96,13 @@ public:
   MemoryAccess(const SCEVAffFunc &AffFunc, SmallVectorImpl<Loop*> &NestLoops,
                SCoP &S, ScalarEvolution &SE, const char *BaseName);
 
+  // Creates a read all access to an array
+  //
+  // @param BaseAddress The base address of the memory accessed.
+  // @param SCoP        The SCoP in which this access happened.
+  // @param BaseName    The name of the Statement that owning this access.
+  MemoryAccess(const Value *BaseAddress, SCoP &S, const char *BaseName);
+
   ~MemoryAccess();
 
   /// @brief Is this a read memory access?
@@ -215,6 +222,10 @@ class SCoPStmt {
           SmallVectorImpl<unsigned> &Scatter,
           ScalarEvolution &SE);
 
+  /// Create the finalization statement.
+  SCoPStmt(SCoP &parent, SmallVectorImpl<unsigned> &Scatter,
+           ScalarEvolution &SE);
+
   isl_constraint *toConditionConstrain(const SCEVAffFunc &AffFunc,
     isl_dim *dim,
     const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
@@ -260,7 +271,7 @@ public:
 
   SCoP *getParent() { return &Parent; }
 
-  const char*getBaseName() const { return BaseName.c_str(); }
+  const char *getBaseName() const { return BaseName.c_str(); }
 
   /// @brief Get the induction variable of the loop a given level.
   ///
@@ -268,6 +279,12 @@ public:
   ///
   /// @return The induction variable of the Loop at level L.
   PHINode *getIVatLevel(unsigned L);
+
+  /// @brief Is this statement the final read statement?
+  ///
+  /// A final read statement is scheduled after all statements to model
+  /// that all data used in the SCoP is read after the SCoP.
+  bool isFinalRead() { return getBasicBlock() == NULL; }
 
   /// @brief Print the SCoPStmt.
   ///

@@ -72,6 +72,26 @@ MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc,
 
 }
 
+MemoryAccess::MemoryAccess(const Value *BaseAddress,
+                           SCoP &S,
+                           const char *IteratorName) {
+  isl_dim *dim = isl_dim_alloc(S.getCtx(), S.getNumParams(), 1, 1);
+  BaseAddr = BaseAddress;
+
+  std::string name;
+  raw_string_ostream OS(name);
+  WriteAsOperand(OS, getBaseAddr(), false);
+  name = OS.str();
+
+  dim = isl_dim_set_tuple_name(dim, isl_dim_out, name.c_str());
+  dim = isl_dim_set_tuple_name(dim, isl_dim_in, IteratorName);
+
+  isl_basic_map *bmap = isl_basic_map_universe(dim);
+  AccessRelation = isl_map_from_basic_map(bmap);
+
+  Type = Read;
+}
+
 static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
                            bool isSigned = true) {
   if (Coeff) {
@@ -448,6 +468,58 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
   buildAccesses(tempSCoP, CurRegion, SE, NestLoops);
 
 }
+
+SCoPStmt::SCoPStmt(SCoP &parent,
+                   SmallVectorImpl<unsigned> &Scatter,
+                   ScalarEvolution &SE)
+  : Parent(parent), BB(NULL), IVS(0) {
+
+  BaseName = "FinalRead";
+
+  // Build iteration domain.
+  std::string IterationDomainString = "{[i0] : i0 = 0}";
+  Domain = isl_set_read_from_str(Parent.getCtx(), IterationDomainString.c_str(),
+                                 -1);
+  Domain = isl_set_add_dims(Domain, isl_dim_param, Parent.getNumParams());
+  Domain = isl_set_set_tuple_name(Domain, getBaseName());
+
+  // Build scattering.
+  unsigned ScatDim = Parent.getMaxLoopDepth() * 2 + 1;
+  isl_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(), 1,
+                               ScatDim);
+  dim = isl_dim_set_tuple_name(dim, isl_dim_out, "scattering");
+  dim = isl_dim_set_tuple_name(dim, isl_dim_in, getBaseName());
+  isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+  isl_int v;
+  isl_int_init(v);
+
+  isl_constraint *c = isl_equality_alloc(dim);
+  isl_int_set_si(v, -1);
+  isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
+  isl_int_set_si(v, Scatter[0]);
+  isl_constraint_set_constant(c, v);
+
+  bmap = isl_basic_map_add_constraint(bmap, c);
+  isl_int_clear(v);
+  Scattering = isl_map_from_basic_map(bmap);
+
+  // Build memory accesses.
+  std::set<const Value*> BaseAddressSet;
+
+  for (SCoP::const_iterator SI = Parent.begin(), SE = Parent.end(); SI != SE;
+       ++SI) {
+    SCoPStmt *Stmt = *SI;
+
+    for (MemoryAccessVec::const_iterator I = Stmt->memacc_begin(),
+         E = Stmt->memacc_end(); I != E; ++I)
+      BaseAddressSet.insert((*I)->getBaseAddr());
+  }
+
+  for (std::set<const Value*>::iterator BI = BaseAddressSet.begin(),
+       BE = BaseAddressSet.end(); BI != BE; ++BI)
+    MemAccs.push_back(new MemoryAccess(*BI, Parent, getBaseName()));
+}
+
 unsigned SCoPStmt::getNumParams() {
   return isl_set_n_param(Domain);
 }
@@ -475,7 +547,7 @@ SCoPStmt::~SCoPStmt() {
 }
 
 void SCoPStmt::print(raw_ostream &OS) const {
-  OS << "\t" << BB->getNameStr() << "\n";
+  OS << "\t" << getBaseName() << "\n";
   isl_printer *p = isl_printer_to_str(Parent.getCtx());
 
   OS.indent(12) << "Domain:\n";
@@ -529,6 +601,7 @@ SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &SE)
   // Build the iteration domain, access functions and scattering functions
   // traversing the region tree.
   buildSCoP(tempSCoP, getRegion(), NestLoops, Scatter, LI, SE);
+  Stmts.push_back(new SCoPStmt(*this, Scatter, SE));
 
   assert(NestLoops.empty() && "NestLoops not empty at top level!");
 }

@@ -77,19 +77,21 @@ CloogUnionDomain *CLooG::buildCloogUnionDomain() {
   CloogUnionDomain *DU = cloog_union_domain_alloc(S->getNumParams());
 
   for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-    CloogScattering *Scattering=
-      cloog_scattering_from_isl_map(isl_map_copy((*SI)->getScattering()));
-    CloogDomain *Domain =
-      cloog_domain_from_isl_set(isl_set_copy((*SI)->getDomain()));
+    SCoPStmt *Stmt = *SI;
 
-    std::string entryName;
-    raw_string_ostream OS(entryName);
-    WriteAsOperand(OS, (*SI)->getBasicBlock(), false);
-    entryName = OS.str();
+    if (Stmt->isFinalRead())
+      continue;
+
+    CloogScattering *Scattering=
+      cloog_scattering_from_isl_map(isl_map_copy(Stmt->getScattering()));
+    CloogDomain *Domain =
+      cloog_domain_from_isl_set(isl_set_copy(Stmt->getDomain()));
+
+    std::string entryName = Stmt->getBaseName();
     char *Name = (char*)malloc(sizeof(char) * (entryName.size() + 1));
     strcpy(Name, entryName.c_str());
 
-    DU = cloog_union_domain_add_domain(DU, Name, Domain, Scattering, *SI);
+    DU = cloog_union_domain_add_domain(DU, Name, Domain, Scattering, Stmt);
   }
 
   return DU;
