@@ -41,6 +41,7 @@ struct isl_constraint;
 namespace polly {
 
 class SCoP;
+class SCoPStmt;
 class SCoPInfo;
 class TempSCoP;
 class SCEVAffFunc;
@@ -93,15 +94,20 @@ private:
                                    ScalarEvolution &SE) const;
 
 public:
+  // @brief Create an affine memory access.
+  //
+  // @param AffFunc    The access function.
+  // @param NestLoops  The loops referenced in the access function.
+  // @param Statement  The Statement that contains this access.
+  // @param SE         The ScalarEvolution analysis.
   MemoryAccess(const SCEVAffFunc &AffFunc, SmallVectorImpl<Loop*> &NestLoops,
-               SCoP &S, ScalarEvolution &SE, const char *BaseName);
+               SCoPStmt *Statement, ScalarEvolution &SE);
 
-  // Creates a read all access to an array
+  // @brief Create a read all access.
   //
   // @param BaseAddress The base address of the memory accessed.
-  // @param SCoP        The SCoP in which this access happened.
-  // @param BaseName    The name of the Statement that owning this access.
-  MemoryAccess(const Value *BaseAddress, SCoP &S, const char *BaseName);
+  // @param Statement   The Statement that contains this access.
+  MemoryAccess(const Value *BaseAddress, SCoPStmt *Statement);
 
   ~MemoryAccess();
 
