@@ -19,11 +19,11 @@
 // analysis will never produce redundant dependences.
 //
 //===----------------------------------------------------------------------===//
+//
+#include "polly/Dependences.h"
 
 #include "polly/LinkAllPasses.h"
 #include "polly/SCoPInfo.h"
-
-#include "llvm/Analysis/RegionPass.h"
 
 #define DEBUG_TYPE "polly-dependences"
 #include "llvm/Support/Debug.h"
@@ -33,24 +33,14 @@
 using namespace polly;
 using namespace llvm;
 
-namespace {
+namespace polly {
 
-class Dependences : public RegionPass {
-
-  SCoP *S;
-
-  isl_union_map *must_dep, *may_dep;
-  isl_union_set *must_no_source, *may_no_source;
-
-public:
-  static char ID;
-
-  Dependences() : RegionPass(ID), S(0) {
+  Dependences::Dependences() : RegionPass(ID), S(0) {
     must_dep = may_dep = NULL;
     must_no_source = may_no_source = NULL;
   }
 
-  bool runOnRegion(Region *R, RGPassManager &RGM) {
+  bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
     S = getAnalysis<SCoPInfo>().getSCoP();
 
     if (!S)
@@ -149,7 +139,7 @@ public:
     return false;
   }
 
-  void print(raw_ostream &OS, const Module *) const {
+  void Dependences::print(raw_ostream &OS, const Module *) const {
     if (!S)
       return;
 
@@ -179,7 +169,7 @@ public:
     isl_printer_free(p);
   }
 
-  virtual void releaseMemory() {
+  void Dependences::releaseMemory() {
     S = 0;
 
     if (must_dep)
@@ -198,11 +188,10 @@ public:
     must_no_source = may_no_source = NULL;
   }
 
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+  void Dependences::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<SCoPInfo>();
     AU.setPreservesAll();
   }
-};
 } //end anonymous namespace
 
 char Dependences::ID = 0;
