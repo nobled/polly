@@ -23,8 +23,8 @@
 #include "scoplib/scop.h"
 
 #include "stdio.h"
-#include "isl/isl_set.h"
-#include "isl/isl_constraint.h"
+#include "isl_set.h"
+#include "isl_constraint.h"
 
 using namespace llvm;
 using namespace polly;

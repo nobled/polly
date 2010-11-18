@@ -21,8 +21,8 @@
 #define OPENSCOP_INT_T_IS_MP
 #include "openscop/openscop.h"
 
-#include "isl/isl_set.h"
-#include "isl/isl_constraint.h"
+#include "isl_set.h"
+#include "isl_constraint.h"
 
 using namespace llvm;
 using namespace polly;
