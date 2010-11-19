@@ -1,6 +1,9 @@
 ; RUN: %opt -polly-print -disable-output < %s | FileCheck %s
 ; RUN: %opt -polly-codegen -disable-output < %s
 ; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-print -disable-output  < %s | FileCheck -check-prefix=IMPORT %s ; fi
+; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-import-postfix=.valid_reverse -polly-print -disable-output < %s | FileCheck -check-prefix=REVERSE %s ; fi > /dev/null
+; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-import-postfix=.invalid_reverse -polly-print -disable-output < %s 2>&1  | FileCheck -check-prefix=INVALID %s ; fi > /dev/null
+; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-print -disable-output  < %s | FileCheck -check-prefix=IMPORT %s ; fi
 ; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-codegen < %s | lli | diff %s.result - ; fi
 ; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-codegen -S < %s | FileCheck -check-prefix=CODEGEN %s ; fi
 
@@ -213,4 +216,16 @@ entry:
 
 
 ; CODEGEN: polly.stmt_do.body2
+
+; REVERSE: for (c2=-35;c2<=0;c2++) {
+; REVERSE:     for (c4=-35;c4<=0;c4++) {
+; REVERSE:           for (c6=0;c6<=35;c6++) {
+; REVERSE:                   %do.body2(-c2,-c4,c6);
+; REVERSE:           }
+; REVERSE:     }
+; REVERSE: }
+
+; INVALID: OpenSCoP file contains a scattering that changes the dependences.
+
+
 
