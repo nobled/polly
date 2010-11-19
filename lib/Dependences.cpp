@@ -38,6 +38,7 @@ namespace polly {
   Dependences::Dependences() : RegionPass(ID), S(0) {
     must_dep = may_dep = NULL;
     must_no_source = may_no_source = NULL;
+    sink = must_source = may_source = NULL;
   }
 
   bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
@@ -48,9 +49,18 @@ namespace polly {
 
     isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
 
-    isl_union_map *sink = isl_union_map_empty(isl_dim_copy(dim));
-    isl_union_map *must_source = isl_union_map_empty(isl_dim_copy(dim));
-    isl_union_map *may_source = isl_union_map_empty(isl_dim_copy(dim));
+    if (sink)
+      isl_union_map_free(sink);
+
+    if (must_source)
+      isl_union_map_free(must_source);
+
+    if (may_source)
+      isl_union_map_free(may_source);
+
+    sink = isl_union_map_empty(isl_dim_copy(dim));
+    must_source = isl_union_map_empty(isl_dim_copy(dim));
+    may_source = isl_union_map_empty(isl_dim_copy(dim));
     isl_union_map *schedule = isl_union_map_empty(dim);
 
     if (must_dep)
@@ -96,7 +106,6 @@ namespace polly {
         isl_map *scattering = isl_map_copy(Stmt->getScattering());
         scattering = isl_map_set_tuple_name(scattering, isl_dim_in,
                                             Combined.c_str());
-
         isl_union_map_add_map(schedule, scattering);
       }
     }
@@ -126,7 +135,9 @@ namespace polly {
 
       isl_printer_free(p));
 
-    isl_union_map_compute_flow(sink, must_source, may_source, schedule,
+    isl_union_map_compute_flow(isl_union_map_copy(sink),
+                               isl_union_map_copy(must_source),
+                               isl_union_map_copy(may_source), schedule,
                                &must_dep, &may_dep, &must_no_source,
                                &may_no_source);
 
@@ -139,7 +150,90 @@ namespace polly {
     return false;
   }
 
-  bool Dependences::isValidScattering(StatementToIslMapTy *NewScatterings) {
+  bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
+    isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
+
+    isl_union_map *schedule = isl_union_map_empty(dim);
+
+    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+      SCoPStmt *Stmt = *SI;
+
+      for (SCoPStmt::memacc_iterator MI = Stmt->memacc_begin(),
+           ME = Stmt->memacc_end(); MI != ME; ++MI) {
+        isl_map *accdom = (*MI)->getAccessFunction();
+        const char *DomainName = isl_map_get_tuple_name(accdom, isl_dim_in);
+        const char *ArrayName = isl_map_get_tuple_name(accdom, isl_dim_out);
+
+        std::string DN = DomainName;
+        std::string AN = ArrayName;
+
+        std::string Combined = DN + "__" + AN;
+
+        isl_map *scattering;
+
+        if (NewScattering->find(*SI) == NewScattering->end())
+          scattering = isl_map_copy(Stmt->getScattering());
+        else
+          scattering = isl_map_copy((*NewScattering)[Stmt]);
+
+        scattering = isl_map_set_tuple_name(scattering, isl_dim_in,
+                                            Combined.c_str());
+        isl_union_map_add_map(schedule, scattering);
+      }
+    }
+
+    isl_union_map *temp_must_dep, *temp_may_dep;
+    isl_union_set *temp_must_no_source, *temp_may_no_source;
+
+    DEBUG(
+      isl_printer *p = isl_printer_to_str(S->getCtx());
+
+      errs().indent(4) << "Sink:\n";
+      isl_printer_print_union_map(p, sink);
+      errs().indent(8) << isl_printer_get_str(p) << "\n";
+      isl_printer_flush(p);
+
+      errs().indent(4) << "Must Source:\n";
+      isl_printer_print_union_map(p, must_source);
+      errs().indent(8) << isl_printer_get_str(p) << "\n";
+      isl_printer_flush(p);
+
+      errs().indent(4) << "May Source:\n";
+      isl_printer_print_union_map(p, may_source);
+      errs().indent(8) << isl_printer_get_str(p) << "\n";
+      isl_printer_flush(p);
+
+      errs().indent(4) << "Schedule:\n";
+      isl_printer_print_union_map(p, schedule);
+      errs().indent(8) << isl_printer_get_str(p) << "\n";
+      isl_printer_flush(p);
+
+      isl_printer_free(p));
+
+    isl_union_map_compute_flow(isl_union_map_copy(sink),
+                               isl_union_map_copy(must_source),
+                               isl_union_map_copy(may_source), schedule,
+                               &temp_must_dep, &temp_may_dep,
+                               &temp_must_no_source, &temp_may_no_source);
+
+    // Remove redundant statements.
+    temp_must_dep = isl_union_map_coalesce(temp_must_dep);
+    temp_may_dep = isl_union_map_coalesce(temp_may_dep);
+    temp_must_no_source = isl_union_set_coalesce(temp_must_no_source);
+    temp_may_no_source = isl_union_set_coalesce(temp_may_no_source);
+
+    if (!isl_union_map_is_equal(temp_must_dep, must_dep))
+      return false;
+
+    if (!isl_union_map_is_equal(temp_may_dep, may_dep))
+      return false;
+
+    if (!isl_union_set_is_equal(temp_must_no_source, must_no_source))
+      return false;
+
+    if (!isl_union_set_is_equal(temp_may_no_source, may_no_source))
+      return false;
+
     return true;
   }
 
@@ -148,7 +242,6 @@ namespace polly {
       return;
 
     isl_printer *p = isl_printer_to_str(S->getCtx());
-    //isl_printer_set_output_format(p, ISL_FORMAT_POLYLIB);
 
     OS.indent(4) << "Must dependences:\n";
     isl_printer_print_union_map(p, must_dep);
@@ -190,6 +283,17 @@ namespace polly {
 
     must_dep = may_dep = NULL;
     must_no_source = may_no_source = NULL;
+
+    if (sink)
+      isl_union_map_free(sink);
+
+    if (must_source)
+      isl_union_map_free(must_source);
+
+    if (may_source)
+      isl_union_map_free(may_source);
+
+    sink = must_source = may_source = NULL;
   }
 
   void Dependences::getAnalysisUsage(AnalysisUsage &AU) const {
