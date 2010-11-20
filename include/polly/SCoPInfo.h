@@ -88,22 +88,15 @@ private:
   enum AccessType Type;
 
   const Value* BaseAddr;
-  isl_constraint *toAccessFunction(const SCEVAffFunc &AffFunc,
-                                   isl_dim* dim,
-                                   const SmallVectorImpl<Loop*> &NestLoops,
-                                   const SmallVectorImpl<const SCEV*> &Params,
-                                   ScalarEvolution &SE) const;
   isl_basic_map *createBasicAccessMap(SCoPStmt *Statement);
 
 public:
   // @brief Create an affine memory access.
   //
   // @param AffFunc    The access function.
-  // @param NestLoops  The loops referenced in the access function.
   // @param Statement  The Statement that contains this access.
   // @param SE         The ScalarEvolution analysis.
-  MemoryAccess(const SCEVAffFunc &AffFunc, SmallVectorImpl<Loop*> &NestLoops,
-               SCoPStmt *Statement, ScalarEvolution &SE);
+  MemoryAccess(const SCEVAffFunc &AffFunc, SCoPStmt *Statement);
 
   // @brief Create a read all access.
   //
@@ -217,8 +210,7 @@ class SCoPStmt {
   void buildIterationDomainFromLoops(TempSCoP &tempSCoP);
   void buildIterationDomain(TempSCoP &tempSCoP, const Region &CurRegion);
   void buildScattering(SmallVectorImpl<unsigned> &Scatter);
-  void buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
-                     SmallVectorImpl<Loop*> &NestLoops);
+  void buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion);
 
   /// Create the SCoPStmt from a BasicBlock.
   SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,

@@ -63,7 +63,10 @@ static isl_map *getValueOf(const SCEVAffFunc &AffFunc,
                       isl_dim_size(dim, isl_dim_set), 1);
   isl_dim_set_tuple_name(dim, isl_dim_in, dimname);
 
-  assert(AffFunc.getType() == SCEVAffFunc::Eq && "AffFunc is not an equality");
+  assert((AffFunc.getType() == SCEVAffFunc::Eq
+          || AffFunc.getType() == SCEVAffFunc::ReadMem
+          || AffFunc.getType() == SCEVAffFunc::WriteMem)
+          && "AffFunc is not an equality");
 
   isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
 
@@ -117,18 +120,23 @@ isl_basic_map *MemoryAccess::createBasicAccessMap(SCoPStmt *Statement) {
   return isl_basic_map_universe(dim);
 }
 
-MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc,
-                           SmallVectorImpl<Loop*> &NestLoops,
-                           SCoPStmt *Statement, ScalarEvolution &SE) {
+MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc, SCoPStmt *Statement) {
   BaseAddr = AffFunc.getBaseAddr();
   Type = AffFunc.isRead() ? Read : Write;
 
-  isl_basic_map *BasicAccessMap = createBasicAccessMap(Statement);
-  isl_dim *dim = isl_basic_map_get_dim(BasicAccessMap);
-  isl_constraint *c = toAccessFunction(AffFunc, dim, NestLoops,
-                                       Statement->getParent()->getParams(), SE);
-  BasicAccessMap = isl_basic_map_add_constraint(BasicAccessMap, c);
-  AccessRelation = isl_map_from_basic_map(BasicAccessMap);
+  isl_dim *dim = isl_dim_set_alloc(Statement->getIslContext(),
+                                   Statement->getNumParams(),
+                                   Statement->getNumIterators());
+  std::string name;
+  raw_string_ostream OS(name);
+  WriteAsOperand(OS, getBaseAddr(), false);
+  name = OS.str();
+
+  dim = isl_dim_set_tuple_name(dim, isl_dim_set, Statement->getBaseName());
+
+  AccessRelation = getValueOf(AffFunc, Statement, dim);
+  AccessRelation = isl_map_set_tuple_name(AccessRelation, isl_dim_out,
+                                          name.c_str());
 }
 
 MemoryAccess::MemoryAccess(const Value *BaseAddress, SCoPStmt *Statement) {
@@ -137,39 +145,6 @@ MemoryAccess::MemoryAccess(const Value *BaseAddress, SCoPStmt *Statement) {
 
   isl_basic_map *BasicAccessMap = createBasicAccessMap(Statement);
   AccessRelation = isl_map_from_basic_map(BasicAccessMap);
-}
-
-isl_constraint *MemoryAccess::toAccessFunction(const SCEVAffFunc &AffFunc,
-  isl_dim* dim, const SmallVectorImpl<Loop*> &NestLoops,
-  const SmallVectorImpl<const SCEV*> &Params, ScalarEvolution &SE) const {
-
-  isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
-  isl_int v;
-  isl_int_init(v);
-
-  isl_int_set_si(v, 1);
-  isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
-
-  // Do not touch the current iterator.
-  for (unsigned i = 0, e = NestLoops.size(); i != e; ++i) {
-    Loop *L = NestLoops[i];
-    Value *IndVar = L->getCanonicalInductionVariable();
-    setCoefficient(AffFunc.getCoeff(SE.getSCEV(IndVar)), v, true);
-    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
-  }
-
-  // Setup the coefficient of parameters
-  for (unsigned i = 0, e = Params.size(); i != e; ++i) {
-    setCoefficient(AffFunc.getCoeff(Params[i]), v, true);
-    isl_constraint_set_coefficient(c, isl_dim_param, i, v);
-  }
-
-  // Set the const.
-  setCoefficient(AffFunc.getTransComp(), v, true);
-  isl_constraint_set_constant(c, v);
-  isl_int_clear(v);
-
-  return c;
 }
 
 void MemoryAccess::print(raw_ostream &OS) const {
@@ -236,14 +211,12 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter) {
   Scattering = isl_map_from_basic_map(bmap);
 }
 
-void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
-                             SmallVectorImpl<Loop*> &NestLoops) {
+void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion) {
   const AccFuncSetType *AccFuncs = tempSCoP.getAccessFunctions(BB);
 
   for (AccFuncSetType::const_iterator I = AccFuncs->begin(),
        E = AccFuncs->end(); I != E; ++I)
-    MemAccs.push_back(new MemoryAccess(*I, NestLoops, this,
-                                       *getParent()->getSE()));
+    MemAccs.push_back(new MemoryAccess(*I, this));
 }
 
 isl_constraint *SCoPStmt::toConditionConstrain(const SCEVAffFunc &AffFunc,
@@ -442,7 +415,7 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
 
   buildIterationDomain(tempSCoP, CurRegion);
   buildScattering(Scatter);
-  buildAccesses(tempSCoP, CurRegion, NestLoops);
+  buildAccesses(tempSCoP, CurRegion);
 }
 
 SCoPStmt::SCoPStmt(SCoP &parent, SmallVectorImpl<unsigned> &Scatter)
