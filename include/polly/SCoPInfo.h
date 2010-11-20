@@ -213,13 +213,9 @@ class SCoPStmt {
   MemoryAccessVec MemAccs;
 
   typedef SmallVector<const SCEVAddRecExpr*, 8> IndVarVec;
-  void addConditionsToDomain(TempSCoP &tempSCoP,
-                             const Region &CurRegion,
-                             IndVarVec &IndVars);
-  void buildIterationDomainFromLoops(TempSCoP &tempSCoP,
-                                     IndVarVec &IndVars);
-  void buildIterationDomain(TempSCoP &tempSCoP,
-                            const Region &CurRegion);
+  void addConditionsToDomain(TempSCoP &tempSCoP, const Region &CurRegion);
+  void buildIterationDomainFromLoops(TempSCoP &tempSCoP);
+  void buildIterationDomain(TempSCoP &tempSCoP, const Region &CurRegion);
   void buildScattering(SmallVectorImpl<unsigned> &Scatter,
                        unsigned CurLoopDepth);
   void buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
@@ -237,9 +233,8 @@ class SCoPStmt {
   isl_constraint *toConditionConstrain(const SCEVAffFunc &AffFunc,
     isl_dim *dim, const SmallVectorImpl<const SCEV*> &Params) const;
 
-  isl_set *toConditionSet(const Comparison &Cmp,
-    isl_dim *dim, const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
-    const SmallVectorImpl<const SCEV*> &Params) const;
+  isl_set *toConditionSet(const Comparison &Cmp, isl_dim *dim,
+                          const SmallVectorImpl<const SCEV*> &Params) const;
 
   friend class SCoP;
   std::string BaseName;

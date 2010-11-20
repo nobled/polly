@@ -52,11 +52,10 @@ static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
 }
 
 static isl_map *getValueOf(const SCEVAffFunc &AffFunc,
-  isl_dim *dim,
-  const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
-  const SmallVectorImpl<const SCEV*> &Params) {
+                           const SCoPStmt *Statement, isl_dim *dim,
+                           const SmallVectorImpl<const SCEV*> &Params) {
 
-  unsigned num_in = IndVars.size(), num_param = Params.size();
+  unsigned num_in = Statement->getNumIterators(), num_param = Params.size();
 
   const char *dimname = isl_dim_get_tuple_name(dim, isl_dim_set);
   dim = isl_dim_alloc(isl_dim_get_ctx(dim), num_param,
@@ -76,7 +75,8 @@ static isl_map *getValueOf(const SCEVAffFunc &AffFunc,
 
   // Set the coefficient for induction variables.
   for (unsigned i = 0, e = num_in; i != e; ++i) {
-    setCoefficient(AffFunc.getCoeff(IndVars[i]), v, false, AffFunc.isSigned());
+    setCoefficient(AffFunc.getCoeff(Statement->getSCEVForDimension(i)), v,
+                   false, AffFunc.isSigned());
     isl_constraint_set_coefficient(c, isl_dim_in, i, v);
   }
 
@@ -342,14 +342,13 @@ static isl_set *getComparison(isl_ctx *Context, const ICmpInst::Predicate Pred,
 }
 
 isl_set *SCoPStmt::toConditionSet(const Comparison &Comp, isl_dim *dim,
-  const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
   const SmallVectorImpl<const SCEV*> &Params) const {
 
   isl_ctx *Context = isl_dim_get_ctx(dim);
   unsigned ParameterNumber = Params.size();
 
-  isl_map *LHSValue = getValueOf(*Comp.getLHS(), dim, IndVars, Params);
-  isl_map *RHSValue = getValueOf(*Comp.getRHS(), dim, IndVars, Params);
+  isl_map *LHSValue = getValueOf(*Comp.getLHS(), this, dim, Params);
+  isl_map *RHSValue = getValueOf(*Comp.getRHS(), this, dim, Params);
   isl_map *MapToLHS = MapValueToLHS(Context, ParameterNumber);
   isl_map *MapToRHS = MapValueToRHS(Context, ParameterNumber);
   isl_map *LHSValueAtLHS = isl_map_apply_range(LHSValue, MapToLHS);
@@ -361,10 +360,9 @@ isl_set *SCoPStmt::toConditionSet(const Comparison &Comp, isl_dim *dim,
   return RemainingSet;
 }
 
-void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
-                                             IndVarVec &IndVars) {
+void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP) {
   isl_dim *dim = isl_dim_set_alloc(Parent.getCtx(), Parent.getNumParams(),
-                                     IndVars.size());
+                                   getNumIterators());
   dim = isl_dim_set_tuple_name(dim, isl_dim_set, getBaseName());
   isl_basic_set *bset = isl_basic_set_universe(dim);
 
@@ -372,8 +370,9 @@ void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
   isl_int_init(v);
 
   // Loop bounds.
-  for (int i = 0, e = IndVars.size(); i != e; ++i) {
-    const SCEVAffFunc &bound = tempSCoP.getLoopBound(IndVars[i]->getLoop());
+  for (int i = 0, e = getNumIterators(); i != e; ++i) {
+    const Loop *L = getSCEVForDimension(i)->getLoop();
+    const SCEVAffFunc &bound = tempSCoP.getLoopBound(L);
     isl_constraint *c = isl_inequality_alloc(isl_dim_copy(dim));
 
     // Lower bound: IV >= 0.
@@ -382,7 +381,7 @@ void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
     bset = isl_basic_set_add_constraint(bset, c);
 
     // Upper bound: IV <= NumberOfIterations.
-    c = toConditionConstrain(bound, dim, IndVars, Parent.getParams());
+    c = toConditionConstrain(bound, dim, Parent.getParams());
     isl_int_set_si(v, -1);
     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
     bset = isl_basic_set_add_constraint(bset, c);
@@ -393,8 +392,7 @@ void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP,
 }
 
 void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
-                                     const Region &CurRegion,
-                                     IndVarVec &IndVars) {
+                                     const Region &CurRegion) {
   isl_dim *dim = isl_set_get_dim(Domain);
   const Region *TopR = tempSCoP.getMaxRegion().getParent(),
                *CurR = &CurRegion;
@@ -408,7 +406,7 @@ void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
       if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
         for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end();
              I != E; ++I) {
-          isl_set *c = toConditionSet(*I,dim, IndVars, Parent.getParams());
+          isl_set *c = toConditionSet(*I,dim, Parent.getParams());
           Domain = isl_set_intersect(Domain, c);
         }
     }
@@ -421,16 +419,8 @@ void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
 
 void SCoPStmt::buildIterationDomain(TempSCoP &tempSCoP, const Region &CurRegion)
 {
-  IndVarVec IndVars(IVS.size());
-
-  // Setup the induction variables.
-  for (unsigned i = 0, e = IVS.size(); i < e; ++i) {
-    PHINode *PN = IVS[i];
-    IndVars[i] = cast<SCEVAddRecExpr>(getParent()->getSE()->getSCEV(PN));
-  }
-
-  buildIterationDomainFromLoops(tempSCoP, IndVars);
-  addConditionsToDomain(tempSCoP, CurRegion, IndVars);
+  buildIterationDomainFromLoops(tempSCoP);
+  addConditionsToDomain(tempSCoP, CurRegion);
 }
 
 SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
