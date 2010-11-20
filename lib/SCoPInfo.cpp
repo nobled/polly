@@ -246,11 +246,9 @@ void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
 }
 
 isl_constraint *SCoPStmt::toConditionConstrain(const SCEVAffFunc &AffFunc,
-  isl_dim *dim,
-  const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
-  const SmallVectorImpl<const SCEV*> &Params) const {
+  isl_dim *dim, const SmallVectorImpl<const SCEV*> &Params) const {
 
-  unsigned num_in = IndVars.size(), num_param = Params.size();
+  unsigned num_in = getNumIterators(), num_param = Params.size();
 
   isl_constraint *c = 0;
   if (AffFunc.getType() == SCEVAffFunc::GE)
@@ -263,7 +261,8 @@ isl_constraint *SCoPStmt::toConditionConstrain(const SCEVAffFunc &AffFunc,
 
   // Set the coefficient for induction variables.
   for (unsigned i = 0, e = num_in; i != e; ++i) {
-    setCoefficient(AffFunc.getCoeff(IndVars[i]), v, false, AffFunc.isSigned());
+    setCoefficient(AffFunc.getCoeff(getSCEVForDimension(i)), v, false,
+                   AffFunc.isSigned());
     isl_constraint_set_coefficient(c, isl_dim_set, i, v);
   }
 
@@ -505,15 +504,15 @@ SCoPStmt::SCoPStmt(SCoP &parent, SmallVectorImpl<unsigned> &Scatter)
     MemAccs.push_back(new MemoryAccess(*BI, this));
 }
 
-unsigned SCoPStmt::getNumParams() {
+unsigned SCoPStmt::getNumParams() const {
   return isl_set_n_param(Domain);
 }
 
-unsigned SCoPStmt::getNumIterators() {
-  return isl_set_n_dim(Domain);
+unsigned SCoPStmt::getNumIterators() const {
+  return IVS.size();
 }
 
-unsigned SCoPStmt::getNumScattering() {
+unsigned SCoPStmt::getNumScattering() const {
   return isl_map_dim(Scattering, isl_dim_out);
 }
 
@@ -522,7 +521,7 @@ const PHINode *SCoPStmt::getInductionVariableForDimension(unsigned Dimension)
   return IVS[Dimension];
 }
 
-const SCEVAddRecExpr *SCoPStmt::getAddRecExprForDimension(unsigned Dimension)
+const SCEVAddRecExpr *SCoPStmt::getSCEVForDimension(unsigned Dimension)
   const {
   PHINode *PN = IVS[Dimension];
   return cast<SCEVAddRecExpr>(getParent()->getSE()->getSCEV(PN));

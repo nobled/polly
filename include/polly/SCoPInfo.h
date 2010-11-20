@@ -235,9 +235,7 @@ class SCoPStmt {
   SCoPStmt(SCoP &parent, SmallVectorImpl<unsigned> &Scatter);
 
   isl_constraint *toConditionConstrain(const SCEVAffFunc &AffFunc,
-    isl_dim *dim,
-    const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
-    const SmallVectorImpl<const SCEV*> &Params) const;
+    isl_dim *dim, const SmallVectorImpl<const SCEV*> &Params) const;
 
   isl_set *toConditionSet(const Comparison &Cmp,
     isl_dim *dim, const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
@@ -274,12 +272,12 @@ public:
   memacc_iterator memacc_begin() { return MemAccs.begin(); }
   memacc_iterator memacc_end() { return MemAccs.end(); }
 
-  unsigned getNumParams();
-  unsigned getNumIterators();
-  unsigned getNumScattering();
+  unsigned getNumParams() const;
+  unsigned getNumIterators() const;
+  unsigned getNumScattering() const;
 
   SCoP *getParent() { return &Parent; }
-  const SCoP *getParent() const { return &Parent; } 
+  const SCoP *getParent() const { return &Parent; }
 
   const char *getBaseName() const { return BaseName.c_str(); }
 
@@ -289,8 +287,8 @@ public:
   /// @return The induction variable at a certain dimension.
   const PHINode *getInductionVariableForDimension(unsigned Dimension) const;
 
-  /// @brief Return the SCEV add recurrence expression for a loop dimension.
-  const SCEVAddRecExpr *getAddRecExprForDimension(unsigned Dimension) const;
+  /// @brief Return the SCEV for a loop dimension.
+  const SCEVAddRecExpr *getSCEVForDimension(unsigned Dimension) const;
 
   /// @brief Is this statement the final read statement?
   ///
