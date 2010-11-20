@@ -328,7 +328,7 @@ class ClastStmtCodeGen {
   //
   // Also used to track the assignment of old IVS to new values or
   // expressions.
-  SCoPStmt *stmt;
+  SCoPStmt *CurrentStatement;
 
   // Count the current assignment.  This is for user statements
   // to track how an IV from the old code corresponds to a value
@@ -336,7 +336,7 @@ class ClastStmtCodeGen {
   //
   // There is one assignment with an empty LHS for every IV dimension
   // of each statement.
-  unsigned assignmentCount;
+  unsigned AssignmentCount;
 
   // Map the Values from the old code to their counterparts in the new code.
   ValueMapT ValueMap;
@@ -357,8 +357,8 @@ public:
 
     if (!a->LHS) {
       const PHINode *PN;
-      PN = stmt->getInductionVariableForDimension(assignmentCount);
-      assignmentCount++;
+      PN = CurrentStatement->getInductionVariableForDimension(assignmentCount);
+      AssignmentCount++;
       const Value *V = PN;
 
       if (PN->getNumOperands() == 2)
@@ -369,10 +369,9 @@ public:
   }
 
   void codegen(struct clast_user_stmt *u) {
-    SCoPStmt *UsrStmt= (SCoPStmt *)u->statement->usr;
-    stmt = UsrStmt;
-    BasicBlock *BB = stmt->getBasicBlock();
-    assignmentCount = 0;
+    CurrentStatement = (SCoPStmt *)u->statement->usr;
+    BasicBlock *BB = CurrentStatement->getBasicBlock();
+    AssignmentCount = 0;
 
     // Actually we have a list of pointers here. Be careful.
     if (u->substitutions)
