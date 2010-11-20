@@ -31,7 +31,7 @@
 struct clast_name;
 
 namespace polly {
-struct SCoP;
+class SCoP;
 
 class CLooG {
   SCoP *S;
