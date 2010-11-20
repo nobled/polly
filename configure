@@ -572,7 +572,6 @@ cloog_ld
 cloog_lib
 cloog_inc
 cloog_found
-isl_isl_inc
 isl_ld
 isl_lib
 isl_inc
@@ -2494,7 +2493,7 @@ $as_echo_n "checking for isl in $given_inc_path, $given_lib_path... " >&6; }
   # try to compile a file that includes a header of the library
   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
-#include <isl/isl_config.h>
+#include <isl/config.h>
 int
 main ()
 {
@@ -2542,13 +2541,8 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 
-if test "x$isl_inc" != "x"; then :
-  isl_isl_inc="$isl_inc/isl"
-
-fi
-
 saved_CXXFLAGS=$CXXFLAGS
-CXXFLAGS="$CXXFLAGS $isl_inc/isl"
+CXXFLAGS="$CXXFLAGS $isl_inc"
 
   ac_ext=cpp
 ac_cpp='$CXXCPP $CPPFLAGS'

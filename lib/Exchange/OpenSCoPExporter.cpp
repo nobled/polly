@@ -23,8 +23,8 @@
 #include "openscop/openscop.h"
 
 #include "stdio.h"
-#include "isl_set.h"
-#include "isl_constraint.h"
+#include "isl/set.h"
+#include "isl/constraint.h"
 
 using namespace llvm;
 using namespace polly;

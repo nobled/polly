@@ -28,7 +28,7 @@
 #define DEBUG_TYPE "polly-dependences"
 #include "llvm/Support/Debug.h"
 
-#include <isl_flow.h>
+#include <isl/flow.h>
 
 using namespace polly;
 using namespace llvm;

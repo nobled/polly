@@ -78,15 +78,11 @@ dnl Find Gmp
 find_lib_and_headers([gmp], [gmp.h], [gmp], [required])
 
 dnl Find Isl
-find_lib_and_headers([isl], [isl/isl_config.h], [isl], [required])
-
-dnl Dirty hack: Cloog will include isl stuffs like #include <isl_map.h>
-AS_IF([test "x$isl_inc" != "x"],
-  [AC_SUBST([isl_isl_inc],["$isl_inc/isl"])])
+find_lib_and_headers([isl], [isl/config.h], [isl], [required])
 
 dnl Find cloog
 saved_CXXFLAGS=$CXXFLAGS
-CXXFLAGS="$CXXFLAGS $isl_inc/isl"
+CXXFLAGS="$CXXFLAGS $isl_inc"
 find_lib_and_headers([cloog], [cloog/isl/cloog.h], [cloog-isl], [required])
 CXXFLAGS=$saved_CXXFLAGS
 

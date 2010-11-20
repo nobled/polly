@@ -32,7 +32,7 @@
 #define DEBUG_TYPE "polly-scops"
 #include "llvm/Support/Debug.h"
 
-#include "isl_constraint.h"
+#include "isl/constraint.h"
 
 using namespace llvm;
 using namespace polly;
