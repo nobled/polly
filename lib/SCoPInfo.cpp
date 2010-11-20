@@ -536,8 +536,8 @@ void SCoPStmt::dump() const { print(dbgs()); }
 //===----------------------------------------------------------------------===//
 /// SCoP class implement
 SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &ScalarEvolution)
-           : R(tempSCoP.getMaxRegion()),
-           MaxLoopDepth(tempSCoP.getMaxLoopDepth()), SE(&ScalarEvolution) {
+           : SE(&ScalarEvolution), R(tempSCoP.getMaxRegion()),
+           MaxLoopDepth(tempSCoP.getMaxLoopDepth()) {
   isl_ctx *ctx = isl_ctx_alloc();
 
   ParamSetType &Params = tempSCoP.getParamSet();
