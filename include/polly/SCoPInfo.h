@@ -140,6 +140,10 @@ class SCoPStmt {
   // DO NOT IMPLEMENT
   const SCoPStmt &operator=(const SCoPStmt &);
 
+
+  /// Polyhedral description
+  //@{
+
   /// The SCoP containing this SCoPStmt
   SCoP &Parent;
 
@@ -148,7 +152,7 @@ class SCoPStmt {
   ///
   /// Example:
   ///     for (i = 0; i < 100 + b; ++i)
-  ///       for (j = 0; j < 50; ++j)
+  ///       for (j = 0; j < i; ++j)
   ///         S(i,j);
   ///
   /// 'S' is executed for different values of i and j. A vector of all
@@ -158,76 +162,81 @@ class SCoPStmt {
   /// In this case it is:
   ///
   ///     Domain: 0 <= i <= 100 + b
-  ///             0 <= i <= j
+  ///             0 <= j <= i
   ///
   /// A pair of statment and iteration vector (S, (5,3)) is called statment
-  /// iteration.
+  /// instance.
   isl_set *Domain;
 
-  /// The scattering map describes the execution order of the statement.
+  /// The scattering map describes the execution order of the statement
+  /// instances.
   ///
   /// A statement and its iteration domain do not give any information about the
-  /// order in time in which the different statement iterations are executed.
-  /// This information is provided by the Scattering.
+  /// order in time in which the different statement instances are executed.
+  /// This information is provided by the scattering.
   ///
-  /// The scattering maps every iteration of every statement into a multi
-  /// dimensional scattering space.
+  /// The scattering maps every instance of each statement into a multi
+  /// dimensional scattering space. This space can be seen as a multi
+  /// dimensional clock.
   ///
   /// Example:
   ///
   /// <S,(5,4)>  may be mapped to (5,4) by this scattering:
   ///
-  /// s0 = i
-  /// s1 = j
+  /// s0 = i (Year of execution)
+  /// s1 = j (Day of execution)
   ///
   /// or to (9, 20) by this scattering:
   ///
-  /// s0 = i + j
-  /// s1 = 20
+  /// s0 = i + j (Year of execution)
+  /// s1 = 20 (Day of execution)
   ///
-  /// The order statement iterations are executed is now defined by the
-  /// scattering vectors they are mapped to. A statement iteration
-  /// <A, (i, j, ..)> is executed before a statement iteration <B, (i', ..)>, if
+  /// The order statement instances are executed is defined by the
+  /// scattering vectors they are mapped to. A statement instance
+  /// <A, (i, j, ..)> is executed before a statement instance <B, (i', ..)>, if
   /// the scattering vector of A is lexicographic smaller than the scattering
   /// vector of B.
   isl_map *Scattering;
 
-  /// The BasicBlock represented by this SCoPStmt.
-  BasicBlock *BB;
-
-  // The loop IVS.
-  std::vector<PHINode*> IVS;
-
   /// The memory accesses of this statement.
   ///
-  /// The only side effects models for a SCoP statement are its accesses to
-  /// memory. Each statement may have an arbitrary large set of memory accesses.
+  /// The only side effects of a statement are its memory accesses.
   typedef SmallVector<MemoryAccess*, 8> MemoryAccessVec;
   MemoryAccessVec MemAccs;
 
-  typedef SmallVector<const SCEVAddRecExpr*, 8> IndVarVec;
+  //@}
+
+  /// The BasicBlock represented by this statement.
+  BasicBlock *BB;
+
+  /// @brief The loop induction variables surrounding the statement.
+  ///
+  /// This information is only needed for final code generation.
+  std::vector<PHINode*> IVS;
+
+  std::string BaseName;
+
+  /// Build the statment.
+  //@{
+  isl_constraint *toConditionConstrain(const SCEVAffFunc &AffFunc, isl_dim *dim,
+    const SmallVectorImpl<const SCEV*> &Params) const;
+  isl_set *toConditionSet(const Comparison &Cmp, isl_dim *dim) const;
   void addConditionsToDomain(TempSCoP &tempSCoP, const Region &CurRegion);
   void buildIterationDomainFromLoops(TempSCoP &tempSCoP);
   void buildIterationDomain(TempSCoP &tempSCoP, const Region &CurRegion);
   void buildScattering(SmallVectorImpl<unsigned> &Scatter);
   void buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion);
+  //@}
 
   /// Create the SCoPStmt from a BasicBlock.
-  SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
-          const Region &CurRegion, BasicBlock &bb,
-          SmallVectorImpl<Loop*> &NestLoops,
-          SmallVectorImpl<unsigned> &Scatter);
+  SCoPStmt(SCoP &parent, TempSCoP &tempSCoP, const Region &CurRegion,
+           BasicBlock &bb, SmallVectorImpl<Loop*> &NestLoops,
+           SmallVectorImpl<unsigned> &Scatter);
 
   /// Create the finalization statement.
   SCoPStmt(SCoP &parent, SmallVectorImpl<unsigned> &Scatter);
 
-  isl_constraint *toConditionConstrain(const SCEVAffFunc &AffFunc,
-    isl_dim *dim, const SmallVectorImpl<const SCEV*> &Params) const;
-
-  isl_set *toConditionSet(const Comparison &Cmp, isl_dim *dim) const;
-
   friend class SCoP;
-  std::string BaseName;
 public:
 
   ~SCoPStmt();
@@ -340,8 +349,8 @@ class SCoP {
   /// Constraints on parameters.
   isl_set *Context;
 
-  /// Create the static control part with a region, max loop depth of this region
-  /// and parameters used in this region.
+  /// Create the static control part with a region, max loop depth of this
+  /// region and parameters used in this region.
   explicit SCoP(TempSCoP &TempSCoP, LoopInfo &LI, ScalarEvolution &SE);
 
   /// @brief Check if a basic block is trivial.
