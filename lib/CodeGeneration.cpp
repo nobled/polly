@@ -33,6 +33,7 @@
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
+#include "llvm/Module.h"
 
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"
@@ -422,26 +423,12 @@ public:
   /// This loop reflects a loop as if it would have been created by an OpenMP
   /// statement.
   void codegenForOpenMP(struct clast_for *f) {
-    APInt Stride = APInt_from_MPZ(f->stride);
-    PHINode *IV;
-    Value *IncrementedIV;
-    BasicBlock *AfterBB;
-    Value *LB = ExpGen.codegen(f->LB);
-    Value *UB = ExpGen.codegen(f->UB);
-    createLoop(Builder, LB, UB, Stride, IV, AfterBB, IncrementedIV, DT);
-    (CharMap)[f->iterator] = IV;
+      Module *M = Builder->GetInsertBlock()->getParent()->getParent();
+      Function *FN = M->getFunction("GOMP_parallel_end");
 
-    if (f->body)
-      codegen(f->body);
-
-    BasicBlock *HeaderBB = *pred_begin(AfterBB);
-    BasicBlock *LastBodyBB = Builder->GetInsertBlock();
-    Builder->CreateBr(HeaderBB);
-    IV->addIncoming(IncrementedIV, LastBodyBB);
-    Builder->SetInsertPoint(AfterBB);
-
-    DEBUG(dbgs() << "Loop with header: " << HeaderBB->getNameStr()
-          << " is parallel\n");
+      Builder->CreateCall(FN);
+      //DEBUG(dbgs() << "Loop with header: " << HeaderBB->getNameStr()
+      //      << " is parallel\n");
   }
 
   void codegen(struct clast_for *f) {
@@ -573,6 +560,22 @@ class CodeGeneration : public RegionPass {
     }
   }
 
+  void addOpenMPDefinitions(IRBuilder<> *Builder)
+  {
+      // Adding prototypes required if OpenMP is enabled.
+      Module *M = Builder->GetInsertBlock()->getParent()->getParent();
+      Function *FN = M->getFunction("GOMP_parallel_end");
+
+      // Check if the definition is already added. Otherwise add it.
+      if (!FN) {
+          LLVMContext &Context = Builder->getContext();
+          FunctionType *FT = FunctionType::get(Type::getVoidTy(Context),
+                  std::vector<const Type*>(), false);
+          Function::Create(FT, Function::ExternalLinkage, 
+                  "GOMP_parallel_end", M); 
+      }
+  }
+
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
     S = getAnalysis<SCoPInfo>().getSCoP();
@@ -605,6 +608,9 @@ class CodeGeneration : public RegionPass {
     clast_stmt *clast = C->getClast();
 
     addParameters(((clast_root*)clast)->names, CodeGen.CharMap, &Builder);
+
+    // TODO: Add check if OpenMP codegeneration is enabled.
+    addOpenMPDefinitions(&Builder);
 
     CodeGen.codegen(clast);
 
