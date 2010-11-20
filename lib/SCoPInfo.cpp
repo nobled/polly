@@ -41,6 +41,62 @@ STATISTIC(SCoPFound,  "Number of valid SCoPs");
 STATISTIC(RichSCoPFound,   "Number of SCoPs containing a loop");
 
 //===----------------------------------------------------------------------===//
+static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
+                           bool isSigned = true) {
+  if (Coeff) {
+    const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
+    const APInt &CI = C->getValue()->getValue();
+    MPZ_from_APInt(v, negative ? (-CI) : CI, isSigned);
+  } else
+    isl_int_set_si(v, 0);
+}
+
+static isl_map *getValueOf(const SCEVAffFunc &AffFunc,
+  isl_dim *dim,
+  const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
+  const SmallVectorImpl<const SCEV*> &Params) {
+
+  unsigned num_in = IndVars.size(), num_param = Params.size();
+
+  const char *dimname = isl_dim_get_tuple_name(dim, isl_dim_set);
+  dim = isl_dim_alloc(isl_dim_get_ctx(dim), num_param,
+                      isl_dim_size(dim, isl_dim_set), 1);
+  isl_dim_set_tuple_name(dim, isl_dim_in, dimname);
+
+  assert(AffFunc.getType() == SCEVAffFunc::Eq && "AffFunc is not an equality");
+
+  isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+
+  isl_int v;
+  isl_int_init(v);
+
+  // Set single output dimension.
+  isl_int_set_si(v, -1);
+  isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
+
+  // Set the coefficient for induction variables.
+  for (unsigned i = 0, e = num_in; i != e; ++i) {
+    setCoefficient(AffFunc.getCoeff(IndVars[i]), v, false, AffFunc.isSigned());
+    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
+  }
+
+  // Set the coefficient of parameters
+  for (unsigned i = 0, e = num_param; i != e; ++i) {
+    setCoefficient(AffFunc.getCoeff(Params[i]), v, false, AffFunc.isSigned());
+    isl_constraint_set_coefficient(c, isl_dim_param, i, v);
+  }
+
+  // Set the constant.
+  setCoefficient(AffFunc.getTransComp(), v, false, AffFunc.isSigned());
+  isl_constraint_set_constant(c, v);
+  isl_int_clear(v);
+
+  isl_basic_map *BasicMap = isl_basic_map_universe(isl_dim_copy(dim));
+  BasicMap = isl_basic_map_add_constraint(BasicMap, c);
+  return isl_map_from_basic_map(BasicMap);
+}
+//===----------------------------------------------------------------------===//
+
 MemoryAccess::~MemoryAccess() {
   isl_map_free(getAccessFunction());
 }
@@ -80,16 +136,6 @@ MemoryAccess::MemoryAccess(const Value *BaseAddress, SCoPStmt *Statement) {
 
   isl_basic_map *BasicAccessMap = createBasicAccessMap(Statement);
   AccessRelation = isl_map_from_basic_map(BasicAccessMap);
-}
-
-static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
-                           bool isSigned = true) {
-  if (Coeff) {
-    const SCEVConstant *C = dyn_cast<SCEVConstant>(Coeff);
-    const APInt &CI = C->getValue()->getValue();
-    MPZ_from_APInt(v, negative ? (-CI) : CI, isSigned);
-  } else
-    isl_int_set_si(v, 0);
 }
 
 isl_constraint *MemoryAccess::toAccessFunction(const SCEVAffFunc &AffFunc,
@@ -233,51 +279,6 @@ isl_constraint *SCoPStmt::toConditionConstrain(const SCEVAffFunc &AffFunc,
   isl_int_clear(v);
 
   return c;
-}
-
-static isl_map *getValueOf(const SCEVAffFunc &AffFunc,
-  isl_dim *dim,
-  const SmallVectorImpl<const SCEVAddRecExpr*> &IndVars,
-  const SmallVectorImpl<const SCEV*> &Params) {
-
-  unsigned num_in = IndVars.size(), num_param = Params.size();
-
-  const char *dimname = isl_dim_get_tuple_name(dim, isl_dim_set);
-  dim = isl_dim_alloc(isl_dim_get_ctx(dim), num_param,
-                      isl_dim_size(dim, isl_dim_set), 1);
-  isl_dim_set_tuple_name(dim, isl_dim_in, dimname);
-
-  assert(AffFunc.getType() == SCEVAffFunc::Eq && "AffFunc is not an equality");
-
-  isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
-
-  isl_int v;
-  isl_int_init(v);
-
-  // Set single output dimension.
-  isl_int_set_si(v, -1);
-  isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
-
-  // Set the coefficient for induction variables.
-  for (unsigned i = 0, e = num_in; i != e; ++i) {
-    setCoefficient(AffFunc.getCoeff(IndVars[i]), v, false, AffFunc.isSigned());
-    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
-  }
-
-  // Set the coefficient of parameters
-  for (unsigned i = 0, e = num_param; i != e; ++i) {
-    setCoefficient(AffFunc.getCoeff(Params[i]), v, false, AffFunc.isSigned());
-    isl_constraint_set_coefficient(c, isl_dim_param, i, v);
-  }
-
-  // Set the constant.
-  setCoefficient(AffFunc.getTransComp(), v, false, AffFunc.isSigned());
-  isl_constraint_set_constant(c, v);
-  isl_int_clear(v);
-
-  isl_basic_map *BasicMap = isl_basic_map_universe(isl_dim_copy(dim));
-  BasicMap = isl_basic_map_add_constraint(BasicMap, c);
-  return isl_map_from_basic_map(BasicMap);
 }
 
 static isl_map *MapValueToLHS(isl_ctx *Context, unsigned ParameterNumber) {
