@@ -218,8 +218,8 @@ class SCoPStmt {
 
   /// Build the statment.
   //@{
-  isl_constraint *toConditionConstrain(const SCEVAffFunc &AffFunc, isl_dim *dim,
-    const SmallVectorImpl<const SCEV*> &Params) const;
+  isl_set *toUpperLoopBound(const SCEVAffFunc &UpperBound, isl_dim *dim,
+			    unsigned BoundedDimension) const;
   isl_set *toConditionSet(const Comparison &Cmp, isl_dim *dim) const;
   void addConditionsToDomain(TempSCoP &tempSCoP, const Region &CurRegion);
   void buildIterationDomainFromLoops(TempSCoP &tempSCoP);

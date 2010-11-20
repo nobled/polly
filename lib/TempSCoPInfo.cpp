@@ -249,7 +249,7 @@ void TempSCoPInfo::buildLoopBounds(TempSCoP &SCoP) {
     if (LoopBounds.find(L) != LoopBounds.end())
       continue;
 
-    LoopBounds[L] = SCEVAffFunc(SCEVAffFunc::GE);
+    LoopBounds[L] = SCEVAffFunc(SCEVAffFunc::Eq);
     const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
     buildAffineFunction(LoopCount, LoopBounds[L], SCoP.getMaxRegion(),
                         SCoP.getParamSet());
