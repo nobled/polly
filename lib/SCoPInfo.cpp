@@ -236,13 +236,13 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
 }
 
 void SCoPStmt::buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
-                             ScalarEvolution &SE, SmallVectorImpl<Loop*>
-                             &NestLoops) {
+                             SmallVectorImpl<Loop*> &NestLoops) {
   const AccFuncSetType *AccFuncs = tempSCoP.getAccessFunctions(BB);
 
   for (AccFuncSetType::const_iterator I = AccFuncs->begin(),
        E = AccFuncs->end(); I != E; ++I)
-    MemAccs.push_back(new MemoryAccess(*I, NestLoops, this, SE));
+    MemAccs.push_back(new MemoryAccess(*I, NestLoops, this,
+                                       *getParent()->getSE()));
 }
 
 isl_constraint *SCoPStmt::toConditionConstrain(const SCEVAffFunc &AffFunc,
@@ -420,16 +420,14 @@ void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
   isl_dim_free(dim);
 }
 
-void SCoPStmt::buildIterationDomain(TempSCoP &tempSCoP,
-                                const Region &CurRegion,
-                                ScalarEvolution &SE)
+void SCoPStmt::buildIterationDomain(TempSCoP &tempSCoP, const Region &CurRegion)
 {
   IndVarVec IndVars(IVS.size());
 
   // Setup the induction variables.
   for (unsigned i = 0, e = IVS.size(); i < e; ++i) {
     PHINode *PN = IVS[i];
-    IndVars[i] = cast<SCEVAddRecExpr>(SE.getSCEV(PN));
+    IndVars[i] = cast<SCEVAddRecExpr>(getParent()->getSE()->getSCEV(PN));
   }
 
   buildIterationDomainFromLoops(tempSCoP, IndVars);
@@ -439,8 +437,7 @@ void SCoPStmt::buildIterationDomain(TempSCoP &tempSCoP,
 SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
                    const Region &CurRegion, BasicBlock &bb,
                    SmallVectorImpl<Loop*> &NestLoops,
-                   SmallVectorImpl<unsigned> &Scatter,
-                   ScalarEvolution &SE)
+                   SmallVectorImpl<unsigned> &Scatter)
   : Parent(parent), BB(&bb), IVS(NestLoops.size()) {
   // Setup the induction variables.
   for (unsigned i = 0, e = NestLoops.size(); i < e; ++i) {
@@ -453,15 +450,13 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
   WriteAsOperand(OS, &bb, false);
   BaseName = OS.str();
 
-  buildIterationDomain(tempSCoP, CurRegion, SE);
+  buildIterationDomain(tempSCoP, CurRegion);
   buildScattering(Scatter, NestLoops.size());
-  buildAccesses(tempSCoP, CurRegion, SE, NestLoops);
+  buildAccesses(tempSCoP, CurRegion, NestLoops);
 
 }
 
-SCoPStmt::SCoPStmt(SCoP &parent,
-                   SmallVectorImpl<unsigned> &Scatter,
-                   ScalarEvolution &SE)
+SCoPStmt::SCoPStmt(SCoP &parent, SmallVectorImpl<unsigned> &Scatter)
   : Parent(parent), BB(NULL), IVS(0) {
 
   BaseName = "FinalRead";
@@ -527,6 +522,12 @@ const PHINode *SCoPStmt::getInductionVariableForDimension(unsigned Dimension)
   return IVS[Dimension];
 }
 
+const SCEVAddRecExpr *SCoPStmt::getAddRecExprForDimension(unsigned Dimension)
+  const {
+  PHINode *PN = IVS[Dimension];
+  return cast<SCEVAddRecExpr>(getParent()->getSE()->getSCEV(PN));
+}
+
 isl_ctx *SCoPStmt::getIslContext() {
   return Parent.getCtx();
 }
@@ -574,9 +575,9 @@ void SCoPStmt::dump() const { print(dbgs()); }
 
 //===----------------------------------------------------------------------===//
 /// SCoP class implement
-SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &SE)
+SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &ScalarEvolution)
            : R(tempSCoP.getMaxRegion()),
-           MaxLoopDepth(tempSCoP.getMaxLoopDepth()) {
+           MaxLoopDepth(tempSCoP.getMaxLoopDepth()), SE(&ScalarEvolution) {
   isl_ctx *ctx = isl_ctx_alloc();
 
   ParamSetType &Params = tempSCoP.getParamSet();
@@ -595,8 +596,8 @@ SCoP::SCoP(TempSCoP &tempSCoP, LoopInfo &LI, ScalarEvolution &SE)
 
   // Build the iteration domain, access functions and scattering functions
   // traversing the region tree.
-  buildSCoP(tempSCoP, getRegion(), NestLoops, Scatter, LI, SE);
-  Stmts.push_back(new SCoPStmt(*this, Scatter, SE));
+  buildSCoP(tempSCoP, getRegion(), NestLoops, Scatter, LI);
+  Stmts.push_back(new SCoPStmt(*this, Scatter));
 
   assert(NestLoops.empty() && "NestLoops not empty at top level!");
 }
@@ -645,6 +646,8 @@ void SCoP::dump() const { print(dbgs()); }
 
 isl_ctx *SCoP::getCtx() const { return isl_set_get_ctx(Context); }
 
+ScalarEvolution *SCoP::getSE() const { return SE; }
+
 bool SCoP::isTrivialBB(BasicBlock *BB, TempSCoP &tempSCoP) {
   if (tempSCoP.getAccessFunctions(BB))
     return false;
@@ -656,7 +659,7 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
                       const Region &CurRegion,
                       SmallVectorImpl<Loop*> &NestLoops,
                       SmallVectorImpl<unsigned> &Scatter,
-                      LoopInfo &LI, ScalarEvolution &SE) {
+                      LoopInfo &LI) {
   Loop *L = castToLoop(CurRegion, LI);
 
   if (L)
@@ -669,7 +672,7 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
        E = CurRegion.element_end(); I != E; ++I)
     if (I->isSubRegion())
       buildSCoP(tempSCoP, *(I->getNodeAs<Region>()), NestLoops, Scatter,
-                LI, SE);
+                LI);
     else {
       BasicBlock *BB = I->getNodeAs<BasicBlock>();
 
@@ -677,7 +680,7 @@ void SCoP::buildSCoP(TempSCoP &tempSCoP,
         continue;
 
       Stmts.push_back(new SCoPStmt(*this, tempSCoP, CurRegion, *BB, NestLoops,
-                                   Scatter, SE));
+                                   Scatter));
 
       // Increasing the Scattering function is OK for the moment, because
       // we are using a depth first iterator and the program is well structured.

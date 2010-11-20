@@ -219,23 +219,20 @@ class SCoPStmt {
   void buildIterationDomainFromLoops(TempSCoP &tempSCoP,
                                      IndVarVec &IndVars);
   void buildIterationDomain(TempSCoP &tempSCoP,
-                            const Region &CurRegion,
-                            ScalarEvolution &SE);
+                            const Region &CurRegion);
   void buildScattering(SmallVectorImpl<unsigned> &Scatter,
                        unsigned CurLoopDepth);
   void buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
-                     ScalarEvolution &SE, SmallVectorImpl<Loop*> &NestLoops);
+                     SmallVectorImpl<Loop*> &NestLoops);
 
   /// Create the SCoPStmt from a BasicBlock.
   SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
           const Region &CurRegion, BasicBlock &bb,
           SmallVectorImpl<Loop*> &NestLoops,
-          SmallVectorImpl<unsigned> &Scatter,
-          ScalarEvolution &SE);
+          SmallVectorImpl<unsigned> &Scatter);
 
   /// Create the finalization statement.
-  SCoPStmt(SCoP &parent, SmallVectorImpl<unsigned> &Scatter,
-           ScalarEvolution &SE);
+  SCoPStmt(SCoP &parent, SmallVectorImpl<unsigned> &Scatter);
 
   isl_constraint *toConditionConstrain(const SCEVAffFunc &AffFunc,
     isl_dim *dim,
@@ -282,6 +279,7 @@ public:
   unsigned getNumScattering();
 
   SCoP *getParent() { return &Parent; }
+  const SCoP *getParent() const { return &Parent; } 
 
   const char *getBaseName() const { return BaseName.c_str(); }
 
@@ -290,6 +288,9 @@ public:
   /// @param Dimension The dimension of the induction variable
   /// @return The induction variable at a certain dimension.
   const PHINode *getInductionVariableForDimension(unsigned Dimension) const;
+
+  /// @brief Return the SCEV add recurrence expression for a loop dimension.
+  const SCEVAddRecExpr *getAddRecExprForDimension(unsigned Dimension) const;
 
   /// @brief Is this statement the final read statement?
   ///
@@ -337,6 +338,8 @@ class SCoP {
   // DO NOT IMPLEMENT
   const SCoP &operator=(const SCoP &);
 
+  ScalarEvolution *SE;
+
   /// The underlying Region.
   Region &R;
 
@@ -375,7 +378,7 @@ class SCoP {
                   SmallVectorImpl<Loop*> &NestLoops,
                   // The scattering numbers
                   SmallVectorImpl<unsigned> &Scatter,
-                  LoopInfo &LI, ScalarEvolution &SE);
+                  LoopInfo &LI);
 
   /// Helper function for printing the SCoP.
   void printContext(raw_ostream &OS) const;
@@ -385,6 +388,8 @@ class SCoP {
 public:
 
   ~SCoP();
+
+  ScalarEvolution *getSE() const;
 
   /// @brief Get the count of parameters used in this SCoP.
   ///
