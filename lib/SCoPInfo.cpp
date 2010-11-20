@@ -187,11 +187,11 @@ void MemoryAccess::dump() const {
 }
 
 //===----------------------------------------------------------------------===//
-void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
-                               unsigned CurLoopDepth) {
+void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter) {
+  unsigned NumberOfIterators = getNumIterators();
   unsigned ScatDim = Parent.getMaxLoopDepth() * 2 + 1;
   isl_dim *dim = isl_dim_alloc(Parent.getCtx(), Parent.getNumParams(),
-                                 CurLoopDepth, ScatDim);
+                               NumberOfIterators, ScatDim);
   dim = isl_dim_set_tuple_name(dim, isl_dim_out, "scattering");
   dim = isl_dim_set_tuple_name(dim, isl_dim_in, getBaseName());
   isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
@@ -199,7 +199,7 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
   isl_int_init(v);
 
   // Loop dimensions.
-  for (unsigned i = 0; i < CurLoopDepth; ++i) {
+  for (unsigned i = 0; i < NumberOfIterators; ++i) {
     isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, 1);
     isl_constraint_set_coefficient(c, isl_dim_out, 2 * i + 1, v);
@@ -210,7 +210,7 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
   }
 
   // Constant dimensions
-  for (unsigned i = 0; i < CurLoopDepth + 1; ++i) {
+  for (unsigned i = 0; i < NumberOfIterators + 1; ++i) {
     isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, -1);
     isl_constraint_set_coefficient(c, isl_dim_out, 2 * i, v);
@@ -221,7 +221,7 @@ void SCoPStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter,
   }
 
   // Fill scattering dimensions.
-  for (unsigned i = 2 * CurLoopDepth + 1; i < ScatDim ; ++i) {
+  for (unsigned i = 2 * NumberOfIterators + 1; i < ScatDim ; ++i) {
     isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, 1);
     isl_constraint_set_coefficient(c, isl_dim_out, i, v);
@@ -441,9 +441,8 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
   BaseName = OS.str();
 
   buildIterationDomain(tempSCoP, CurRegion);
-  buildScattering(Scatter, NestLoops.size());
+  buildScattering(Scatter);
   buildAccesses(tempSCoP, CurRegion, NestLoops);
-
 }
 
 SCoPStmt::SCoPStmt(SCoP &parent, SmallVectorImpl<unsigned> &Scatter)
