@@ -315,22 +315,20 @@ static isl_set *getComparison(isl_ctx *Context, const ICmpInst::Predicate Pred,
   return isl_set_add_dims(Set, isl_dim_param, ParameterNumber);
 }
 
-isl_set *SCoPStmt::toConditionSet(const Comparison &Comp, isl_dim *dim,
-  const SmallVectorImpl<const SCEV*> &Params) const {
-
+isl_set *SCoPStmt::toConditionSet(const Comparison &Comp, isl_dim *dim) const {
   isl_ctx *Context = isl_dim_get_ctx(dim);
-  unsigned ParameterNumber = Params.size();
 
   isl_map *LHSValue = getValueOf(*Comp.getLHS(), this, dim);
   isl_map *RHSValue = getValueOf(*Comp.getRHS(), this, dim);
-  isl_map *MapToLHS = MapValueToLHS(Context, ParameterNumber);
-  isl_map *MapToRHS = MapValueToRHS(Context, ParameterNumber);
+  isl_map *MapToLHS = MapValueToLHS(Context, getNumParams());
+  isl_map *MapToRHS = MapValueToRHS(Context, getNumParams());
   isl_map *LHSValueAtLHS = isl_map_apply_range(LHSValue, MapToLHS);
   isl_map *RHSValueAtRHS = isl_map_apply_range(RHSValue, MapToRHS);
   isl_map *BothValues = isl_map_intersect(LHSValueAtLHS, RHSValueAtRHS);
-  isl_set *Comparison = getComparison(Context, Comp.getPred(), ParameterNumber);
+  isl_set *Comparison = getComparison(Context, Comp.getPred(), getNumParams());
   isl_map *ComparedValues = isl_map_intersect_range(BothValues, Comparison);
   isl_set *RemainingSet = isl_map_domain(ComparedValues);
+
   return RemainingSet;
 }
 
@@ -380,7 +378,7 @@ void SCoPStmt::addConditionsToDomain(TempSCoP &tempSCoP,
       if (const BBCond *Cnd = tempSCoP.getBBCond(CurEntry))
         for (BBCond::const_iterator I = Cnd->begin(), E = Cnd->end();
              I != E; ++I) {
-          isl_set *c = toConditionSet(*I,dim, Parent.getParams());
+          isl_set *c = toConditionSet(*I, dim);
           Domain = isl_set_intersect(Domain, c);
         }
     }

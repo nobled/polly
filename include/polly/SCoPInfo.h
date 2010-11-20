@@ -224,8 +224,7 @@ class SCoPStmt {
   isl_constraint *toConditionConstrain(const SCEVAffFunc &AffFunc,
     isl_dim *dim, const SmallVectorImpl<const SCEV*> &Params) const;
 
-  isl_set *toConditionSet(const Comparison &Cmp, isl_dim *dim,
-                          const SmallVectorImpl<const SCEV*> &Params) const;
+  isl_set *toConditionSet(const Comparison &Cmp, isl_dim *dim) const;
 
   friend class SCoP;
   std::string BaseName;
