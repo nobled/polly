@@ -216,8 +216,7 @@ class SCoPStmt {
   void addConditionsToDomain(TempSCoP &tempSCoP, const Region &CurRegion);
   void buildIterationDomainFromLoops(TempSCoP &tempSCoP);
   void buildIterationDomain(TempSCoP &tempSCoP, const Region &CurRegion);
-  void buildScattering(SmallVectorImpl<unsigned> &Scatter,
-                       unsigned CurLoopDepth);
+  void buildScattering(SmallVectorImpl<unsigned> &Scatter);
   void buildAccesses(TempSCoP &tempSCoP, const Region &CurRegion,
                      SmallVectorImpl<Loop*> &NestLoops);
 
