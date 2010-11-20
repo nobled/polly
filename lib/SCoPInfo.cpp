@@ -315,21 +315,29 @@ static isl_set *getComparison(isl_ctx *Context, const ICmpInst::Predicate Pred,
   return isl_set_add_dims(Set, isl_dim_param, ParameterNumber);
 }
 
-isl_set *SCoPStmt::toConditionSet(const Comparison &Comp, isl_dim *dim) const {
-  isl_ctx *Context = isl_dim_get_ctx(dim);
+static isl_set *compareValues(isl_map *LeftValue, isl_map *RightValue,
+                              const ICmpInst::Predicate Predicate) {
+  isl_ctx *Context = isl_map_get_ctx(LeftValue);
+  unsigned NumberOfParameters = isl_map_n_param(LeftValue);
 
+  isl_map *MapToLHS = MapValueToLHS(Context, NumberOfParameters);
+  isl_map *MapToRHS = MapValueToRHS(Context, NumberOfParameters);
+
+  isl_map *LeftValueAtLHS = isl_map_apply_range(LeftValue, MapToLHS);
+  isl_map *RightValueAtRHS = isl_map_apply_range(RightValue, MapToRHS);
+
+  isl_map *BothValues = isl_map_intersect(LeftValueAtLHS, RightValueAtRHS);
+  isl_set *Comparison = getComparison(Context, Predicate, NumberOfParameters);
+
+  isl_map *ComparedValues = isl_map_intersect_range(BothValues, Comparison);
+  return isl_map_domain(ComparedValues);
+}
+
+isl_set *SCoPStmt::toConditionSet(const Comparison &Comp, isl_dim *dim) const {
   isl_map *LHSValue = getValueOf(*Comp.getLHS(), this, dim);
   isl_map *RHSValue = getValueOf(*Comp.getRHS(), this, dim);
-  isl_map *MapToLHS = MapValueToLHS(Context, getNumParams());
-  isl_map *MapToRHS = MapValueToRHS(Context, getNumParams());
-  isl_map *LHSValueAtLHS = isl_map_apply_range(LHSValue, MapToLHS);
-  isl_map *RHSValueAtRHS = isl_map_apply_range(RHSValue, MapToRHS);
-  isl_map *BothValues = isl_map_intersect(LHSValueAtLHS, RHSValueAtRHS);
-  isl_set *Comparison = getComparison(Context, Comp.getPred(), getNumParams());
-  isl_map *ComparedValues = isl_map_intersect_range(BothValues, Comparison);
-  isl_set *RemainingSet = isl_map_domain(ComparedValues);
 
-  return RemainingSet;
+  return compareValues(LHSValue, RHSValue, Comp.getPred());
 }
 
 void SCoPStmt::buildIterationDomainFromLoops(TempSCoP &tempSCoP) {
