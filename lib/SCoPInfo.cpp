@@ -52,9 +52,10 @@ static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
 }
 
 static isl_map *getValueOf(const SCEVAffFunc &AffFunc,
-                           const SCoPStmt *Statement, isl_dim *dim,
-                           const SmallVectorImpl<const SCEV*> &Params) {
+                           const SCoPStmt *Statement, isl_dim *dim) {
 
+  const SmallVectorImpl<const SCEV*> &Params =
+    Statement->getParent()->getParams();
   unsigned num_in = Statement->getNumIterators(), num_param = Params.size();
 
   const char *dimname = isl_dim_get_tuple_name(dim, isl_dim_set);
@@ -347,8 +348,8 @@ isl_set *SCoPStmt::toConditionSet(const Comparison &Comp, isl_dim *dim,
   isl_ctx *Context = isl_dim_get_ctx(dim);
   unsigned ParameterNumber = Params.size();
 
-  isl_map *LHSValue = getValueOf(*Comp.getLHS(), this, dim, Params);
-  isl_map *RHSValue = getValueOf(*Comp.getRHS(), this, dim, Params);
+  isl_map *LHSValue = getValueOf(*Comp.getLHS(), this, dim);
+  isl_map *RHSValue = getValueOf(*Comp.getRHS(), this, dim);
   isl_map *MapToLHS = MapValueToLHS(Context, ParameterNumber);
   isl_map *MapToRHS = MapValueToRHS(Context, ParameterNumber);
   isl_map *LHSValueAtLHS = isl_map_apply_range(LHSValue, MapToLHS);
