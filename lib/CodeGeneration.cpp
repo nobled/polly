@@ -324,20 +324,6 @@ class ClastStmtCodeGen {
   // The Builder specifies the current location to code generate at.
   IRBuilder<> *Builder;
 
-  // The current statement we are working on.
-  //
-  // Also used to track the assignment of old IVS to new values or
-  // expressions.
-  SCoPStmt *CurrentStatement;
-
-  // Count the current assignment.  This is for user statements
-  // to track how an IV from the old code corresponds to a value
-  // or expression in the new code.
-  //
-  // There is one assignment with an empty LHS for every IV dimension
-  // of each statement.
-  unsigned AssignmentCount;
-
   // Map the Values from the old code to their counterparts in the new code.
   ValueMapT ValueMap;
 
@@ -352,13 +338,14 @@ public:
   CharMapT CharMap;
 
   protected:
-  void codegen(struct clast_assignment *a) {
+  void codegen(struct clast_assignment *a, SCoPStmt *Statement = 0,
+               unsigned Dimension = 0) {
     Value *RHS = ExpGen.codegen(a->RHS);
 
     if (!a->LHS) {
+      assert(Statement && "Empty statement in assignment of a substitution.");
       const PHINode *PN;
-      PN = CurrentStatement->getInductionVariableForDimension(assignmentCount);
-      AssignmentCount++;
+      PN = Statement->getInductionVariableForDimension(Dimension);
       const Value *V = PN;
 
       if (PN->getNumOperands() == 2)
@@ -368,14 +355,26 @@ public:
     }
   }
 
-  void codegen(struct clast_user_stmt *u) {
-    CurrentStatement = (SCoPStmt *)u->statement->usr;
-    BasicBlock *BB = CurrentStatement->getBasicBlock();
-    AssignmentCount = 0;
+  void codegenSubstitutions(struct clast_stmt *Assignment,
+                            SCoPStmt *Statement) {
+    int Dimension = 0;
 
-    // Actually we have a list of pointers here. Be careful.
+    while (Assignment) {
+      assert(CLAST_STMT_IS_A(Assignment, stmt_ass)
+             && "Substitions are expected to be assignments");
+      codegen((struct clast_assignment *)Assignment, Statement, Dimension);
+      Assignment = Assignment->next;
+      Dimension++;
+    }
+  }
+
+  void codegen(struct clast_user_stmt *u) {
+    SCoPStmt *Statement = (SCoPStmt *)u->statement->usr;
+    BasicBlock *BB = Statement->getBasicBlock();
+
     if (u->substitutions)
-      codegen(u->substitutions);
+      codegenSubstitutions(u->substitutions, Statement);
+
     copyBB(Builder, BB, ValueMap, DT, &S->getRegion());
   }
 
