@@ -356,9 +356,10 @@ public:
     Value *RHS = ExpGen.codegen(a->RHS);
 
     if (!a->LHS) {
-      PHINode *PN = stmt->IVS[assignmentCount];
+      const PHINode *PN;
+      PN = stmt->getInductionVariableForDimension(assignmentCount);
       assignmentCount++;
-      Value *V = PN;
+      const Value *V = PN;
 
       if (PN->getNumOperands() == 2)
         V = *(PN->use_begin());

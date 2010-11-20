@@ -522,8 +522,9 @@ unsigned SCoPStmt::getNumScattering() {
   return isl_map_dim(Scattering, isl_dim_out);
 }
 
-PHINode *SCoPStmt::getIVatLevel(unsigned L) {
-  return IVS[L];
+const PHINode *SCoPStmt::getInductionVariableForDimension(unsigned Dimension)
+  const {
+  return IVS[Dimension];
 }
 
 isl_ctx *SCoPStmt::getIslContext() {

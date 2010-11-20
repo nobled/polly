@@ -150,9 +150,6 @@ class SCoPStmt {
   /// The SCoP containing this SCoPStmt
   SCoP &Parent;
 
-  /// The BasicBlock represented by this SCoPStmt.
-  BasicBlock *BB;
-
   /// The iteration domain describes the set of iterations for which this
   /// statement is executed.
   ///
@@ -202,6 +199,12 @@ class SCoPStmt {
   /// vector of B.
   isl_map *Scattering;
 
+  /// The BasicBlock represented by this SCoPStmt.
+  BasicBlock *BB;
+
+  // The loop IVS.
+  std::vector<PHINode*> IVS;
+
   /// The memory accesses of this statement.
   ///
   /// The only side effects models for a SCoP statement are its accesses to
@@ -246,8 +249,6 @@ class SCoPStmt {
   friend class SCoP;
   std::string BaseName;
 public:
-  // The loop IVS.
-  std::vector<PHINode*> IVS;
 
   ~SCoPStmt();
 
@@ -284,12 +285,11 @@ public:
 
   const char *getBaseName() const { return BaseName.c_str(); }
 
-  /// @brief Get the induction variable of the loop a given level.
+  /// @brief Get the induction variable for a dimension.
   ///
-  /// @param L The level of loop for the induction variable.
-  ///
-  /// @return The induction variable of the Loop at level L.
-  PHINode *getIVatLevel(unsigned L);
+  /// @param Dimension The dimension of the induction variable
+  /// @return The induction variable at a certain dimension.
+  const PHINode *getInductionVariableForDimension(unsigned Dimension) const;
 
   /// @brief Is this statement the final read statement?
   ///
