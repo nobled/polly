@@ -150,17 +150,6 @@ isl_map *scatteringForStmt(scoplib_matrix_p m, SCoPStmt *PollyStmt,
   return map;
 }
 
-/// @brief Update the scattering in PollyStmt.
-///
-/// @param PollyStmt The statement to update.
-/// @param OStmt The OpenSCoP statement describing the new scattering.
-void updateScattering(SCoPStmt *PollyStmt, scoplib_statement_p OStmt,
-                      unsigned scatteringDims) {
-  assert(OStmt && "No scoplib statement available");
-  isl_map *m = scatteringForStmt(OStmt->schedule, PollyStmt, scatteringDims);
-  PollyStmt->setScattering(m);
-}
-
 unsigned maxScattering(scoplib_statement_p stmt) {
   unsigned max = 0;
 
