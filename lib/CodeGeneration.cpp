@@ -136,10 +136,14 @@ static void copyBB(IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
 
     Instruction *NewInst = Inst->clone();
 
+    // Copy the operands in temporary vector, as an in place update
+    // fails if an instruction is referencing the same operand twice.
+    std::vector<Value*> Operands(NewInst->op_begin(), NewInst->op_end());
+
     // Replace old operands with the new ones.
-    for (Instruction::op_iterator UI = NewInst->op_begin(),
-         UE = NewInst->op_end(); UI != UE; ++UI)
-      if (Instruction *OpInst = dyn_cast<Instruction>((*UI).get())) {
+    for (std::vector<Value*>::iterator UI = Operands.begin(),
+         UE = Operands.end(); UI != UE; ++UI)
+      if (Instruction *OpInst = dyn_cast<Instruction>((*UI))) {
         // IVS and Parameters.
         if (VMap.find(OpInst) != VMap.end()) {
           Value *NewOp = VMap[*UI];
@@ -159,8 +163,11 @@ static void copyBB(IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
         // Ignore instructions that are referencing ops in the old BB. These
         // instructions are unused. They where replace by new ones during
         // createIndependentBlocks().
-        } else if (R->contains(OpInst->getParent()))
+        } else if (R->contains(OpInst->getParent())) {
+          assert(!isa<StoreInst>(NewInst)
+                 && "Store instructions are always needed!");
           Add = false;
+        }
       }
 
     if (Add) {
