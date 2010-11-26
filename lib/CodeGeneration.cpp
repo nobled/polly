@@ -37,8 +37,10 @@
 
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"
+#include "cloog/isl/cloog.h"
 
 #include <vector>
+#include <utility>
 
 using namespace polly;
 using namespace llvm;
@@ -422,6 +424,41 @@ public:
     // TODO: Implement the correct analysis. At the moment we just trust the
     // information given at the command line.
     std::string DimName(f->iterator);
+
+    // Find statements and their dimensions in this for loop.
+    std::vector<std::pair<SCoPStmt*, isl_set*> > Statements;
+
+    std::vector<clast_stmt *> TODO;
+
+    if(f->body)
+      TODO.push_back(f->body);
+
+    while(!TODO.empty()) {
+      clast_stmt *stmt = TODO.back();
+      TODO.pop_back();
+
+      if (stmt->next)
+        TODO.push_back(stmt->next);
+
+      if (CLAST_STMT_IS_A(stmt, stmt_for)) {
+        clast_for *loop = (clast_for *) stmt;
+        TODO.push_back(loop->body);
+      } else if (CLAST_STMT_IS_A(stmt, stmt_guard)) {
+        clast_guard *guard = (clast_guard *) stmt;
+        TODO.push_back(guard->then);
+      } else if (CLAST_STMT_IS_A(stmt, stmt_block)) {
+        clast_block *block = (clast_block *) stmt;
+        TODO.push_back(block->body);
+      } else if (CLAST_STMT_IS_A(stmt, stmt_user)) {
+        clast_user_stmt *user = (clast_user_stmt *) stmt;
+        SCoPStmt *Statement = (SCoPStmt *)user->statement->usr;
+        CloogDomain *Domain = user->domain;
+
+        Statements.push_back(std::make_pair<SCoPStmt*, isl_set*>(Statement,
+          isl_set_from_cloog_domain(Domain)));
+      }
+    }
+
     return DimName == ParallelDimension;
   }
 
