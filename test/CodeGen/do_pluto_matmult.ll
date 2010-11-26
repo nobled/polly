@@ -191,7 +191,7 @@ entry:
 ; CHECK: for (c2=0;c2<=35;c2++) {
 ; CHECK:     for (c4=0;c4<=35;c4++) {
 ; CHECK:           for (c6=0;c6<=35;c6++) {
-; CHECK:                   %do.body2(c2,c4,c6);
+; CHECK:                   Stmt_do.body2(c2,c4,c6);
 ; CHECK:                       }
 ; CHECK:                         }
 ; CHECK: }
@@ -206,7 +206,7 @@ entry:
 ; IMPORT:         for (c10=0;c10<=35;c10+=4) {
 ; IMPORT:           c11<=min(35,c10+3);c11++)
 ; IMPORT:           {
-; IMPORT:             %do.body2(c3,c7,c11);
+; IMPORT:             Stmt_do.body2(c3,c7,c11);
 ; IMPORT:           }
 ; IMPORT:         }
 ; IMPORT:       }
@@ -220,7 +220,7 @@ entry:
 ; REVERSE: for (c2=-35;c2<=0;c2++) {
 ; REVERSE:     for (c4=-35;c4<=0;c4++) {
 ; REVERSE:           for (c6=0;c6<=35;c6++) {
-; REVERSE:                   %do.body2(-c2,-c4,c6);
+; REVERSE:                   Stmt_do.body2(-c2,-c4,c6);
 ; REVERSE:           }
 ; REVERSE:     }
 ; REVERSE: }

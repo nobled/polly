@@ -105,16 +105,23 @@ MemoryAccess::~MemoryAccess() {
   isl_map_free(getAccessFunction());
 }
 
+void MemoryAccess::setBaseName() {
+  raw_string_ostream OS(BaseName);
+  WriteAsOperand(OS, getBaseAddr(), false);
+  BaseName = OS.str();
+
+  // Remove the % in the name. This is not supported by isl.
+  BaseName.erase(0,1);
+  BaseName = "MemRef_" + BaseName;
+}
+
 isl_basic_map *MemoryAccess::createBasicAccessMap(SCoPStmt *Statement) {
   isl_dim *dim = isl_dim_alloc(Statement->getIslContext(),
                                Statement->getNumParams(),
                                Statement->getNumIterators(), 1);
-  std::string name;
-  raw_string_ostream OS(name);
-  WriteAsOperand(OS, getBaseAddr(), false);
-  name = OS.str();
+  setBaseName();
 
-  dim = isl_dim_set_tuple_name(dim, isl_dim_out, name.c_str());
+  dim = isl_dim_set_tuple_name(dim, isl_dim_out, getBaseName()->c_str());
   dim = isl_dim_set_tuple_name(dim, isl_dim_in, Statement->getBaseName());
 
   return isl_basic_map_universe(dim);
@@ -124,19 +131,16 @@ MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc, SCoPStmt *Statement) {
   BaseAddr = AffFunc.getBaseAddr();
   Type = AffFunc.isRead() ? Read : Write;
 
+  setBaseName();
+
   isl_dim *dim = isl_dim_set_alloc(Statement->getIslContext(),
                                    Statement->getNumParams(),
                                    Statement->getNumIterators());
-  std::string name;
-  raw_string_ostream OS(name);
-  WriteAsOperand(OS, getBaseAddr(), false);
-  name = OS.str();
-
   dim = isl_dim_set_tuple_name(dim, isl_dim_set, Statement->getBaseName());
 
   AccessRelation = getValueOf(AffFunc, Statement, dim);
   AccessRelation = isl_map_set_tuple_name(AccessRelation, isl_dim_out,
-                                          name.c_str());
+                                          getBaseName()->c_str());
 }
 
 MemoryAccess::MemoryAccess(const Value *BaseAddress, SCoPStmt *Statement) {
@@ -406,6 +410,10 @@ SCoPStmt::SCoPStmt(SCoP &parent, TempSCoP &tempSCoP,
   WriteAsOperand(OS, &bb, false);
   BaseName = OS.str();
 
+  // Remove the % in the name. This is not supported by isl.
+  BaseName.erase(0, 1);
+  BaseName = "Stmt_" + BaseName;
+
   buildIterationDomain(tempSCoP, CurRegion);
   buildScattering(Scatter);
   buildAccesses(tempSCoP, CurRegion);
@@ -465,12 +473,18 @@ unsigned SCoPStmt::getNumParams() const {
 }
 
 unsigned SCoPStmt::getNumIterators() const {
+  // The final read has one dimension with one element.
+  if (!BB)
+    return 1;
+
   return IVS.size();
 }
 
 unsigned SCoPStmt::getNumScattering() const {
   return isl_map_dim(Scattering, isl_dim_out);
 }
+
+const char *SCoPStmt::getBaseName() const { return BaseName.c_str(); }
 
 const PHINode *SCoPStmt::getInductionVariableForDimension(unsigned Dimension)
   const {

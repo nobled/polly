@@ -68,7 +68,7 @@ declare void @llvm.memory.barrier(i1, i1, i1, i1, i1) nounwind
 ; CHECK: for (c2=4;c2<=49;c2++) {
 ; CHECK:     S0(c2);
 ; CHECK: }
-; CHECK: S0: %4
-; CHECK: S1: %7
-; CHECK: S2: %10
+; CHECK: S0: Stmt_4
+; CHECK: S1: Stmt_7
+; CHECK: S2: Stmt_10
 ; CHECK: 

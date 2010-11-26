@@ -29,4 +29,4 @@ bb:
 }
 
 
-; CHECK: %bb1();
+; CHECK: Stmt_bb1();

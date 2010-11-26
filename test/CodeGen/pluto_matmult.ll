@@ -88,7 +88,7 @@ declare void @print_array(...)
 ; CHECK:  for (c2=0;c2<=2047;c2++) {
 ; CHECK:    for (c4=0;c4<=2047;c4++) {
 ; CHECK:      for (c6=0;c6<=2047;c6++) {
-; CHECK:        %for.body8(c2,c4,c6);
+; CHECK:        Stmt_for.body8(c2,c4,c6);
 ; CHECK:      }
 ; CHECK:    }
 ; CHECK:  }
@@ -103,7 +103,7 @@ declare void @print_array(...)
 ; IMPORT:         for (c10=0;c10<=2047;c10+=64) {
 ; IMPORT:           c11<=min(2047,c10+63);c11++)
 ; IMPORT:             {
-; IMPORT:               %for.body8(c3,c7,c11);
+; IMPORT:               Stmt_for.body8(c3,c7,c11);
 ; IMPORT:             }
 ; IMPORT:         }
 ; IMPORT:       }

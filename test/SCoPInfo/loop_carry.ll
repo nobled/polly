@@ -46,37 +46,48 @@ bb2:                                              ; preds = %bb, %entry
   ret i64 0
 }
 
-; CHECK:     Context:
-; CHECK:     [p0] -> { [] }
-; CHECK:     Statements {
-; CHECK:     	bb.nph
-; CHECK:             Domain:
-; CHECK:                 [p0] -> { %bb.nph[] : p0 >= 2 }
-; CHECK:             Scattering:
-; CHECK:                 [p0] -> { %bb.nph[] -> scattering[0, 0, 0] }
-; CHECK:             Reads %a at:
-; CHECK:                 [p0] -> { %bb.nph[] -> %a[0] }
-; CHECK:             Writes %k.05.reg2mem at:
-; CHECK:                 [p0] -> { %bb.nph[] -> %k.05.reg2mem[0] }
-; CHECK:             Writes %.reg2mem at:
-; CHECK:                 [p0] -> { %bb.nph[] -> %.reg2mem[0] }
-; CHECK:     	bb
-; CHECK:             Domain:
-; CHECK:                 [p0] -> { %bb[i0] : i0 >= 0 and i0 <= -2 + p0 and p0 >= 2 }
-; CHECK:             Scattering:
-; CHECK:                 [p0] -> { %bb[i0] -> scattering[1, i0, 0] }
-; CHECK:             Reads %.reg2mem at:
-; CHECK:                 [p0] -> { %bb[i0] -> %.reg2mem[0] }
-; CHECK:             Reads %k.05.reg2mem at:
-; CHECK:                 [p0] -> { %bb[i0] -> %k.05.reg2mem[0] }
-; CHECK:             Writes %a at:
-; CHECK:                 [p0] -> { %bb[i0] -> %a[8 + 8i0] }
-; CHECK:             Reads %a at:
-; CHECK:                 [p0] -> { %bb[i0] -> %a[16 + 16i0] }
-; CHECK:             Reads %a at:
-; CHECK:                 [p0] -> { %bb[i0] -> %a[32 + 8i0] }
-; CHECK:             Writes %k.05.reg2mem at:
-; CHECK:                 [p0] -> { %bb[i0] -> %k.05.reg2mem[0] }
-; CHECK:             Writes %.reg2mem at:
-; CHECK:                 [p0] -> { %bb[i0] -> %.reg2mem[0] }
-; CHECK:     }
+; CHECK: Context:
+; CHECK: [p0] -> { [] }
+; CHECK: Statements {
+; CHECK: 	Stmt_bb.nph
+; CHECK: Domain:
+; CHECK: [p0] -> { Stmt_bb.nph[] : p0 >= 2 }
+; CHECK: Scattering:
+; CHECK: [p0] -> { Stmt_bb.nph[] -> scattering[0, 0, 0] }
+; CHECK: Reads %a at:
+; CHECK: [p0] -> { Stmt_bb.nph[] -> MemRef_a[0] }
+; CHECK: Writes %k.05.reg2mem at:
+; CHECK: [p0] -> { Stmt_bb.nph[] -> MemRef_k.05.reg2mem[0] }
+; CHECK: Writes %.reg2mem at:
+; CHECK: [p0] -> { Stmt_bb.nph[] -> MemRef_.reg2mem[0] }
+; CHECK: 	Stmt_bb
+; CHECK: Domain:
+; CHECK: [p0] -> { Stmt_bb[i0] : i0 >= 0 and i0 <= -2 + p0 and p0 >= 2 }
+; CHECK: Scattering:
+; CHECK: [p0] -> { Stmt_bb[i0] -> scattering[1, i0, 0] }
+; CHECK: Reads %.reg2mem at:
+; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_.reg2mem[0] }
+; CHECK: Reads %k.05.reg2mem at:
+; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_k.05.reg2mem[0] }
+; CHECK: Writes %a at:
+; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_a[8 + 8i0] }
+; CHECK: Reads %a at:
+; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_a[16 + 16i0] }
+; CHECK: Reads %a at:
+; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_a[32 + 8i0] }
+; CHECK: Writes %k.05.reg2mem at:
+; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_k.05.reg2mem[0] }
+; CHECK: Writes %.reg2mem at:
+; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_.reg2mem[0] }
+; CHECK: 	FinalRead
+; CHECK: Domain:
+; CHECK: [p0] -> { FinalRead[0] }
+; CHECK: Scattering:
+; CHECK: [p0] -> { FinalRead[i0] -> scattering[2, o1, o2] }
+; CHECK: Reads %a at:
+; CHECK: [p0] -> { FinalRead[i0] -> MemRef_a[o0] }
+; CHECK: Reads %k.05.reg2mem at:
+; CHECK: [p0] -> { FinalRead[i0] -> MemRef_k.05.reg2mem[o0] }
+; CHECK: Reads %.reg2mem at:
+; CHECK: [p0] -> { FinalRead[i0] -> MemRef_.reg2mem[o0] }
+; CHECK: }

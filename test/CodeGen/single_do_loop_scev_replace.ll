@@ -63,6 +63,6 @@ return:                                           ; preds = %if.else, %if.then
 declare i32 @fprintf(%struct._IO_FILE*, i8*, ...)
 
 ; CHECK:   for (c2=0;c2<=19;c2++) {
-; CHECK:     %do.cond(c2);
+; CHECK:     Stmt_do.cond(c2);
 ; CHECK:   }
 

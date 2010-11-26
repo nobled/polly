@@ -88,7 +88,9 @@ private:
   enum AccessType Type;
 
   const Value* BaseAddr;
+  std::string BaseName;
   isl_basic_map *createBasicAccessMap(SCoPStmt *Statement);
+  void setBaseName();
 
 public:
   // @brief Create an affine memory access.
@@ -114,6 +116,10 @@ public:
 
   const Value *getBaseAddr() const {
     return BaseAddr;
+  }
+
+  const std::string *getBaseName() const {
+    return &BaseName;
   }
 
   /// @brief Print the MemoryAccess.
@@ -273,8 +279,7 @@ public:
   SCoP *getParent() { return &Parent; }
   const SCoP *getParent() const { return &Parent; }
 
-  const char *getBaseName() const { return BaseName.c_str(); }
-
+  const char *getBaseName() const;
   /// @brief Get the induction variable for a dimension.
   ///
   /// @param Dimension The dimension of the induction variable
