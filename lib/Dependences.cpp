@@ -29,6 +29,8 @@
 #include "llvm/Support/Debug.h"
 
 #include <isl/flow.h>
+#include <isl/map.h>
+#include <isl/constraint.h>
 
 using namespace polly;
 using namespace llvm;
@@ -236,6 +238,142 @@ namespace polly {
 
     return true;
   }
+
+static isl_map *getReverseMap(isl_ctx *context, int parameterDimension,
+                              int scatteringDimensions,
+                              int dimensionToReverse) {
+  isl_dim *dim = isl_dim_alloc(context, parameterDimension,
+                               scatteringDimensions, scatteringDimensions);
+
+  isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+
+  isl_int one;
+  isl_int_init(one);
+  isl_int_set_si(one, 1);
+
+  isl_int minusOne;
+  isl_int_init(minusOne);
+  isl_int_set_si(minusOne, -1);
+
+  for (int i = 0; i < scatteringDimensions; i++) {
+    isl_constraint *eq = isl_equality_alloc(isl_dim_copy(dim));
+
+    isl_constraint_set_coefficient(eq, isl_dim_in, i, one);
+
+    if (i == dimensionToReverse)
+      isl_constraint_set_coefficient(eq, isl_dim_out, i, one);
+    else
+      isl_constraint_set_coefficient(eq, isl_dim_out, i, minusOne);
+
+    bmap = isl_basic_map_add_constraint(bmap, eq);
+  }
+
+  isl_int_clear(one);
+  isl_int_clear(minusOne);
+  isl_dim_free(dim);
+  bmap = isl_basic_map_set_tuple_name(bmap, isl_dim_in, "scattering");
+  bmap = isl_basic_map_set_tuple_name(bmap, isl_dim_out, "scattering");
+
+  return isl_map_from_basic_map(bmap);
+}
+
+bool Dependences::isParallelDimension(StatementDomainMap *statementDomains,
+                                      unsigned parallelDimension) {
+  isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
+
+  isl_union_map *schedule = isl_union_map_empty(dim);
+
+  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+    SCoPStmt *Stmt = *SI;
+    isl_map *scattering = isl_map_copy(Stmt->getScattering());
+
+
+    if (statementDomains->count(*SI) > 0) {
+      isl_set *stmtDomain = isl_set_copy(statementDomains->find(*SI)->second);
+
+      int scatteringDimensions = isl_set_n_dim(stmtDomain)
+                                  - Stmt->getNumIterators();
+
+      // The statement instances executed in parallel.
+      isl_set *parallelDomain = isl_set_project_out(isl_set_copy(stmtDomain),
+                                                    isl_dim_set, 0,
+                                                    scatteringDimensions);
+
+      // The statement instances executed in sequential order.
+      isl_set *nonParallelDomain =
+        isl_set_universe(isl_set_get_dim(parallelDomain));
+      nonParallelDomain = isl_set_subtract(nonParallelDomain,
+                                           isl_set_copy(parallelDomain));
+
+      // Set the correct tuple names.
+      const char *iteratorName = isl_map_get_tuple_name(scattering, isl_dim_in);
+      nonParallelDomain = isl_set_set_tuple_name(nonParallelDomain,
+                                                 iteratorName);
+      parallelDomain = isl_set_set_tuple_name(parallelDomain, iteratorName);
+
+      // The non parallel part of the iteration domain is executed with the
+      // normal scattering, whereas the subset of the iteration domain that
+      // is in the parallel part is executed with a schedule where the parallel
+      // dimension is reversed. In case this yields the same dependences as an
+      // execution in normal execution order, the dimension does not carry any
+      // dependences and execution it in parallel is therefore valid.
+      isl_map *scatteringChanged = isl_map_copy(scattering);
+      scatteringChanged = isl_map_intersect_domain(scatteringChanged,
+                                                   parallelDomain);
+      isl_map *scatteringUnchanged = scattering;
+      scatteringUnchanged = isl_map_intersect_domain(scatteringUnchanged,
+                                                     nonParallelDomain);
+
+      isl_map *reverseMap = getReverseMap(S->getCtx(), S->getNumParams(),
+                                          isl_map_n_out(scatteringChanged),
+                                          parallelDimension);
+
+      scatteringChanged = isl_map_apply_range(scatteringChanged,
+                                              isl_map_copy(reverseMap));
+
+      scattering = isl_map_union(scatteringChanged, scatteringUnchanged);
+    }
+
+    for (SCoPStmt::memacc_iterator MI = Stmt->memacc_begin(),
+         ME = Stmt->memacc_end(); MI != ME; ++MI) {
+      isl_map *accdom = (*MI)->getAccessFunction();
+      const char *DomainName = isl_map_get_tuple_name(accdom, isl_dim_in);
+      const char *ArrayName = isl_map_get_tuple_name(accdom, isl_dim_out);
+
+      std::string DN = DomainName;
+      std::string AN = ArrayName;
+
+      std::string Combined = DN + "__" + AN;
+
+      scattering = isl_map_set_tuple_name(scattering, isl_dim_in,
+                                          Combined.c_str());
+      isl_union_map_add_map(schedule, isl_map_copy(scattering));
+    }
+  }
+
+  isl_union_map *temp_must_dep, *temp_may_dep;
+  isl_union_set *temp_must_no_source, *temp_may_no_source;
+
+  isl_union_map_compute_flow(isl_union_map_copy(sink),
+                             isl_union_map_copy(must_source),
+                             isl_union_map_copy(may_source), schedule,
+                             &temp_must_dep, &temp_may_dep,
+                             &temp_must_no_source, &temp_may_no_source);
+
+  if (!isl_union_map_is_equal(temp_must_dep, must_dep))
+    return false;
+
+  if (!isl_union_map_is_equal(temp_may_dep, may_dep))
+    return false;
+
+  if (!isl_union_set_is_equal(temp_must_no_source, must_no_source))
+    return false;
+
+  if (!isl_union_set_is_equal(temp_may_no_source, may_no_source))
+    return false;
+
+  return true;
+}
 
   void Dependences::print(raw_ostream &OS, const Module *) const {
     if (!S)

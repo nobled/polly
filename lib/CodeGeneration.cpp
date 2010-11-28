@@ -26,6 +26,7 @@
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/SCoPHelper.h"
 #include "polly/CLooG.h"
+#include "polly/Dependences.h"
 #include "polly/SCoPInfo.h"
 #include "polly/TempSCoPInfo.h"
 #include "llvm/Support/CommandLine.h"
@@ -47,11 +48,11 @@ using namespace llvm;
 
 namespace polly {
 
-static cl::opt<std::string>
-ParallelDimension("polly-codegen-parallel",
-                  cl::desc("The dimension which is parallel"), cl::Hidden,
-                  cl::value_desc("Name of dimension"),
-                  cl::ValueRequired, cl::init(""));
+static cl::opt<bool>
+OpenMP("polly-codegen-parallel",
+       cl::desc("Generate OpenMP parallel code"), cl::Hidden,
+       cl::value_desc("OpenMP code generation enabled if true"),
+       cl::ValueRequired, cl::init(false));
 
 typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
@@ -330,6 +331,7 @@ class ClastStmtCodeGen {
   SCoP *S;
 
   DominatorTree *DT;
+  Dependences *DP;
 
   // The Builder specifies the current location to code generate at.
   IRBuilder<> *Builder;
@@ -339,6 +341,9 @@ class ClastStmtCodeGen {
 
   // Codegenerator for clast expressions.
   ClastExpCodeGen ExpGen;
+
+  // Do we currently generate parallel code?
+  bool parallelCodeGeneration;
 
 public:
   // Map the textual representation of variables in clast to the actual
@@ -421,19 +426,15 @@ public:
   /// @param f The clast for loop to check.
   bool isParallelFor(struct clast_for *f) {
 
-    // TODO: Implement the correct analysis. At the moment we just trust the
-    // information given at the command line.
-    std::string DimName(f->iterator);
-
-    // Find statements and their dimensions in this for loop.
-    std::vector<std::pair<SCoPStmt*, isl_set*> > Statements;
+    // Find statements instances executed in this loop.
+    Dependences::StatementDomainMap Statements;
 
     std::vector<clast_stmt *> TODO;
 
     if(f->body)
       TODO.push_back(f->body);
 
-    while(!TODO.empty()) {
+    while (!TODO.empty()) {
       clast_stmt *stmt = TODO.back();
       TODO.pop_back();
 
@@ -454,12 +455,24 @@ public:
         SCoPStmt *Statement = (SCoPStmt *)user->statement->usr;
         CloogDomain *Domain = user->domain;
 
-        Statements.push_back(std::make_pair<SCoPStmt*, isl_set*>(Statement,
-          isl_set_from_cloog_domain(Domain)));
+        isl_set *DomainSet = isl_set_from_cloog_domain(Domain);
+        Statements[Statement] = DomainSet;
       }
     }
 
-    return DimName == ParallelDimension;
+    // Get the scattering dimension this loop enumerates.
+    std::string DimName(f->iterator);
+    DimName.erase(0, 1);
+    int scatteringLevel = atoi(DimName.c_str());
+
+    // Check if it is parallel.
+    bool isParallel = DP->isParallelDimension(&Statements, scatteringLevel - 1);
+
+    if (isParallel)
+      DEBUG(errs() << "Parallel loop with iv c" << scatteringLevel
+            << " found\n";);
+
+    return isParallel;
   }
 
   /// @brief Create an OpenMP parallel for loop.
@@ -467,18 +480,18 @@ public:
   /// This loop reflects a loop as if it would have been created by an OpenMP
   /// statement.
   void codegenForOpenMP(struct clast_for *f) {
-      Module *M = Builder->GetInsertBlock()->getParent()->getParent();
-      Function *FN = M->getFunction("GOMP_parallel_end");
+    Module *M = Builder->GetInsertBlock()->getParent()->getParent();
+    Function *FN = M->getFunction("GOMP_parallel_end");
 
-      Builder->CreateCall(FN);
-      //DEBUG(dbgs() << "Loop with header: " << HeaderBB->getNameStr()
-      //      << " is parallel\n");
+    Builder->CreateCall(FN);
   }
 
   void codegen(struct clast_for *f) {
-    if (isParallelFor(f))
+    if (OpenMP && !parallelCodeGeneration && isParallelFor(f)) {
+      parallelCodeGeneration = true;
       codegenForOpenMP(f);
-    else
+      parallelCodeGeneration = false;
+    } else
       codegenForSequential(f);
   }
 
@@ -521,7 +534,9 @@ public:
     Builder->SetInsertPoint(MergeBB);
   }
 
-  void codegen(struct clast_root *r) { }
+  void codegen(struct clast_root *r) {
+    parallelCodeGeneration = false;
+  }
 
 public:
   void codegen(clast_stmt *stmt) {
@@ -543,8 +558,9 @@ public:
   }
 
   public:
-  ClastStmtCodeGen(SCoP *scop, DominatorTree *dt, IRBuilder<> *B) :
-    S(scop), DT(dt), Builder(B),
+  ClastStmtCodeGen(SCoP *scop, DominatorTree *dt, Dependences *dp,
+                   IRBuilder<> *B) :
+    S(scop), DT(dt), DP(dp), Builder(B),
   ExpGen(Builder, &CharMap) {}
 
 };
@@ -624,6 +640,7 @@ class CodeGeneration : public RegionPass {
     region = R;
     S = getAnalysis<SCoPInfo>().getSCoP();
     DT = &getAnalysis<DominatorTree>();
+    Dependences *DP = &getAnalysis<Dependences>();
     SE = &getAnalysis<ScalarEvolution>();
     LI = &getAnalysis<LoopInfo>();
     SD = &getAnalysis<SCoPDetection>();
@@ -647,14 +664,14 @@ class CodeGeneration : public RegionPass {
     IRBuilder<> Builder(PollyBB);
     DT->addNewBlock(PollyBB, R->getEntry());
 
-    ClastStmtCodeGen CodeGen(S, DT, &Builder);
+    ClastStmtCodeGen CodeGen(S, DT, DP, &Builder);
 
     clast_stmt *clast = C->getClast();
 
     addParameters(((clast_root*)clast)->names, CodeGen.CharMap, &Builder);
 
-    // TODO: Add check if OpenMP codegeneration is enabled.
-    addOpenMPDefinitions(&Builder);
+    if (OpenMP)
+      addOpenMPDefinitions(&Builder);
 
     CodeGen.codegen(clast);
 
@@ -713,6 +730,7 @@ class CodeGeneration : public RegionPass {
   }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+    AU.addRequired<Dependences>();
     AU.addRequired<DominatorTree>();
     AU.addRequired<ScalarEvolution>();
     AU.addRequired<LoopInfo>();
@@ -720,6 +738,7 @@ class CodeGeneration : public RegionPass {
     AU.addRequired<SCoPDetection>();
     AU.addRequired<SCoPInfo>();
 
+    AU.addPreserved<Dependences>();
     AU.addPreserved<LoopInfo>();
     AU.addPreserved<DominatorTree>();
     AU.addPreserved<PostDominatorTree>();
