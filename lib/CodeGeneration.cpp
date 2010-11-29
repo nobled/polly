@@ -425,19 +425,15 @@ public:
   ///
   /// @param f The clast for loop to check.
   bool isParallelFor(struct clast_for *f) {
+    assert(f->dimension_type == CLOOG_SCAT && "Unexpected dimension type!");
+
     isl_set *loopDomain = isl_set_from_cloog_domain(f->domain);
-
-    // Get the scattering dimension this loop enumerates.
-    std::string DimName(f->iterator);
-    DimName.erase(0, 1);
-    int scatteringLevel = atoi(DimName.c_str());
-
-    // Check if it is parallel.
-    bool isParallel = DP->isParallelDimension(loopDomain, scatteringLevel - 1);
+    bool isParallel = DP->isParallelDimension(loopDomain,
+                                              f->dimension_position);
 
     if (isParallel)
-      DEBUG(errs() << "Parallel loop with iv c" << scatteringLevel
-            << " found\n";);
+      DEBUG(errs() << "Parallel loop with induction variable '" << f->iterator
+            << "' found\n";);
 
     return isParallel;
   }
