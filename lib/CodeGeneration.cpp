@@ -425,40 +425,7 @@ public:
   ///
   /// @param f The clast for loop to check.
   bool isParallelFor(struct clast_for *f) {
-
-    // Find statements instances executed in this loop.
-    Dependences::StatementDomainMap Statements;
-
-    std::vector<clast_stmt *> TODO;
-
-    if(f->body)
-      TODO.push_back(f->body);
-
-    while (!TODO.empty()) {
-      clast_stmt *stmt = TODO.back();
-      TODO.pop_back();
-
-      if (stmt->next)
-        TODO.push_back(stmt->next);
-
-      if (CLAST_STMT_IS_A(stmt, stmt_for)) {
-        clast_for *loop = (clast_for *) stmt;
-        TODO.push_back(loop->body);
-      } else if (CLAST_STMT_IS_A(stmt, stmt_guard)) {
-        clast_guard *guard = (clast_guard *) stmt;
-        TODO.push_back(guard->then);
-      } else if (CLAST_STMT_IS_A(stmt, stmt_block)) {
-        clast_block *block = (clast_block *) stmt;
-        TODO.push_back(block->body);
-      } else if (CLAST_STMT_IS_A(stmt, stmt_user)) {
-        clast_user_stmt *user = (clast_user_stmt *) stmt;
-        SCoPStmt *Statement = (SCoPStmt *)user->statement->usr;
-        CloogDomain *Domain = user->domain;
-
-        isl_set *DomainSet = isl_set_from_cloog_domain(Domain);
-        Statements[Statement] = DomainSet;
-      }
-    }
+    isl_set *loopDomain = isl_set_from_cloog_domain(f->domain);
 
     // Get the scattering dimension this loop enumerates.
     std::string DimName(f->iterator);
@@ -466,7 +433,7 @@ public:
     int scatteringLevel = atoi(DimName.c_str());
 
     // Check if it is parallel.
-    bool isParallel = DP->isParallelDimension(&Statements, scatteringLevel - 1);
+    bool isParallel = DP->isParallelDimension(loopDomain, scatteringLevel - 1);
 
     if (isParallel)
       DEBUG(errs() << "Parallel loop with iv c" << scatteringLevel

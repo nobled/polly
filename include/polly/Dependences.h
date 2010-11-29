@@ -53,25 +53,20 @@ namespace polly {
   public:
     static char ID;
     typedef std::map<SCoPStmt*, isl_map*> StatementToIslMapTy;
-    typedef std::map<SCoPStmt*, isl_set*> StatementDomainMap;
 
     Dependences();
     bool isValidScattering(StatementToIslMapTy *NewScatterings);
 
     /// @brief Check if a dimension of the SCoP can be executed in parallel.
     ///
-    /// @param statementDomains A map that contains for every statement the
-    ///                         subset of the iteration domain, that should be
-    ///                         executed in parallel. In case a statement is not
-    ///                         part of this map, all its statement instances
-    ///                         are regarded as being executed sequential.
+    /// @param loopDomain The subset of the scattering space that is executed in
+    ///                   parallel.
     /// @param parallelDimension The scattering dimension that is being executed
     ///                          in parallel.
     ///
     /// @return bool Returns true, if executing parallelDimension in parallel is
-    ///              valid for the iteration domain subsets given.
-    bool isParallelDimension(StatementDomainMap *statementDomains,
-                             unsigned parallelDimension);
+    ///              valid for the scattering domain subset given.
+    bool isParallelDimension(isl_set *loopDomain, unsigned parallelDimension);
 
     bool runOnRegion(Region *R, RGPassManager &RGM);
     void print(raw_ostream &OS, const Module *) const;

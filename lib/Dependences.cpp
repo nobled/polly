@@ -277,7 +277,7 @@ static isl_map *getReverseMap(isl_ctx *context, int parameterDimension,
   return isl_map_from_basic_map(bmap);
 }
 
-bool Dependences::isParallelDimension(StatementDomainMap *statementDomains,
+bool Dependences::isParallelDimension(isl_set *loopDomain,
                                       unsigned parallelDimension) {
   isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
 
@@ -287,52 +287,61 @@ bool Dependences::isParallelDimension(StatementDomainMap *statementDomains,
     SCoPStmt *Stmt = *SI;
     isl_map *scattering = isl_map_copy(Stmt->getScattering());
 
+    int missingDimensions = Stmt->getNumScattering()
+      - isl_set_n_dim(loopDomain);
 
-    if (statementDomains->count(*SI) > 0) {
-      isl_set *stmtDomain = isl_set_copy(statementDomains->find(*SI)->second);
+    assert(missingDimensions >= 0 && "Scattering space too large");
 
-      int scatteringDimensions = isl_set_n_dim(stmtDomain)
-                                  - Stmt->getNumIterators();
+    isl_set *scatteringDomain;
 
-      // The statement instances executed in parallel.
-      isl_set *parallelDomain = isl_set_project_out(isl_set_copy(stmtDomain),
-                                                    isl_dim_set, 0,
-                                                    scatteringDimensions);
+    if (missingDimensions > 0)
+      scatteringDomain = isl_set_add_dims(isl_set_copy(loopDomain),
+                                          isl_dim_set, missingDimensions);
+    else
+      scatteringDomain = isl_set_copy(loopDomain);
 
-      // The statement instances executed in sequential order.
-      isl_set *nonParallelDomain =
-        isl_set_universe(isl_set_get_dim(parallelDomain));
-      nonParallelDomain = isl_set_subtract(nonParallelDomain,
-                                           isl_set_copy(parallelDomain));
+    scatteringDomain = isl_set_set_tuple_name(scatteringDomain, "scattering");
 
-      // Set the correct tuple names.
-      const char *iteratorName = isl_map_get_tuple_name(scattering, isl_dim_in);
-      nonParallelDomain = isl_set_set_tuple_name(nonParallelDomain,
-                                                 iteratorName);
-      parallelDomain = isl_set_set_tuple_name(parallelDomain, iteratorName);
+    isl_map *scatteringTmp = isl_map_intersect_range(isl_map_copy(scattering),
+                                                     scatteringDomain);
+    scatteringTmp = isl_map_intersect_domain(scatteringTmp,
+                                          isl_set_copy(Stmt->getDomain()));
 
-      // The non parallel part of the iteration domain is executed with the
-      // normal scattering, whereas the subset of the iteration domain that
-      // is in the parallel part is executed with a schedule where the parallel
-      // dimension is reversed. In case this yields the same dependences as an
-      // execution in normal execution order, the dimension does not carry any
-      // dependences and execution it in parallel is therefore valid.
-      isl_map *scatteringChanged = isl_map_copy(scattering);
-      scatteringChanged = isl_map_intersect_domain(scatteringChanged,
-                                                   parallelDomain);
-      isl_map *scatteringUnchanged = scattering;
-      scatteringUnchanged = isl_map_intersect_domain(scatteringUnchanged,
-                                                     nonParallelDomain);
+    // The statement instances executed in parallel.
+    isl_set *parallelDomain = isl_map_domain(isl_map_copy(scatteringTmp));
 
-      isl_map *reverseMap = getReverseMap(S->getCtx(), S->getNumParams(),
-                                          isl_map_n_out(scatteringChanged),
-                                          parallelDimension);
+    // The statement instances executed in sequential order.
+    isl_set *nonParallelDomain =
+      isl_set_universe(isl_set_get_dim(parallelDomain));
 
-      scatteringChanged = isl_map_apply_range(scatteringChanged,
-                                              isl_map_copy(reverseMap));
+    // Set the correct tuple names.
+    const char *iteratorName = isl_map_get_tuple_name(scattering, isl_dim_in);
+    nonParallelDomain = isl_set_set_tuple_name(nonParallelDomain,
+                                               iteratorName);
+    nonParallelDomain = isl_set_subtract(nonParallelDomain,
+                                         isl_set_copy(parallelDomain));
 
-      scattering = isl_map_union(scatteringChanged, scatteringUnchanged);
-    }
+    // The non parallel part of the iteration domain is executed with the
+    // normal scattering, whereas the subset of the iteration domain that
+    // is in the parallel part is executed with a schedule where the parallel
+    // dimension is reversed. In case this yields the same dependences as an
+    // execution in normal execution order, the dimension does not carry any
+    // dependences and execution it in parallel is therefore valid.
+    isl_map *scatteringChanged = isl_map_copy(scattering);
+    scatteringChanged = isl_map_intersect_domain(scatteringChanged,
+                                                 parallelDomain);
+    isl_map *scatteringUnchanged = scattering;
+    scatteringUnchanged = isl_map_intersect_domain(scatteringUnchanged,
+                                                   nonParallelDomain);
+
+    isl_map *reverseMap = getReverseMap(S->getCtx(), S->getNumParams(),
+                                        isl_map_n_out(scatteringChanged),
+                                        parallelDimension);
+
+    scatteringChanged = isl_map_apply_range(scatteringChanged,
+                                            isl_map_copy(reverseMap));
+
+    scattering = isl_map_union(scatteringChanged, scatteringUnchanged);
 
     for (SCoPStmt::memacc_iterator MI = Stmt->memacc_begin(),
          ME = Stmt->memacc_end(); MI != ME; ++MI) {

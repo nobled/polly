@@ -71,6 +71,7 @@ void CLooG::buildCloogOptions() {
   Options->quiet = 1;
   Options->strides = 1;
   Options->save_domains = 1;
+  Options->noscalars = 1;
 }
 
 CloogUnionDomain *CLooG::buildCloogUnionDomain() {
