@@ -88,28 +88,15 @@ namespace polly {
         isl_set *domcp = isl_set_copy(Stmt->getDomain());
         isl_map *accdom = isl_map_copy((*MI)->getAccessFunction());
 
-        const char *DomainName = isl_map_get_tuple_name(accdom, isl_dim_in);
-        const char *ArrayName = isl_map_get_tuple_name(accdom, isl_dim_out);
-
-        std::string DN = DomainName;
-        std::string AN = ArrayName;
-
-        std::string Combined = DN + "__" + AN;
-
         accdom = isl_map_intersect_domain(accdom, domcp);
-
-        accdom = isl_map_set_tuple_name(accdom, isl_dim_in, Combined.c_str());
 
         if ((*MI)->isRead())
           isl_union_map_add_map(sink, accdom);
         else
           isl_union_map_add_map(must_source, accdom);
-
-        isl_map *scattering = isl_map_copy(Stmt->getScattering());
-        scattering = isl_map_set_tuple_name(scattering, isl_dim_in,
-                                            Combined.c_str());
-        isl_union_map_add_map(schedule, scattering);
       }
+      isl_map *scattering = isl_map_copy(Stmt->getScattering());
+      isl_union_map_add_map(schedule, scattering);
     }
 
     DEBUG(
@@ -160,28 +147,14 @@ namespace polly {
     for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
       SCoPStmt *Stmt = *SI;
 
-      for (SCoPStmt::memacc_iterator MI = Stmt->memacc_begin(),
-           ME = Stmt->memacc_end(); MI != ME; ++MI) {
-        isl_map *accdom = (*MI)->getAccessFunction();
-        const char *DomainName = isl_map_get_tuple_name(accdom, isl_dim_in);
-        const char *ArrayName = isl_map_get_tuple_name(accdom, isl_dim_out);
+      isl_map *scattering;
 
-        std::string DN = DomainName;
-        std::string AN = ArrayName;
+      if (NewScattering->find(*SI) == NewScattering->end())
+        scattering = isl_map_copy(Stmt->getScattering());
+      else
+        scattering = isl_map_copy((*NewScattering)[Stmt]);
 
-        std::string Combined = DN + "__" + AN;
-
-        isl_map *scattering;
-
-        if (NewScattering->find(*SI) == NewScattering->end())
-          scattering = isl_map_copy(Stmt->getScattering());
-        else
-          scattering = isl_map_copy((*NewScattering)[Stmt]);
-
-        scattering = isl_map_set_tuple_name(scattering, isl_dim_in,
-                                            Combined.c_str());
-        isl_union_map_add_map(schedule, scattering);
-      }
+      isl_union_map_add_map(schedule, scattering);
     }
 
     isl_union_map *temp_must_dep, *temp_may_dep;
@@ -343,21 +316,7 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
 
     scattering = isl_map_union(scatteringChanged, scatteringUnchanged);
 
-    for (SCoPStmt::memacc_iterator MI = Stmt->memacc_begin(),
-         ME = Stmt->memacc_end(); MI != ME; ++MI) {
-      isl_map *accdom = (*MI)->getAccessFunction();
-      const char *DomainName = isl_map_get_tuple_name(accdom, isl_dim_in);
-      const char *ArrayName = isl_map_get_tuple_name(accdom, isl_dim_out);
-
-      std::string DN = DomainName;
-      std::string AN = ArrayName;
-
-      std::string Combined = DN + "__" + AN;
-
-      scattering = isl_map_set_tuple_name(scattering, isl_dim_in,
-                                          Combined.c_str());
-      isl_union_map_add_map(schedule, isl_map_copy(scattering));
-    }
+    isl_union_map_add_map(schedule, scattering);
   }
 
   isl_union_map *temp_must_dep, *temp_may_dep;
