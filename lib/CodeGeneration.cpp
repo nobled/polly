@@ -425,11 +425,9 @@ public:
   ///
   /// @param f The clast for loop to check.
   bool isParallelFor(struct clast_for *f) {
-    assert(f->dimension_type == CLOOG_SCAT && "Unexpected dimension type!");
-
     isl_set *loopDomain = isl_set_from_cloog_domain(f->domain);
     bool isParallel = DP->isParallelDimension(loopDomain,
-                                              f->dimension_position);
+                                              isl_set_n_dim(loopDomain) - 1);
 
     if (isParallel)
       DEBUG(errs() << "Parallel loop with induction variable '" << f->iterator
