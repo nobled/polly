@@ -49,10 +49,10 @@ using namespace llvm;
 namespace polly {
 
 static cl::opt<bool>
-OpenMP("polly-codegen-parallel",
+OpenMP("enable-polly-openmp",
        cl::desc("Generate OpenMP parallel code"), cl::Hidden,
        cl::value_desc("OpenMP code generation enabled if true"),
-       cl::ValueRequired, cl::init(false));
+       cl::init(false));
 
 typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
