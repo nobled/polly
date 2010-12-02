@@ -7,11 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Calculate the data dependency relations for a SCoP using ISL.
+// Calculate the data dependency relations for a Scop using ISL.
 //
 // The integer set library (ISL) from Sven, has a integrated dependency analysis
 // to calculate data dependences. This pass takes advantage of this and
-// calculate those dependences a SCoP.
+// calculate those dependences a Scop.
 //
 // The dependences in this pass are exact in terms that for a specific read
 // statement instance only the last write statement instance is returned. In
@@ -36,12 +36,12 @@ using namespace llvm;
 
 namespace polly {
 
-  class SCoP;
-  class SCoPStmt;
+  class Scop;
+  class ScopStmt;
 
   class Dependences : public RegionPass {
 
-    SCoP *S;
+    Scop *S;
 
     isl_union_map *must_dep, *may_dep;
     isl_union_set *must_no_source, *may_no_source;
@@ -52,12 +52,12 @@ namespace polly {
 
   public:
     static char ID;
-    typedef std::map<SCoPStmt*, isl_map*> StatementToIslMapTy;
+    typedef std::map<ScopStmt*, isl_map*> StatementToIslMapTy;
 
     Dependences();
     bool isValidScattering(StatementToIslMapTy *NewScatterings);
 
-    /// @brief Check if a dimension of the SCoP can be executed in parallel.
+    /// @brief Check if a dimension of the Scop can be executed in parallel.
     ///
     /// @param loopDomain The subset of the scattering space that is executed in
     ///                   parallel.

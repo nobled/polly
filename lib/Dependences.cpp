@@ -1,4 +1,4 @@
-//===- Dependency.cpp - Calculate dependency information for a SCoP.  -----===//
+//===- Dependency.cpp - Calculate dependency information for a Scop.  -----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,11 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Calculate the data dependency relations for a SCoP using ISL.
+// Calculate the data dependency relations for a Scop using ISL.
 //
 // The integer set library (ISL) from Sven, has a integrated dependency analysis
 // to calculate data dependences. This pass takes advantage of this and
-// calculate those dependences a SCoP.
+// calculate those dependences a Scop.
 //
 // The dependences in this pass are exact in terms that for a specific read
 // statement instance only the last write statement instance is returned. In
@@ -23,7 +23,7 @@
 #include "polly/Dependences.h"
 
 #include "polly/LinkAllPasses.h"
-#include "polly/SCoPInfo.h"
+#include "polly/ScopInfo.h"
 
 #define DEBUG_TYPE "polly-dependences"
 #include "llvm/Support/Debug.h"
@@ -49,7 +49,7 @@ static cl::opt<bool>
   }
 
   bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
-    S = getAnalysis<SCoPInfo>().getSCoP();
+    S = getAnalysis<ScopInfo>().getScop();
 
     if (!S)
       return false;
@@ -85,10 +85,10 @@ static cl::opt<bool>
     must_dep = may_dep = NULL;
     must_no_source = may_no_source = NULL;
 
-    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-      SCoPStmt *Stmt = *SI;
+    for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+      ScopStmt *Stmt = *SI;
 
-      for (SCoPStmt::memacc_iterator MI = Stmt->memacc_begin(),
+      for (ScopStmt::memacc_iterator MI = Stmt->memacc_begin(),
            ME = Stmt->memacc_end(); MI != ME; ++MI) {
         isl_set *domcp = isl_set_copy(Stmt->getDomain());
         isl_map *accdom = isl_map_copy((*MI)->getAccessFunction());
@@ -153,8 +153,8 @@ static cl::opt<bool>
 
     isl_union_map *schedule = isl_union_map_empty(dim);
 
-    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-      SCoPStmt *Stmt = *SI;
+    for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+      ScopStmt *Stmt = *SI;
 
       isl_map *scattering;
 
@@ -265,8 +265,8 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
 
   isl_union_map *schedule = isl_union_map_empty(dim);
 
-  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-    SCoPStmt *Stmt = *SI;
+  for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+    ScopStmt *Stmt = *SI;
     isl_map *scattering = isl_map_copy(Stmt->getScattering());
 
     int missingDimensions = Stmt->getNumScattering()
@@ -412,7 +412,7 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
   }
 
   void Dependences::getAnalysisUsage(AnalysisUsage &AU) const {
-    AU.addRequired<SCoPInfo>();
+    AU.addRequired<ScopInfo>();
     AU.setPreservesAll();
   }
 } //end anonymous namespace
@@ -420,7 +420,7 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
 char Dependences::ID = 0;
 
 static RegisterPass<Dependences>
-X("polly-dependences", "Polly - Calculate dependences for SCoP");
+X("polly-dependences", "Polly - Calculate dependences for Scop");
 
 Pass* polly::createDependencesPass() {
   return new Dependences();

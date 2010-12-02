@@ -1,4 +1,4 @@
-//===- GmpConv.cpp - Recreate LLVM IR from the SCoP.  ---------------------===//
+//===- GmpConv.cpp - Recreate LLVM IR from the Scop.  ---------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //

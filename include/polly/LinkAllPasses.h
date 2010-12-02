@@ -38,16 +38,16 @@ namespace polly {
   Pass *createDOTPrinterPass();
   Pass *createDOTViewerPass();
   Pass *createIndependentBlocksPass();
-  Pass *createSCoPInfoPass();
+  Pass *createScopInfoPass();
 
 #ifdef OPENSCOP_FOUND
-  Pass *createSCoPExporterPass();
-  Pass *createSCoPImporterPass();
+  Pass *createScopExporterPass();
+  Pass *createScopImporterPass();
 #endif
 
 #ifdef SCOPLIB_FOUND
-  Pass *createSCoPLibExporterPass();
-  Pass *createSCoPLibImporterPass();
+  Pass *createScopLibExporterPass();
+  Pass *createScopLibImporterPass();
 #endif
 
   extern char &IndependentBlocksID;
@@ -77,15 +77,15 @@ namespace {
        createDOTPrinterPass();
        createDOTViewerPass();
        createIndependentBlocksPass();
-       createSCoPInfoPass();
+       createScopInfoPass();
 
 #ifdef OPENSCOP_FOUND
-       createSCoPExporterPass();
-       createSCoPImporterPass();
+       createScopExporterPass();
+       createScopImporterPass();
 #endif
 #ifdef SCOPLIB_FOUND
-       createSCoPLibExporterPass();
-       createSCoPLibImporterPass();
+       createScopLibExporterPass();
+       createScopLibImporterPass();
 #endif
 
     }

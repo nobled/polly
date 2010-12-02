@@ -73,5 +73,5 @@ return:                                           ; preds = %bb9, %entry
   ret void
 }
 
-; CHECK: Valid Region for SCoP: entry.split => return
+; CHECK: Valid Region for Scop: entry.split => return
 

@@ -9,7 +9,7 @@
 //
 // CLooG[1] interface.
 //
-// The CLooG interface takes a SCoP and generates a CLooG AST (clast). This
+// The CLooG interface takes a Scop and generates a CLooG AST (clast). This
 // clast can either be returned directly or it can be pretty printed to stdout.
 //
 // A typical clast output looks like this:
@@ -24,7 +24,7 @@
 //
 #ifndef POLLY_CLOOG_H
 #define POLLY_CLOOG_H
-#include "polly/SCoPPass.h"
+#include "polly/ScopPass.h"
 
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"
@@ -35,10 +35,10 @@ namespace llvm {
 }
 
 namespace polly {
-class SCoP;
+class Scop;
 
 class CLooG {
-  SCoP *S;
+  Scop *S;
   CloogOptions *Options;
   CloogState *State;
   clast_stmt *ClastRoot;
@@ -48,7 +48,7 @@ class CLooG {
   CloogInput *buildCloogInput();
 
 public:
-  CLooG(SCoP *Scop);
+  CLooG(Scop *Scop);
 
   ~CLooG();
 
@@ -61,12 +61,12 @@ public:
   /// Create the CLooG AST from this program.
   struct clast_stmt *getClast();
 };
-  class CloogInfo : public SCoPPass {
+  class CloogInfo : public ScopPass {
     CLooG *C;
 
   public:
     static char ID;
-    CloogInfo() : SCoPPass(ID), C(0) {}
+    CloogInfo() : ScopPass(ID), C(0) {}
 
     /// Write a .cloog input file
     void dump(FILE *F);
@@ -77,8 +77,8 @@ public:
     /// Create the CLooG AST from this program.
     const struct clast_stmt *getClast();
 
-    bool runOnSCoP(SCoP &S);
-    void printSCoP(llvm::raw_ostream &OS) const;
+    bool runOnScop(Scop &S);
+    void printScop(llvm::raw_ostream &OS) const;
     virtual void getAnalysisUsage(AnalysisUsage &AU) const;
   };
 }

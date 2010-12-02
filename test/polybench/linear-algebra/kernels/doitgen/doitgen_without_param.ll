@@ -70,6 +70,6 @@ return:                                           ; preds = %bb12
   ret void
 }
 
-; CHECK: Valid Region for SCoP: bb11.preheader => return
+; CHECK: Valid Region for Scop: bb11.preheader => return
 
 

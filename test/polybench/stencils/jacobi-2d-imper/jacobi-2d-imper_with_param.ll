@@ -88,5 +88,5 @@ return:                                           ; preds = %bb12
   ret void
 }
 
-; CHECK: Valid Region for SCoP: bb5.preheader => return
+; CHECK: Valid Region for Scop: bb5.preheader => return
 

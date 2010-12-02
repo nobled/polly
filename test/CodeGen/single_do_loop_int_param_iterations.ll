@@ -49,5 +49,5 @@ return:                                           ; preds = %if.else, %if.then
   %retval.0 = phi i32 [ 0, %if.then ], [ 1, %if.else ] ; <i32> [#uses=1]
   ret i32 %retval.0
 }
-; CHECK: SCoP: do.body => do.end
+; CHECK: Scop: do.body => do.end
 

@@ -7,13 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Create independent blocks in the regions detected by SCoPDetection.
+// Create independent blocks in the regions detected by ScopDetection.
 //
 //===----------------------------------------------------------------------===//
 //
 #include "polly/LinkAllPasses.h"
-#include "polly/SCoPDetection.h"
-#include "polly/Support/SCoPHelper.h"
+#include "polly/ScopDetection.h"
+#include "polly/Support/ScopHelper.h"
 
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/RegionInfo.h"
@@ -36,7 +36,7 @@ namespace {
 struct IndependentBlocks : public FunctionPass {
   RegionInfo *RI;
   ScalarEvolution *SE;
-  SCoPDetection *SD;
+  ScopDetection *SD;
   LoopInfo *LI;
 
   BasicBlock *AllocaBlock;
@@ -59,7 +59,7 @@ struct IndependentBlocks : public FunctionPass {
   bool createIndependentBlocks(BasicBlock *BB, const Region *R);
   bool createIndependentBlocks(const Region *R);
 
-  // Elimination on the SCoP to eliminate the scalar dependences come with
+  // Elimination on the Scop to eliminate the scalar dependences come with
   // trivially dead instructions.
   bool eliminateDeadCode(const Region *R);
 
@@ -70,10 +70,10 @@ struct IndependentBlocks : public FunctionPass {
   /// prevent use from schedule BBs arbitrarily.
   ///
   /// @brief This function checks if a scalar value that is part of the
-  ///        SCoP is used outside of the SCoP.
+  ///        Scop is used outside of the Scop.
   ///
   /// @param Use  The use of the instruction.
-  /// @param R    The maximum region in the SCoP.
+  /// @param R    The maximum region in the Scop.
   ///
   /// @return Return true if the Use of an instruction and the instruction
   ///         itself form a non trivial scalar dependence.
@@ -86,7 +86,7 @@ struct IndependentBlocks : public FunctionPass {
   ///
   /// @param Operand  The operand of the instruction.
   /// @param CurBB    The BasicBlock that contains the instruction.
-  /// @param R        The maximum region in the SCoP.
+  /// @param R        The maximum region in the Scop.
   ///
   /// @return Return true if the Operand of an instruction and the instruction
   ///         itself form a non trivial scalar (true) dependence.
@@ -112,7 +112,7 @@ struct IndependentBlocks : public FunctionPass {
   ///        eliminate trivial scalar dependences.
   ///
   /// @param Inst         The root of the operand Tree.
-  /// @param R            The maximum region in the SCoP.
+  /// @param R            The maximum region in the Scop.
   /// @param ReplacedMap  The map that mapping original instruction to the moved
   ///                     instruction.
   /// @param InsertPos    The insert position of the moved instructions.
@@ -132,7 +132,7 @@ struct IndependentBlocks : public FunctionPass {
 
   bool runOnFunction(Function &F);
   void verifyAnalysis() const;
-  void verifySCoP(const Region *R) const;
+  void verifyScop(const Region *R) const;
   void getAnalysisUsage(AnalysisUsage &AU) const;
 };
 }
@@ -177,9 +177,9 @@ void IndependentBlocks::moveOperandTree(Instruction *Inst, const Region *R,
 
       DEBUG(dbgs() << "For Operand:\n" << *Operand << "\n--->");
 
-      // If the SCoP Region does not contain N, skip it and all its operand and
+      // If the Scop Region does not contain N, skip it and all its operand and
       // continue. because we reach a "parameter".
-      // FIXME: we must keep the predicate instruction inside the SCoP, otherwise
+      // FIXME: we must keep the predicate instruction inside the Scop, otherwise
       // it will be translated to a load instruction, and we can not handle load
       // as affine predicate at this moment.
       if (!R->contains(Operand) && !isa<TerminatorInst>(CurInst)) {
@@ -380,7 +380,7 @@ bool IndependentBlocks::translateScalarToArray(Instruction *Inst,
   AllocaInst *Slot = new AllocaInst(Inst->getType(), 0,
                                     Inst->getName() + ".s2a",
                                     AllocaBlock->begin());
-  assert(!isa<InvokeInst>(Inst) && "Unexpect Invoke in SCoP!");
+  assert(!isa<InvokeInst>(Inst) && "Unexpect Invoke in Scop!");
   // Store right after Inst.
   BasicBlock::iterator StorePos = Inst;
   (void) new StoreInst(Inst, Slot, ++StorePos);
@@ -435,12 +435,12 @@ bool IndependentBlocks::isIndependentBlock(const Region *R,
     if (isIndVar(Inst, LI))
       continue;
 
-    // A value inside the SCoP is referenced outside.
+    // A value inside the Scop is referenced outside.
     for (Instruction::use_iterator UI = Inst->use_begin(),
          UE = Inst->use_end(); UI != UE; ++UI) {
       if (isEscapeUse(*UI, R)) {
         DEBUG(dbgs() << "Instruction not independent:\n");
-        DEBUG(dbgs() << "Instruction used outside the SCoP!\n");
+        DEBUG(dbgs() << "Instruction used outside the Scop!\n");
         DEBUG(Inst->print(dbgs()));
         DEBUG(dbgs() << "\n");
         return false;
@@ -488,8 +488,8 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<LoopInfo>();
   AU.addRequired<ScalarEvolution>();
   AU.addPreserved<ScalarEvolution>();
-  AU.addRequired<SCoPDetection>();
-  AU.addPreserved<SCoPDetection>();
+  AU.addRequired<ScopDetection>();
+  AU.addPreserved<ScopDetection>();
 }
 
 bool IndependentBlocks::runOnFunction(llvm::Function &F) {
@@ -497,15 +497,15 @@ bool IndependentBlocks::runOnFunction(llvm::Function &F) {
 
   RI = &getAnalysis<RegionInfo>();
   LI = &getAnalysis<LoopInfo>();
-  SD = &getAnalysis<SCoPDetection>();
+  SD = &getAnalysis<ScopDetection>();
   SE = &getAnalysis<ScalarEvolution>();
 
   BasicBlock *EntryBlock = &F.getEntryBlock();
   Region *R = RI->getRegionFor(EntryBlock);
 
   while (!R->isTopLevelRegion()) {
-    // If the entry block belong to any SCoP, split it.
-    if (SD->isMaxRegionInSCoP(*R)) {
+    // If the entry block belong to any Scop, split it.
+    if (SD->isMaxRegionInScop(*R)) {
       splitEntryBlockForAlloca(EntryBlock, this);
       break;
     }
@@ -517,7 +517,7 @@ bool IndependentBlocks::runOnFunction(llvm::Function &F) {
 
   DEBUG(dbgs() << "Run IndepBlock on " << F.getName() << '\n');
 
-  for (SCoPDetection::iterator I = SD->begin(), E = SD->end(); I != E; ++I) {
+  for (ScopDetection::iterator I = SD->begin(), E = SD->end(); I != E; ++I) {
     const Region *R = *I;
     Changed |= createIndependentBlocks(R);
     Changed |= eliminateDeadCode(R);
@@ -528,7 +528,7 @@ bool IndependentBlocks::runOnFunction(llvm::Function &F) {
   DEBUG(dbgs() << "Before Scalar to Array------->\n");
   DEBUG(F.dump());
 
-  for (SCoPDetection::iterator I = SD->begin(), E = SD->end(); I != E; ++I)
+  for (ScopDetection::iterator I = SD->begin(), E = SD->end(); I != E; ++I)
     Changed |= translateScalarToArray(*I);
 
   DEBUG(dbgs() << "After Independent Blocks------------->\n");
@@ -540,11 +540,11 @@ bool IndependentBlocks::runOnFunction(llvm::Function &F) {
 }
 
 void IndependentBlocks::verifyAnalysis() const {
-  for (SCoPDetection::const_iterator I = SD->begin(), E = SD->end();I != E;++I)
-    verifySCoP(*I);
+  for (ScopDetection::const_iterator I = SD->begin(), E = SD->end();I != E;++I)
+    verifyScop(*I);
 }
 
-void IndependentBlocks::verifySCoP(const Region *R) const {
+void IndependentBlocks::verifyScop(const Region *R) const {
   assert (areAllBlocksIndependent(R) && "Cannot generate independent blocks");
 }
 

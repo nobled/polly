@@ -59,5 +59,5 @@ return:                                           ; preds = %bb3.us
   ret void
 }
 
-; CHECK: Valid Region for SCoP: bb.nph.us => return
+; CHECK: Valid Region for Scop: bb.nph.us => return
 

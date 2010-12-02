@@ -9,7 +9,7 @@
 //
 // CLooG[1] interface.
 //
-// The CLooG interface takes a SCoP and generates a CLooG AST (clast). This
+// The CLooG interface takes a Scop and generates a CLooG AST (clast). This
 // clast can either be returned directly or it can be pretty printed to stdout.
 //
 // A typical clast output looks like this:
@@ -24,7 +24,7 @@
 
 #include "polly/CLooG.h"
 #include "polly/LinkAllPasses.h"
-#include "polly/SCoPInfo.h"
+#include "polly/ScopInfo.h"
 
 #include "cloog/isl/domain.h"
 
@@ -33,7 +33,7 @@ using namespace polly;
 
 namespace polly {
 
-CLooG::CLooG(SCoP *Scop) : S(Scop) {
+CLooG::CLooG(Scop *Scop) : S(Scop) {
   State = cloog_state_malloc();
   buildCloogOptions();
   ClastRoot = cloog_clast_create_from_input(buildCloogInput(), Options);
@@ -125,8 +125,8 @@ void CLooG::buildCloogOptions() {
 CloogUnionDomain *CLooG::buildCloogUnionDomain() {
   CloogUnionDomain *DU = cloog_union_domain_alloc(S->getNumParams());
 
-  for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-    SCoPStmt *Stmt = *SI;
+  for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+    ScopStmt *Stmt = *SI;
 
     if (Stmt->isFinalRead())
       continue;
@@ -159,7 +159,7 @@ namespace {
 
 struct CLooGExporter : public RegionPass {
   static char ID;
-  SCoP *S;
+  Scop *S;
   explicit CLooGExporter() : RegionPass(ID) {}
 
   std::string getFileName(Region *R) const;
@@ -192,7 +192,7 @@ std::string CLooGExporter::getFileName(Region *R) const {
 
 char CLooGExporter::ID = 0;
 bool CLooGExporter::runOnRegion(Region *R, RGPassManager &RGM) {
-  S = getAnalysis<SCoPInfo>().getSCoP();
+  S = getAnalysis<ScopInfo>().getScop();
 
   if (!S)
     return false;
@@ -200,7 +200,7 @@ bool CLooGExporter::runOnRegion(Region *R, RGPassManager &RGM) {
   std::string FunctionName = R->getEntry()->getParent()->getNameStr();
   std::string Filename = getFileName(R);
 
-  errs() << "Writing SCoP '" << R->getNameStr() << "' in function '"
+  errs() << "Writing Scop '" << R->getNameStr() << "' in function '"
     << FunctionName << "' to '" << Filename << "'...\n";
 
   FILE *F = fopen(Filename.c_str(), "w");
@@ -214,12 +214,12 @@ bool CLooGExporter::runOnRegion(Region *R, RGPassManager &RGM) {
 
 void CLooGExporter::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
-  AU.addRequired<SCoPInfo>();
+  AU.addRequired<ScopInfo>();
 }
 
 static RegisterPass<CLooGExporter> A("polly-export-cloog",
                                     "Polly - Export the CLooG input file"
-                                    " (Writes a .cloog file for each SCoP)"
+                                    " (Writes a .cloog file for each Scop)"
                                     );
 
 llvm::Pass* polly::createCLooGExporterPass() {
@@ -241,7 +241,7 @@ const struct clast_stmt *CloogInfo::getClast() {
   return C->getClast();
 }
 
-bool CloogInfo::runOnSCoP(SCoP &S) {
+bool CloogInfo::runOnScop(Scop &S) {
   if (C)
     delete C;
 
@@ -250,13 +250,13 @@ bool CloogInfo::runOnSCoP(SCoP &S) {
   return false;
 }
 
-void CloogInfo::printSCoP(raw_ostream &OS) const {
+void CloogInfo::printScop(raw_ostream &OS) const {
   C->pprint(OS);
 }
 
 void CloogInfo::getAnalysisUsage(AnalysisUsage &AU) const {
-  // Get the Common analysis usage of SCoPPasses.
-  SCoPPass::getAnalysisUsage(AU);
+  // Get the Common analysis usage of ScopPasses.
+  ScopPass::getAnalysisUsage(AU);
 }
 char CloogInfo::ID = 0;
 

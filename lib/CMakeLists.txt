@@ -3,12 +3,12 @@ set(LLVM_NO_RTTI 1)
 
 if (OPENSCOP_FOUND)
   set(POLLY_EXCHANGE_FILES
-      Exchange/OpenSCoPImporter.cpp Exchange/OpenSCoPExporter.cpp)
+      Exchange/OpenScopImporter.cpp Exchange/OpenScopExporter.cpp)
 endif (OPENSCOP_FOUND)
 if (SCOPLIB_FOUND)
   set(POLLY_SCOPLIB_FILES
-      Exchange/SCoPLibExporter.cpp
-      Exchange/SCoPLibImporter.cpp)
+      Exchange/ScopLibExporter.cpp
+      Exchange/ScopLibImporter.cpp)
 endif (SCOPLIB_FOUND)
 
 add_polly_library(LLVMPolly
@@ -17,14 +17,14 @@ add_polly_library(LLVMPolly
   CodeGeneration.cpp
   Dependences.cpp
   IndependentBlocks.cpp
-  SCoPPass.cpp
-  SCoPDetection.cpp
-  SCoPGraphPrinter.cpp
-  SCoPInfo.cpp
-  TempSCoPInfo.cpp
+  ScopPass.cpp
+  ScopDetection.cpp
+  ScopGraphPrinter.cpp
+  ScopInfo.cpp
+  TempScopInfo.cpp
   Support/GmpConv.cpp
   Support/AffSCEVItTester.cpp
-  Support/SCoPHelper.cpp
+  Support/ScopHelper.cpp
   ${POLLY_EXCHANGE_FILES}
   ${POLLY_SCOPLIB_FILES}
   )

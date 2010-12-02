@@ -1,4 +1,4 @@
-//===---- CodePreparation.cpp - Code preparation for SCoP Detection -------===//
+//===---- CodePreparation.cpp - Code preparation for Scop Detection -------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,13 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implement the code preparation for SCoP detect, which will:
+// This file implement the code preparation for Scop detect, which will:
 //    1. Translate all PHINodes that not induction variable to memory access,
 //       this will easier parameter and scalar dependencies checking.
 //
 //===----------------------------------------------------------------------===//
 #include "polly/LinkAllPasses.h"
-#include "polly/Support/SCoPHelper.h"
+#include "polly/Support/ScopHelper.h"
 
 #include "llvm/Instruction.h"
 #include "llvm/Pass.h"
@@ -36,7 +36,7 @@ using namespace polly;
 
 namespace {
 //===----------------------------------------------------------------------===//
-/// @brief SCoP Code Preparation - Perform some transforms to make scop detect
+/// @brief Scop Code Preparation - Perform some transforms to make scop detect
 /// easier.
 ///
 class CodePreperation : public FunctionPass {

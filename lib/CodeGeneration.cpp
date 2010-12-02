@@ -1,4 +1,4 @@
-//===------ CodeGeneration.cpp - Code generate the SCoPs. -----------------===//
+//===------ CodeGeneration.cpp - Code generate the Scops. -----------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,12 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// The CodeGeneration pass takes a SCoP created by SCoPInfo and translates it
+// The CodeGeneration pass takes a Scop created by ScopInfo and translates it
 // back to LLVM-IR using CLooG.
 //
-// The SCoP describes the high level memory behaviour of a control flow region.
+// The Scop describes the high level memory behaviour of a control flow region.
 // Transformation passes can update the schedule (execution order) of statements
-// in the SCoP. CLooG is used to generate an abstract syntax tree (clast) that
+// in the Scop. CLooG is used to generate an abstract syntax tree (clast) that
 // reflects the updated execution order. This clast is used to create new
 // LLVM-IR that is computational equivalent to the original control flow region,
 // but executes its code in the new execution order defined by the changed
@@ -24,11 +24,11 @@
 
 #include "polly/LinkAllPasses.h"
 #include "polly/Support/GmpConv.h"
-#include "polly/Support/SCoPHelper.h"
+#include "polly/Support/ScopHelper.h"
 #include "polly/CLooG.h"
 #include "polly/Dependences.h"
-#include "polly/SCoPInfo.h"
-#include "polly/TempSCoPInfo.h"
+#include "polly/ScopInfo.h"
+#include "polly/TempScopInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/IRBuilder.h"
@@ -327,8 +327,8 @@ public:
 };
 
 class ClastStmtCodeGen {
-  // The SCoP we code generate.
-  SCoP *S;
+  // The Scop we code generate.
+  Scop *S;
 
   DominatorTree *DT;
   Dependences *DP;
@@ -353,7 +353,7 @@ public:
   CharMapT CharMap;
 
   protected:
-  void codegen(struct clast_assignment *a, SCoPStmt *Statement = 0,
+  void codegen(struct clast_assignment *a, ScopStmt *Statement = 0,
                unsigned Dimension = 0) {
     Value *RHS = ExpGen.codegen(a->RHS);
 
@@ -371,7 +371,7 @@ public:
   }
 
   void codegenSubstitutions(struct clast_stmt *Assignment,
-                            SCoPStmt *Statement) {
+                            ScopStmt *Statement) {
     int Dimension = 0;
 
     while (Assignment) {
@@ -384,7 +384,7 @@ public:
   }
 
   void codegen(struct clast_user_stmt *u) {
-    SCoPStmt *Statement = (SCoPStmt *)u->statement->usr;
+    ScopStmt *Statement = (ScopStmt *)u->statement->usr;
     BasicBlock *BB = Statement->getBasicBlock();
 
     if (u->substitutions)
@@ -519,7 +519,7 @@ public:
   }
 
   public:
-  ClastStmtCodeGen(SCoP *scop, DominatorTree *dt, Dependences *dp,
+  ClastStmtCodeGen(Scop *scop, DominatorTree *dt, Dependences *dp,
                    IRBuilder<> *B) :
     S(scop), DT(dt), DP(dp), Builder(B),
   ExpGen(Builder, &CharMap) {}
@@ -530,10 +530,10 @@ public:
 namespace {
 class CodeGeneration : public RegionPass {
   Region *region;
-  SCoP *S;
+  Scop *S;
   DominatorTree *DT;
   ScalarEvolution *SE;
-  SCoPDetection *SD;
+  ScopDetection *SD;
   CLooG *C;
   LoopInfo *LI;
 
@@ -547,7 +547,7 @@ class CodeGeneration : public RegionPass {
   void createSeSeEdges(Region *R) {
     BasicBlock *newEntry = createSingleEntryEdge(R, this);
 
-    for (SCoP::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI)
+    for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI)
       if ((*SI)->getBasicBlock() == R->getEntry())
         (*SI)->setBasicBlock(newEntry);
 
@@ -565,7 +565,7 @@ class CodeGeneration : public RegionPass {
                                   Builder->getInt16Ty(), false, "insertInst",
                                   Builder->GetInsertBlock());
 
-    for (SCoP::param_iterator PI = S->param_begin(), PE = S->param_end();
+    for (Scop::param_iterator PI = S->param_begin(), PE = S->param_end();
          PI != PE; ++PI) {
       assert(i < names->nb_parameters && "Not enough parameter names");
       Instruction *InsertLocation;
@@ -599,12 +599,12 @@ class CodeGeneration : public RegionPass {
 
   bool runOnRegion(Region *R, RGPassManager &RGM) {
     region = R;
-    S = getAnalysis<SCoPInfo>().getSCoP();
+    S = getAnalysis<ScopInfo>().getScop();
     DT = &getAnalysis<DominatorTree>();
     Dependences *DP = &getAnalysis<Dependences>();
     SE = &getAnalysis<ScalarEvolution>();
     LI = &getAnalysis<LoopInfo>();
-    SD = &getAnalysis<SCoPDetection>();
+    SD = &getAnalysis<ScopDetection>();
 
     if (!S) {
       C = 0;
@@ -636,8 +636,8 @@ class CodeGeneration : public RegionPass {
 
     CodeGen.codegen(clast);
 
-    BasicBlock *AfterSCoP = *pred_begin(R->getExit());
-    Builder.CreateBr(AfterSCoP);
+    BasicBlock *AfterScop = *pred_begin(R->getExit());
+    Builder.CreateBr(AfterScop);
 
     // Update old PHI nodes to pass LLVM verification.
     for (BasicBlock::iterator SI = succ_begin(R->getEntry())->begin(),
@@ -647,14 +647,14 @@ class CodeGeneration : public RegionPass {
         PN->removeIncomingValue(R->getEntry());
       }
 
-    DT->changeImmediateDominator(AfterSCoP, Builder.GetInsertBlock());
+    DT->changeImmediateDominator(AfterScop, Builder.GetInsertBlock());
 
     BasicBlock *OldRegionEntry = *succ_begin(R->getEntry());
 
     // Enable the new polly code.
     R->getEntry()->getTerminator()->setSuccessor(0, PollyBB);
 
-    // Remove old SCoP nodes from dominator tree.
+    // Remove old Scop nodes from dominator tree.
     std::vector<DomTreeNode*> ToVisit;
     std::vector<DomTreeNode*> Visited;
     ToVisit.push_back(DT->getNode(OldRegionEntry));
@@ -664,7 +664,7 @@ class CodeGeneration : public RegionPass {
 
       ToVisit.pop_back();
 
-      if (AfterSCoP == Node->getBlock())
+      if (AfterScop == Node->getBlock())
         continue;
 
       Visited.push_back(Node);
@@ -679,8 +679,8 @@ class CodeGeneration : public RegionPass {
 
     R->getParent()->removeSubRegion(R);
 
-    // And forget the SCoP if we remove the region.
-    SD->forgetSCoP(*R);
+    // And forget the Scop if we remove the region.
+    SD->forgetScop(*R);
 
     return false;
   }
@@ -696,17 +696,17 @@ class CodeGeneration : public RegionPass {
     AU.addRequired<ScalarEvolution>();
     AU.addRequired<LoopInfo>();
     AU.addRequired<RegionInfo>();
-    AU.addRequired<SCoPDetection>();
-    AU.addRequired<SCoPInfo>();
+    AU.addRequired<ScopDetection>();
+    AU.addRequired<ScopInfo>();
 
     AU.addPreserved<Dependences>();
     AU.addPreserved<LoopInfo>();
     AU.addPreserved<DominatorTree>();
     AU.addPreserved<PostDominatorTree>();
-    AU.addPreserved<SCoPDetection>();
+    AU.addPreserved<ScopDetection>();
     AU.addPreserved<ScalarEvolution>();
     AU.addPreserved<RegionInfo>();
-    AU.addPreserved<SCoPInfo>();
+    AU.addPreserved<ScopInfo>();
     AU.addPreservedID(IndependentBlocksID);
   }
 };
