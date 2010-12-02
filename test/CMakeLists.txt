@@ -1,5 +1,8 @@
 set(POLLY_TEST_DIRECTORIES
-  "Polly")
+  "SCoPInfo"
+  "AffineIterator"
+  "CodeGen"
+  "polybench")
 
 set(LLVM_SOURCE_DIR "${LLVM_MAIN_SRC_DIR}")
 set(LLVM_BINARY_DIR "${LLVM_BINARY_DIR}")
