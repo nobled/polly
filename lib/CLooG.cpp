@@ -193,6 +193,7 @@ std::string CLooGExporter::getFileName(Region *R) const {
 char CLooGExporter::ID = 0;
 bool CLooGExporter::runOnScop(Scop &S) {
   Region &R = S.getRegion();
+  CloogInfo &C = getAnalysis<CloogInfo>();
 
   std::string FunctionName = R.getEntry()->getParent()->getNameStr();
   std::string Filename = getFileName(&R);
@@ -201,8 +202,6 @@ bool CLooGExporter::runOnScop(Scop &S) {
     << FunctionName << "' to '" << Filename << "'...\n";
 
   FILE *F = fopen(Filename.c_str(), "w");
-
-  CLooG C(&S);
   C.dump(F);
   fclose(F);
 
@@ -212,6 +211,7 @@ bool CLooGExporter::runOnScop(Scop &S) {
 void CLooGExporter::getAnalysisUsage(AnalysisUsage &AU) const {
   // Get the Common analysis usage of ScopPasses.
   ScopPass::getAnalysisUsage(AU);
+  AU.addRequired<CloogInfo>();
 }
 
 static RegisterPass<CLooGExporter> A("polly-export-cloog",
