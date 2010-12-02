@@ -557,7 +557,7 @@ PACKAGE_STRING='Polly 0.01'
 PACKAGE_BUGREPORT='etherzhhb@gmail.com grosser@fim.uni-passau.de ojomojo@gmail.com'
 PACKAGE_URL=''
 
-ac_unique_file=""lib/SCoPInfo.cpp""
+ac_unique_file=""lib/ScopInfo.cpp""
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
 scoplib_ld

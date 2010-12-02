@@ -1,5 +1,5 @@
 set(POLLY_TEST_DIRECTORIES
-  "SCoPInfo"
+  "ScopInfo"
   "AffineIterator"
   "CodeGen"
   "polybench")
