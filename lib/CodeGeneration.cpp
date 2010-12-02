@@ -675,10 +675,7 @@ class CodeGeneration : public ScopPass {
     return false;
   }
 
-  void print(raw_ostream &OS, const Module *) const {
-    if (C)
-      C->pprint(OS);
-  }
+  void print(raw_ostream &OS, const Module *) const { }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<CloogInfo>();
