@@ -436,7 +436,7 @@ public:
                                               isl_set_n_dim(loopDomain) - 1);
 
     if (isParallel)
-      DEBUG(errs() << "Parallel loop with induction variable '" << f->iterator
+      DEBUG(dbgs() << "Parallel loop with induction variable '" << f->iterator
             << "' found\n";);
 
     return isParallel;
@@ -459,6 +459,7 @@ public:
 
   /// @brief Create vector instructions for this loop.
   void codegenForVector(const clast_for *f) {
+    DEBUG(dbgs() << "Vectorizing loop '" << f->iterator << "'\n";);
     codegenForSequential(f);
   }
 
