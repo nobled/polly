@@ -8,11 +8,11 @@
 //===----------------------------------------------------------------------===//
 //
 // The CodeGeneration pass takes a Scop created by ScopInfo and translates it
-// back to LLVM-IR using CLooG.
+// back to LLVM-IR using Cloog.
 //
 // The Scop describes the high level memory behaviour of a control flow region.
 // Transformation passes can update the schedule (execution order) of statements
-// in the Scop. CLooG is used to generate an abstract syntax tree (clast) that
+// in the Scop. Cloog is used to generate an abstract syntax tree (clast) that
 // reflects the updated execution order. This clast is used to create new
 // LLVM-IR that is computational equivalent to the original control flow region,
 // but executes its code in the new execution order defined by the changed
@@ -25,7 +25,7 @@
 #include "polly/LinkAllPasses.h"
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/ScopHelper.h"
-#include "polly/CLooG.h"
+#include "polly/Cloog.h"
 #include "polly/Dependences.h"
 #include "polly/ScopInfo.h"
 #include "polly/TempScopInfo.h"

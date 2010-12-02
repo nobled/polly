@@ -35,34 +35,11 @@ namespace llvm {
 }
 
 namespace polly {
-class Scop;
+  class Scop;
+  class Cloog;
 
-class CLooG {
-  Scop *S;
-  CloogOptions *Options;
-  CloogState *State;
-  clast_stmt *ClastRoot;
-
-  void buildCloogOptions();
-  CloogUnionDomain *buildCloogUnionDomain();
-  CloogInput *buildCloogInput();
-
-public:
-  CLooG(Scop *Scop);
-
-  ~CLooG();
-
-  /// Write a .cloog input file
-  void dump(FILE *F);
-
-  /// Print a source code representation of the program.
-  void pprint(llvm::raw_ostream &OS);
-
-  /// Create the CLooG AST from this program.
-  struct clast_stmt *getClast();
-};
   class CloogInfo : public ScopPass {
-    CLooG *C;
+    Cloog *C;
 
   public:
     static char ID;

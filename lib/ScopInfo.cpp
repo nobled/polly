@@ -13,7 +13,7 @@
 // detection derived from their LLVM-IR code.
 //
 // This represantation is shared among several tools in the polyhedral
-// community, which are e.g. CLooG, Pluto, Loopo, Graphite.
+// community, which are e.g. Cloog, Pluto, Loopo, Graphite.
 //
 //===----------------------------------------------------------------------===//
 

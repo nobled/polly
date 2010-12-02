@@ -28,7 +28,7 @@ using namespace llvm;
 
 namespace polly {
   Pass *createAffSCEVItTesterPass();
-  Pass *createCLooGExporterPass();
+  Pass *createCloogExporterPass();
   Pass *createCloogInfoPass();
   Pass *createCodeGenerationPass();
   Pass *createCodePreperationPass();
@@ -67,7 +67,7 @@ namespace {
         return;
 
        createAffSCEVItTesterPass();
-       createCLooGExporterPass();
+       createCloogExporterPass();
        createCloogInfoPass();
        createCodeGenerationPass();
        createCodePreperationPass();

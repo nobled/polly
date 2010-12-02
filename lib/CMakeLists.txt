@@ -12,7 +12,7 @@ if (SCOPLIB_FOUND)
 endif (SCOPLIB_FOUND)
 
 add_polly_library(LLVMPolly
-  CLooG.cpp
+  Cloog.cpp
   CodePreparation.cpp
   CodeGeneration.cpp
   Dependences.cpp
