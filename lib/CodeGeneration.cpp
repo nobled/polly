@@ -528,21 +528,19 @@ public:
 }
 
 namespace {
-class CodeGeneration : public RegionPass {
+class CodeGeneration : public ScopPass {
   Region *region;
   Scop *S;
   DominatorTree *DT;
   ScalarEvolution *SE;
   ScopDetection *SD;
-  CLooG *C;
+  CloogInfo *C;
   LoopInfo *LI;
 
   public:
   static char ID;
 
-  CodeGeneration() : RegionPass(ID) {
-    C = 0;
-  }
+  CodeGeneration() : ScopPass(ID) {}
 
   void createSeSeEdges(Region *R) {
     BasicBlock *newEntry = createSingleEntryEdge(R, this);
@@ -597,26 +595,18 @@ class CodeGeneration : public RegionPass {
       }
   }
 
-  bool runOnRegion(Region *R, RGPassManager &RGM) {
-    region = R;
-    S = getAnalysis<ScopInfo>().getScop();
+  bool runOnScop(Scop &scop) {
+    S = &scop;
+    region = &S->getRegion();
+    Region *R = region;
     DT = &getAnalysis<DominatorTree>();
     Dependences *DP = &getAnalysis<Dependences>();
     SE = &getAnalysis<ScalarEvolution>();
     LI = &getAnalysis<LoopInfo>();
+    C = &getAnalysis<CloogInfo>();
     SD = &getAnalysis<ScopDetection>();
 
-    if (!S) {
-      C = 0;
-      return false;
-    }
-
     createSeSeEdges(R);
-
-    if (C)
-      delete(C);
-
-    C = new CLooG(S);
 
     Function *F = R->getEntry()->getParent();
 
@@ -627,14 +617,14 @@ class CodeGeneration : public RegionPass {
 
     ClastStmtCodeGen CodeGen(S, DT, DP, &Builder);
 
-    clast_stmt *clast = C->getClast();
+    const clast_stmt *clast = C->getClast();
 
     addParameters(((clast_root*)clast)->names, CodeGen.CharMap, &Builder);
 
     if (OpenMP)
       addOpenMPDefinitions(&Builder);
 
-    CodeGen.codegen(clast);
+    CodeGen.codegen(const_cast<clast_stmt*>(clast));
 
     BasicBlock *AfterScop = *pred_begin(R->getExit());
     Builder.CreateBr(AfterScop);
@@ -691,6 +681,7 @@ class CodeGeneration : public RegionPass {
   }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+    AU.addRequired<CloogInfo>();
     AU.addRequired<Dependences>();
     AU.addRequired<DominatorTree>();
     AU.addRequired<ScalarEvolution>();
