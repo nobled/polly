@@ -29,6 +29,7 @@ using namespace llvm;
 namespace polly {
   Pass *createAffSCEVItTesterPass();
   Pass *createCLooGExporterPass();
+  Pass *createCloogInfoPass();
   Pass *createCodeGenerationPass();
   Pass *createCodePreperationPass();
   Pass *createDependencesPass();
@@ -38,7 +39,6 @@ namespace polly {
   Pass *createDOTViewerPass();
   Pass *createIndependentBlocksPass();
   Pass *createSCoPInfoPass();
-  Pass *createSCoPPrinterPass();
 
 #ifdef OPENSCOP_FOUND
   Pass *createSCoPExporterPass();
@@ -68,6 +68,7 @@ namespace {
 
        createAffSCEVItTesterPass();
        createCLooGExporterPass();
+       createCloogInfoPass();
        createCodeGenerationPass();
        createCodePreperationPass();
        createDependencesPass();
@@ -77,7 +78,6 @@ namespace {
        createDOTViewerPass();
        createIndependentBlocksPass();
        createSCoPInfoPass();
-       createSCoPPrinterPass();
 
 #ifdef OPENSCOP_FOUND
        createSCoPExporterPass();

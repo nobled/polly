@@ -17,7 +17,6 @@ add_polly_library(LLVMPolly
   CodeGeneration.cpp
   Dependences.cpp
   IndependentBlocks.cpp
-  SCoPPrinter.cpp
   SCoPPass.cpp
   SCoPDetection.cpp
   SCoPGraphPrinter.cpp

@@ -24,6 +24,7 @@
 //
 #ifndef POLLY_CLOOG_H
 #define POLLY_CLOOG_H
+#include "polly/SCoPPass.h"
 
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"
@@ -60,5 +61,25 @@ public:
   /// Create the CLooG AST from this program.
   struct clast_stmt *getClast();
 };
+  class CloogInfo : public SCoPPass {
+    CLooG *C;
+
+  public:
+    static char ID;
+    CloogInfo() : SCoPPass(ID), C(0) {}
+
+    /// Write a .cloog input file
+    void dump(FILE *F);
+
+    /// Print a source code representation of the program.
+    void pprint(llvm::raw_ostream &OS);
+
+    /// Create the CLooG AST from this program.
+    const struct clast_stmt *getClast();
+
+    bool runOnSCoP(SCoP &S);
+    void printSCoP(llvm::raw_ostream &OS) const;
+    virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+  };
 }
 #endif /* POLLY_CLOOG_H */

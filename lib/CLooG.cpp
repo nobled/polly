@@ -226,3 +226,44 @@ llvm::Pass* polly::createCLooGExporterPass() {
   return new CLooGExporter();
 }
 
+/// Write a .cloog input file
+void CloogInfo::dump(FILE *F) {
+  C->dump(F);
+}
+
+/// Print a source code representation of the program.
+void CloogInfo::pprint(llvm::raw_ostream &OS) {
+  C->pprint(OS);
+}
+
+/// Create the CLooG AST from this program.
+const struct clast_stmt *CloogInfo::getClast() {
+  return C->getClast();
+}
+
+bool CloogInfo::runOnSCoP(SCoP &S) {
+  if (C)
+    delete C;
+
+  C = new CLooG(&S);
+
+  return false;
+}
+
+void CloogInfo::printSCoP(raw_ostream &OS) const {
+  C->pprint(OS);
+}
+
+void CloogInfo::getAnalysisUsage(AnalysisUsage &AU) const {
+  // Get the Common analysis usage of SCoPPasses.
+  SCoPPass::getAnalysisUsage(AU);
+}
+char CloogInfo::ID = 0;
+
+
+static RegisterPass<CloogInfo> B("polly-cloog",
+                                 "Execute CLooG code generation");
+
+Pass* polly::createCloogInfoPass() {
+  return new CloogInfo();
+}

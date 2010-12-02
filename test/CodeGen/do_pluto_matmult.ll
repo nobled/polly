@@ -1,9 +1,9 @@
-; RUN: %opt -polly-print -analyze < %s | FileCheck %s
+; RUN: %opt -polly-cloog -analyze < %s | FileCheck %s
 ; RUN: %opt -polly-codegen -disable-output < %s
-; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-print -analyze  < %s | FileCheck -check-prefix=IMPORT %s ; fi
-; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-import-postfix=.valid_reverse -polly-print -analyze < %s | FileCheck -check-prefix=REVERSE %s ; fi > /dev/null
-; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-import-postfix=.invalid_reverse -polly-print -analyze < %s 2>&1  | FileCheck -check-prefix=INVALID %s ; fi > /dev/null
-; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-print -analyze  < %s | FileCheck -check-prefix=IMPORT %s ; fi
+; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-cloog -analyze  < %s | FileCheck -check-prefix=IMPORT %s ; fi
+; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-import-postfix=.valid_reverse -polly-cloog -analyze < %s | FileCheck -check-prefix=REVERSE %s ; fi > /dev/null
+; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-import-postfix=.invalid_reverse -polly-cloog -analyze < %s 2>&1  | FileCheck -check-prefix=INVALID %s ; fi > /dev/null
+; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-cloog -analyze  < %s | FileCheck -check-prefix=IMPORT %s ; fi
 ; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-codegen < %s | lli | diff %s.result - ; fi
 ; RUN: if `%opt -help | grep -q "OpenSCoP"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-codegen -S < %s | FileCheck -check-prefix=CODEGEN %s ; fi
 

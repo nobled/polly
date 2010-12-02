@@ -1,4 +1,4 @@
-;RUN: %opt -polly-print -analyze %s | FileCheck %s
+;RUN: %opt -polly-cloog -analyze %s | FileCheck %s
 @A = common global [1 x i32] zeroinitializer, align 4 ; <[1 x i32]*> [#uses=1]
 
 define void @constant_condition() nounwind {

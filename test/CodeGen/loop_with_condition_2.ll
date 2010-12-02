@@ -1,4 +1,4 @@
-; RUN: %opt -polly-print -analyze %s | FileCheck %s
+; RUN: %opt -polly-cloog -analyze %s | FileCheck %s
 ; RUN: %opt -polly-codegen %s | lli 
 
 ; Cloog code generation generates non optimal code for the moment if -noscalars
