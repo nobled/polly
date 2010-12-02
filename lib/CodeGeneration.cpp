@@ -190,7 +190,7 @@ class ClastExpCodeGen {
   IRBuilder<> *Builder;
   const CharMapT *IVS;
 
-  Value *codegen(clast_name *e, const Type *Ty) {
+  Value *codegen(const clast_name *e, const Type *Ty) {
     CharMapT::const_iterator I = IVS->find(e->name);
 
     if (I != IVS->end())
@@ -199,7 +199,7 @@ class ClastExpCodeGen {
       llvm_unreachable("Clast name not found");
   }
 
-  Value *codegen(clast_term *e, const Type *Ty) {
+  Value *codegen(const clast_term *e, const Type *Ty) {
     APInt a = APInt_from_MPZ(e->val);
 
     Value *ConstOne = ConstantInt::get(Builder->getContext(), a);
@@ -213,7 +213,7 @@ class ClastExpCodeGen {
     return ConstOne;
   }
 
-  Value *codegen(clast_binary *e, const Type *Ty) {
+  Value *codegen(const clast_binary *e, const Type *Ty) {
     Value *LHS = codegen(e->LHS, Ty);
 
     APInt RHS_AP = APInt_from_MPZ(e->RHS);
@@ -257,7 +257,7 @@ class ClastExpCodeGen {
     };
   }
 
-  Value *codegen(clast_reduction *r, const Type *Ty) {
+  Value *codegen(const clast_reduction *r, const Type *Ty) {
     assert((   r->type == clast_red_min
             || r->type == clast_red_max
             || r->type == clast_red_sum)
@@ -306,22 +306,22 @@ public:
   //
   // @param e The expression to calculate.
   // @return The Value that holds the result.
-  Value *codegen(clast_expr *e, const Type *Ty) {
+  Value *codegen(const clast_expr *e, const Type *Ty) {
     switch(e->type) {
       case clast_expr_name:
-	return codegen((struct clast_name *)e, Ty);
+	return codegen((const clast_name *)e, Ty);
       case clast_expr_term:
-	return codegen((struct clast_term *)e, Ty);
+	return codegen((const clast_term *)e, Ty);
       case clast_expr_bin:
-	return codegen((struct clast_binary *)e, Ty);
+	return codegen((const clast_binary *)e, Ty);
       case clast_expr_red:
-	return codegen((struct clast_reduction *)e, Ty);
+	return codegen((const clast_reduction *)e, Ty);
       default:
         llvm_unreachable("Unknown clast expression!");
     }
   }
 
-  Value *codegen(clast_expr *e) {
+  Value *codegen(const clast_expr *e) {
     return codegen(e, Builder->getInt64Ty());
   }
 };
@@ -353,7 +353,7 @@ public:
   CharMapT CharMap;
 
   protected:
-  void codegen(struct clast_assignment *a, ScopStmt *Statement = 0,
+  void codegen(const clast_assignment *a, ScopStmt *Statement = 0,
                unsigned Dimension = 0) {
     Value *RHS = ExpGen.codegen(a->RHS);
 
@@ -370,20 +370,20 @@ public:
     }
   }
 
-  void codegenSubstitutions(struct clast_stmt *Assignment,
+  void codegenSubstitutions(const clast_stmt *Assignment,
                             ScopStmt *Statement) {
     int Dimension = 0;
 
     while (Assignment) {
       assert(CLAST_STMT_IS_A(Assignment, stmt_ass)
              && "Substitions are expected to be assignments");
-      codegen((struct clast_assignment *)Assignment, Statement, Dimension);
+      codegen((const clast_assignment *)Assignment, Statement, Dimension);
       Assignment = Assignment->next;
       Dimension++;
     }
   }
 
-  void codegen(struct clast_user_stmt *u) {
+  void codegen(const clast_user_stmt *u) {
     ScopStmt *Statement = (ScopStmt *)u->statement->usr;
     BasicBlock *BB = Statement->getBasicBlock();
 
@@ -393,13 +393,13 @@ public:
     copyBB(Builder, BB, ValueMap, DT, &S->getRegion());
   }
 
-  void codegen(struct clast_block *b) {
+  void codegen(const clast_block *b) {
     if (b->body)
       codegen(b->body);
   }
 
   /// @brief Create a classical sequential loop.
-  void codegenForSequential(struct clast_for *f) {
+  void codegenForSequential(const clast_for *f) {
     APInt Stride = APInt_from_MPZ(f->stride);
     PHINode *IV;
     Value *IncrementedIV;
@@ -424,7 +424,7 @@ public:
   /// Detect if a clast_for loop can be executed in parallel.
   ///
   /// @param f The clast for loop to check.
-  bool isParallelFor(struct clast_for *f) {
+  bool isParallelFor(const clast_for *f) {
     isl_set *loopDomain = isl_set_from_cloog_domain(f->domain);
     bool isParallel = DP->isParallelDimension(loopDomain,
                                               isl_set_n_dim(loopDomain) - 1);
@@ -440,14 +440,14 @@ public:
   ///
   /// This loop reflects a loop as if it would have been created by an OpenMP
   /// statement.
-  void codegenForOpenMP(struct clast_for *f) {
+  void codegenForOpenMP(const clast_for *f) {
     Module *M = Builder->GetInsertBlock()->getParent()->getParent();
     Function *FN = M->getFunction("GOMP_parallel_end");
 
     Builder->CreateCall(FN);
   }
 
-  void codegen(struct clast_for *f) {
+  void codegen(const clast_for *f) {
     if (OpenMP && !parallelCodeGeneration && isParallelFor(f)) {
       parallelCodeGeneration = true;
       codegenForOpenMP(f);
@@ -456,7 +456,7 @@ public:
       codegenForSequential(f);
   }
 
-  Value *codegen(struct clast_equation *eq) {
+  Value *codegen(const clast_equation *eq) {
     Value *LHS = ExpGen.codegen(eq->LHS);
     Value *RHS = ExpGen.codegen(eq->RHS);
     CmpInst::Predicate P;
@@ -471,7 +471,7 @@ public:
     return Builder->CreateICmp(P, LHS, RHS);
   }
 
-  void codegen(struct clast_guard *g) {
+  void codegen(const clast_guard *g) {
     Function *F = Builder->GetInsertBlock()->getParent();
     LLVMContext &Context = F->getContext();
     BasicBlock *ThenBB = BasicBlock::Create(Context, "polly.then", F);
@@ -495,24 +495,24 @@ public:
     Builder->SetInsertPoint(MergeBB);
   }
 
-  void codegen(struct clast_root *r) {
+  void codegen(const clast_root *r) {
     parallelCodeGeneration = false;
   }
 
 public:
-  void codegen(clast_stmt *stmt) {
+  void codegen(const clast_stmt *stmt) {
     if	    (CLAST_STMT_IS_A(stmt, stmt_root))
-      codegen((struct clast_root *)stmt);
+      codegen((const clast_root *)stmt);
     else if (CLAST_STMT_IS_A(stmt, stmt_ass))
-      codegen((struct clast_assignment *)stmt);
+      codegen((const clast_assignment *)stmt);
     else if (CLAST_STMT_IS_A(stmt, stmt_user))
-      codegen((struct clast_user_stmt *)stmt);
+      codegen((const clast_user_stmt *)stmt);
     else if (CLAST_STMT_IS_A(stmt, stmt_block))
-      codegen((struct clast_block *)stmt);
+      codegen((const clast_block *)stmt);
     else if (CLAST_STMT_IS_A(stmt, stmt_for))
-      codegen((struct clast_for *)stmt);
+      codegen((const clast_for *)stmt);
     else if (CLAST_STMT_IS_A(stmt, stmt_guard))
-      codegen((struct clast_guard *)stmt);
+      codegen((const clast_guard *)stmt);
 
     if (stmt->next)
       codegen(stmt->next);
@@ -552,7 +552,7 @@ class CodeGeneration : public ScopPass {
     createSingleExitEdge(R, this);
   }
 
-  void addParameters(CloogNames *names, CharMapT &VariableMap,
+  void addParameters(const CloogNames *names, CharMapT &VariableMap,
                      IRBuilder<> *Builder) {
     int i = 0;
     SCEVExpander Rewriter(*SE);
@@ -619,12 +619,12 @@ class CodeGeneration : public ScopPass {
 
     const clast_stmt *clast = C->getClast();
 
-    addParameters(((clast_root*)clast)->names, CodeGen.CharMap, &Builder);
+    addParameters(((const clast_root*)clast)->names, CodeGen.CharMap, &Builder);
 
     if (OpenMP)
       addOpenMPDefinitions(&Builder);
 
-    CodeGen.codegen(const_cast<clast_stmt*>(clast));
+    CodeGen.codegen(clast);
 
     BasicBlock *AfterScop = *pred_begin(R->getExit());
     Builder.CreateBr(AfterScop);
