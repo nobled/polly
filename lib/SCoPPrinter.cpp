@@ -19,36 +19,29 @@
 #include "polly/CLooG.h"
 #include "polly/LinkAllPasses.h"
 #include "polly/SCoPInfo.h"
+#include "polly/SCoPPass.h"
 
 using namespace polly;
 using namespace llvm;
 
 namespace {
-  class ScopPrinter : public RegionPass {
-
-    SCoP *S;
-
+  class ScopPrinter : public SCoPPass {
   public:
     static char ID;
 
-    ScopPrinter() : RegionPass(ID), S(0) {}
+    ScopPrinter() : SCoPPass(ID) {}
 
-    bool runOnRegion(Region *R, RGPassManager &RGM) {
-      S = getAnalysis<SCoPInfo>().getSCoP();
-
-      if (!S)
-        return false;
-
-      Function *F = S->getRegion().getEntry()->getParent();
+    bool runOnSCoP(SCoP &S) {
+      Function *F = S.getRegion().getEntry()->getParent();
       fflush(stdout);
 
       std::string output;
       raw_string_ostream OS(output);
       OS << "In function: '" << F->getNameStr() << "' SCoP: "
-        << S->getRegion().getNameStr() << ":\n";
+        << S.getRegion().getNameStr() << ":\n";
       fprintf(stdout, "%s", OS.str().c_str());
 
-      CLooG C = CLooG(S);
+      CLooG C = CLooG(&S);
       C.pprint();
 
       return false;
@@ -56,11 +49,9 @@ namespace {
 
     void print(raw_ostream &OS, const Module *) const {}
 
-    virtual void releaseMemory() { S = 0; }
-
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-      AU.addRequired<SCoPInfo>();
-      AU.setPreservesAll();
+      // Get the Common analysis usage of SCoPPasses.
+      SCoPPass::getAnalysisUsage(AU);
     }
   };
 } //end anonymous namespace
