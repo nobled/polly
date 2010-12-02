@@ -29,6 +29,9 @@
 #include "cloog/cloog.h"
 
 struct clast_name;
+namespace llvm {
+  class raw_ostream;
+}
 
 namespace polly {
 class SCoP;
@@ -48,13 +51,11 @@ public:
 
   ~CLooG();
 
-  /// Print a .cloog input file, that is equivalent to this program.
-  // TODO: use raw_ostream as parameter.
+  /// Write a .cloog input file
   void dump(FILE *F);
 
   /// Print a source code representation of the program.
-  // TODO: use raw_ostream as parameter.
-  void pprint();
+  void pprint(llvm::raw_ostream &OS);
 
   /// Create the CLooG AST from this program.
   struct clast_stmt *getClast();

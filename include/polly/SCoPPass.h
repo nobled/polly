@@ -29,8 +29,9 @@ class SCoP;
 /// creation of passes that operate on the Polly IR. Instead of overriding
 /// runOnRegion, subclasses override runOnSCoP.
 class SCoPPass : public RegionPass {
+  SCoP *S;
 protected:
-  explicit SCoPPass(char &ID) : RegionPass(ID) {}
+  explicit SCoPPass(char &ID) : RegionPass(ID), S(0) {}
 
   /// runOnMachineFunction - This method must be overloaded to perform the
   /// desired machine code transformation or analysis.
@@ -44,6 +45,8 @@ protected:
 
 private:
   virtual bool runOnRegion(Region *R, RGPassManager &RGM);
+  void print(raw_ostream &OS, const Module *) const;
+  virtual void printSCoP(raw_ostream &OS) const {}
 };
 
 } // End llvm namespace

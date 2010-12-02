@@ -1,4 +1,4 @@
-; RUN: %opt -polly-print-scop -S -analyze < %s | FileCheck %s
+; RUN: %opt -polly-print-scop -S -analyze  < %s | FileCheck %s
 ; RUN: %opt -polly-codegen -O3 < %s | lli
 ; XFAIL: *
 ; ModuleID = 'single_do_loop_one_iteration.s'

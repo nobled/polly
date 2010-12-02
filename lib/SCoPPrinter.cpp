@@ -28,26 +28,22 @@ namespace {
   class ScopPrinter : public SCoPPass {
   public:
     static char ID;
+    CLooG *C;
 
-    ScopPrinter() : SCoPPass(ID) {}
+    ScopPrinter() : SCoPPass(ID), C(0) {}
 
     bool runOnSCoP(SCoP &S) {
-      Function *F = S.getRegion().getEntry()->getParent();
-      fflush(stdout);
+      if (C)
+        delete C;
 
-      std::string output;
-      raw_string_ostream OS(output);
-      OS << "In function: '" << F->getNameStr() << "' SCoP: "
-        << S.getRegion().getNameStr() << ":\n";
-      fprintf(stdout, "%s", OS.str().c_str());
-
-      CLooG C = CLooG(&S);
-      C.pprint();
+      C = new CLooG(&S);
 
       return false;
     }
 
-    void print(raw_ostream &OS, const Module *) const {}
+    void printSCoP(raw_ostream &OS) const {
+      C->pprint(OS);
+    }
 
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
       // Get the Common analysis usage of SCoPPasses.

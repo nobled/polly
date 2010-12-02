@@ -18,10 +18,14 @@ using namespace llvm;
 using namespace polly;
 
 bool SCoPPass::runOnRegion(Region *R, RGPassManager &RGM) {
-  if (SCoP *S = getAnalysis<SCoPInfo>().getSCoP())
+  if ((S = getAnalysis<SCoPInfo>().getSCoP()))
     return runOnSCoP(*S);
 
   return false;
+}
+void SCoPPass::print(raw_ostream &OS, const Module *M) const {
+  if (S)
+    printSCoP(OS);
 }
 
 void SCoPPass::getAnalysisUsage(AnalysisUsage &AU) const {

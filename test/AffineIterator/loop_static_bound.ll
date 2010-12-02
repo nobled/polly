@@ -1,4 +1,4 @@
-; RUN: %opt -print-scev-affine  -analyze < %s | FileCheck %s
+; RUN: %opt -print-scev-affine  -analyze  < %s | FileCheck %s
 
 define void @f(i32* nocapture %a) nounwind {
 entry:

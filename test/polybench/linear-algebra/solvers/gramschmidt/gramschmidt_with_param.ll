@@ -1,4 +1,4 @@
-; RUN: %opt -polly-prepare -polly-print %s | FileCheck %s
+; RUN: %opt -polly-prepare -polly-print -analyze  %s | FileCheck %s
 ; Non affine branch instruction in BB: %bb1
 ; Loop %bb46: backedge-taken count is (0 smax %m) not supported
 ; XFAIL: *

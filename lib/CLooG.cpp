@@ -45,20 +45,68 @@ CLooG::~CLooG() {
   cloog_state_free(State);
 }
 
-/// Print a .cloog input file, that is equivalent to this program.
-// TODO: use raw_ostream as parameter.
+// Create a FILE* write stream and get the output to it written
+// to a std::string.
+class FileToString {
+  int FD[2];
+  FILE *input;
+  static const int BUFFERSIZE = 20;
+
+  char buf[BUFFERSIZE + 1];
+
+
+public:
+  FileToString() {
+    pipe(FD);
+    input = fdopen(FD[1], "w");
+  }
+  ~FileToString() {
+    close(FD[0]);
+    //close(FD[1]);
+  }
+
+  FILE *getInputFile() {
+    return input;
+  }
+
+  void closeInput() {
+    fclose(input);
+    close(FD[1]);
+  }
+
+  std::string getOutput() {
+    std::string output;
+    int readSize;
+
+    while (true) {
+      readSize = read(FD[0], &buf, BUFFERSIZE);
+
+      if (readSize <= 0)
+        break;
+
+      output += std::string(buf, readSize);
+    }
+
+
+    return output;
+  }
+
+};
+
+/// Write .cloog input file.
 void CLooG::dump(FILE *F) {
   CloogInput *Input = buildCloogInput();
   cloog_input_dump_cloog(F, Input, Options);
   cloog_input_free(Input);
-  fflush(F);
 }
 
 /// Print a source code representation of the program.
-// TODO: use raw_ostream as parameter.
-void CLooG::pprint() {
-  clast_pprint(stdout, ClastRoot, 0, Options);
-  fflush(stdout);
+void CLooG::pprint(raw_ostream &OS) {
+  FileToString *Output = new FileToString();
+  clast_pprint(Output->getInputFile(), ClastRoot, 0, Options);
+  Output->closeInput();
+  OS << Output->getOutput();
+  delete (Output);
 }
 
 /// Create the CLooG AST from this program.

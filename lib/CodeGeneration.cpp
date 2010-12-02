@@ -687,7 +687,7 @@ class CodeGeneration : public RegionPass {
 
   void print(raw_ostream &OS, const Module *) const {
     if (C)
-      C->pprint();
+      C->pprint(OS);
   }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
