@@ -157,13 +157,13 @@ CloogInput *CLooG::buildCloogInput() {
 
 namespace {
 
-struct CLooGExporter : public RegionPass {
+struct CLooGExporter : public ScopPass {
   static char ID;
   Scop *S;
-  explicit CLooGExporter() : RegionPass(ID) {}
+  explicit CLooGExporter() : ScopPass(ID) {}
 
   std::string getFileName(Region *R) const;
-  virtual bool runOnRegion(Region *R, RGPassManager &RGM);
+  virtual bool runOnScop(Scop &S);
   void getAnalysisUsage(AnalysisUsage &AU) const;
 };
 
@@ -191,21 +191,18 @@ std::string CLooGExporter::getFileName(Region *R) const {
 }
 
 char CLooGExporter::ID = 0;
-bool CLooGExporter::runOnRegion(Region *R, RGPassManager &RGM) {
-  S = getAnalysis<ScopInfo>().getScop();
+bool CLooGExporter::runOnScop(Scop &S) {
+  Region &R = S.getRegion();
 
-  if (!S)
-    return false;
+  std::string FunctionName = R.getEntry()->getParent()->getNameStr();
+  std::string Filename = getFileName(&R);
 
-  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-  std::string Filename = getFileName(R);
-
-  errs() << "Writing Scop '" << R->getNameStr() << "' in function '"
+  errs() << "Writing Scop '" << R.getNameStr() << "' in function '"
     << FunctionName << "' to '" << Filename << "'...\n";
 
   FILE *F = fopen(Filename.c_str(), "w");
 
-  CLooG C(S);
+  CLooG C(&S);
   C.dump(F);
   fclose(F);
 
@@ -213,8 +210,8 @@ bool CLooGExporter::runOnRegion(Region *R, RGPassManager &RGM) {
 }
 
 void CLooGExporter::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.setPreservesAll();
-  AU.addRequired<ScopInfo>();
+  // Get the Common analysis usage of ScopPasses.
+  ScopPass::getAnalysisUsage(AU);
 }
 
 static RegisterPass<CLooGExporter> A("polly-export-cloog",

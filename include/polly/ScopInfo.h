@@ -417,6 +417,7 @@ public:
   ///
   /// @return The maximum region of this static control part.
   inline const Region &getRegion() const { return R; }
+  inline Region &getRegion() { return R; }
 
   /// @brief Get the maximum region of this static control part.
   ///
