@@ -133,8 +133,6 @@ static void copyBB(IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
   DT->addNewBlock(CopyBB, Builder->GetInsertBlock());
   Builder->SetInsertPoint(CopyBB);
 
-  std::vector<const Instruction*> ToCopy;
-
   ValueMapT BBMap;
 
   for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
