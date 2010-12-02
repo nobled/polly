@@ -49,6 +49,12 @@ using namespace llvm;
 namespace polly {
 
 static cl::opt<bool>
+Vector("enable-polly-vector",
+       cl::desc("Enable polly vector code generation"), cl::Hidden,
+       cl::value_desc("Vector code generation enabled if true"),
+       cl::init(false));
+
+static cl::opt<bool>
 OpenMP("enable-polly-openmp",
        cl::desc("Generate OpenMP parallel code"), cl::Hidden,
        cl::value_desc("OpenMP code generation enabled if true"),
@@ -447,8 +453,19 @@ public:
     Builder->CreateCall(FN);
   }
 
+  bool isInnermostLoop(const clast_for *f) {
+    return true;
+  }
+
+  /// @brief Create vector instructions for this loop.
+  void codegenForVector(const clast_for *f) {
+    codegenForSequential(f);
+  }
+
   void codegen(const clast_for *f) {
-    if (OpenMP && !parallelCodeGeneration && isParallelFor(f)) {
+    if (Vector && isInnermostLoop(f) && isParallelFor(f)) {
+      codegenForVector(f);
+    } else if (OpenMP && !parallelCodeGeneration && isParallelFor(f)) {
       parallelCodeGeneration = true;
       codegenForOpenMP(f);
       parallelCodeGeneration = false;
