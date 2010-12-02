@@ -27,6 +27,7 @@
 
 #define DEBUG_TYPE "polly-dependences"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/CommandLine.h"
 
 #include <isl/flow.h>
 #include <isl/map.h>
@@ -36,6 +37,10 @@ using namespace polly;
 using namespace llvm;
 
 namespace polly {
+static cl::opt<bool>
+  LegalityCheckDisabled("disable-polly-legality",
+       cl::desc("Disable polly legality check"), cl::Hidden,
+       cl::init(false));
 
   Dependences::Dependences() : RegionPass(ID), S(0) {
     must_dep = may_dep = NULL;
@@ -140,6 +145,10 @@ namespace polly {
   }
 
   bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
+
+    if (LegalityCheckDisabled)
+      return true;
+
     isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
 
     isl_union_map *schedule = isl_union_map_empty(dim);
