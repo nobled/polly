@@ -454,7 +454,7 @@ public:
   }
 
   bool isInnermostLoop(const clast_for *f) {
-    return true;
+    return CLAST_STMT_IS_A(f->body, stmt_user);
   }
 
   /// @brief Create vector instructions for this loop.
