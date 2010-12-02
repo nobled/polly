@@ -136,9 +136,12 @@ static void copyBB(IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
   ValueMapT BBMap;
 
   for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
-       II != IE; ++II)
-    if (!II->isTerminator()) {
+       II != IE; ++II) {
+    if (II->isTerminator())
+      continue;
+
     const Instruction *Inst = &*II;
+
     bool Add = true;
 
     Instruction *NewInst = Inst->clone();
@@ -162,14 +165,14 @@ static void copyBB(IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
 
           NewInst->replaceUsesOfWith(*UI, NewOp);
 
-        // Instructions calculated in the current BB.
+          // Instructions calculated in the current BB.
         } else if (BBMap.find(OpInst) != BBMap.end()) {
           Value *NewOp = BBMap[*UI];
           NewInst->replaceUsesOfWith(*UI, NewOp);
 
-        // Ignore instructions that are referencing ops in the old BB. These
-        // instructions are unused. They where replace by new ones during
-        // createIndependentBlocks().
+          // Ignore instructions that are referencing ops in the old BB. These
+          // instructions are unused. They where replace by new ones during
+          // createIndependentBlocks().
         } else if (R->contains(OpInst->getParent())) {
           assert(!isa<StoreInst>(NewInst)
                  && "Store instructions are always needed!");
@@ -177,15 +180,16 @@ static void copyBB(IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
         }
       }
 
-    if (Add) {
-      Builder->Insert(NewInst);
-      BBMap[Inst] = NewInst;
-
-      if (!NewInst->getType()->isVoidTy())
-        NewInst->setName("p_" + Inst->getName());
-    } else
+    if (!Add) {
       delete NewInst;
+      continue;
+    }
 
+    Builder->Insert(NewInst);
+    BBMap[Inst] = NewInst;
+
+    if (!NewInst->getType()->isVoidTy())
+      NewInst->setName("p_" + Inst->getName());
   }
 }
 
