@@ -62,6 +62,7 @@ OpenMP("enable-polly-openmp",
 
 typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
+typedef std::vector<ValueMapT> VectorValueMapT;
 
 // Create a new loop.
 //
@@ -353,7 +354,8 @@ public:
   //                is used to update the operands of the statements.
   //                For new statements a relation old->new is inserted in this
   //                map.
-  void copyBB(BasicBlock *BB, DominatorTree *DT) {
+  void copyBB(BasicBlock *BB, DominatorTree *DT,
+              std::vector<ValueMapT> *VectorVMap = 0) {
     Function *F = Builder.GetInsertBlock()->getParent();
     LLVMContext &Context = F->getContext();
     type = 0;
@@ -365,11 +367,16 @@ public:
     DT->addNewBlock(CopyBB, Builder.GetInsertBlock());
     Builder.SetInsertPoint(CopyBB);
 
-    ValueMapT BBMap;
+    int vectorSize = 1;
+
+    if (VectorVMap)
+      vectorSize = VectorVMap->size();
+
+    VectorValueMapT BBMap(vectorSize);
 
     for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
          II != IE; ++II)
-      copyInstruction(&*II, BBMap);
+      copyInstruction(&*II, BBMap[0]);
   }
 
 };
@@ -603,6 +610,8 @@ public:
         codegenSubstitutions(u->substitutions, Statement, i, &VectorValueMap);
         i++;
       }
+      LLVMGenerator.copyBB(BB, DT, &VectorValueMap);
+      return;
     }
 
     LLVMGenerator.copyBB(BB, DT);
