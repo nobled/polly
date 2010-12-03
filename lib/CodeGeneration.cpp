@@ -179,7 +179,7 @@ public:
   /// %vector_ptr= bitcast double* %p to <4 x double>*
   /// %vec_full = load <4 x double>* %vector_ptr
   ///
-  Value *generateFullVectorLoad(const LoadInst *load, ValueMapT BBMap,
+  Value *generateFullVectorLoad(const LoadInst *load, ValueMapT &BBMap,
                                 int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     const Type *vectorPtrType = getVectorPtrTy(pointer, size);
@@ -202,7 +202,7 @@ public:
   /// %splat = shufflevector <1 x double> %splat_one, <1 x
   ///       double> %splat_one, <4 x i32> zeroinitializer
   ///
-  Value *generateSplatVectorLoad(const LoadInst *load, ValueMapT BBMap,
+  Value *generateSplatVectorLoad(const LoadInst *load, ValueMapT &BBMap,
                                  int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     const Type *vectorPtrType = getVectorPtrTy(pointer, 1);
@@ -236,7 +236,7 @@ public:
   /// %scalar 2 = load double* %p_2
   /// %vec_2 = insertelement <2 x double> %vec_1, double %scalar_1, i32 1
   ///
-  Value *generateScalarVectorLoad(const LoadInst *load, ValueMapT BBMap,
+  Value *generateScalarVectorLoad(const LoadInst *load, ValueMapT &BBMap,
                                   int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     VectorType *vectorType = VectorType::get(
@@ -256,7 +256,7 @@ public:
     return vector;
   }
 
-  Value *generateScalarLoad(const LoadInst *load, ValueMapT BBMap) {
+  Value *generateScalarLoad(const LoadInst *load, ValueMapT &BBMap) {
     const Value *pointer = load->getPointerOperand();
     Value *newPointer = getOperand(pointer, BBMap);
     Value *scalarLoad = Builder.CreateLoad(newPointer,
@@ -265,7 +265,7 @@ public:
   }
 
   /// @brief Load a value (or several values as a vector) from memory.
-  Value *generateLoad(const LoadInst *load, ValueMapT BBMap) {
+  Value *generateLoad(const LoadInst *load, ValueMapT &BBMap) {
 
     if (!Vector)
       return generateScalarLoad(load, BBMap);
@@ -279,6 +279,77 @@ public:
   }
 
   int type;
+
+  void copyInstruction(const Instruction *Inst, ValueMapT &BBMap) {
+    if (Inst->isTerminator())
+      return;
+
+    if (const LoadInst *load = dyn_cast<LoadInst>(Inst)) {
+      BBMap[Inst] = generateLoad(load, BBMap);
+      type++;
+      return;
+    }
+
+    if (const BinaryOperator *binaryInst = dyn_cast<BinaryOperator>(Inst)) {
+      Value *VectorLHS = getOperand(Inst->getOperand(0), BBMap);
+      Value *VectorRHS = getOperand(Inst->getOperand(1), BBMap);
+
+      std::string newInstructionName =  Inst->getNameStr() + "_vector";
+      BBMap[Inst] = Builder.CreateBinOp(binaryInst->getOpcode(), VectorLHS,
+                                        VectorRHS, newInstructionName);
+      return;
+    }
+
+    if (const StoreInst *store = dyn_cast<StoreInst>(Inst)) {
+      if (Vector) {
+        const Value *pointer = store->getPointerOperand();
+        const Type *vectorPtrType = getVectorPtrTy(pointer);
+        Value *newPointer = getOperand(pointer, BBMap);
+
+        Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
+                                                 "vector_ptr");
+
+        Value *VectorVal = getOperand(store->getValueOperand(), BBMap);
+        BBMap[Inst] = Builder.CreateStore(VectorVal, VectorPtr);
+
+        return;
+      }
+    }
+
+    bool Add = true;
+
+    Instruction *NewInst = Inst->clone();
+
+    // Copy the operands in temporary vector, as an in place update
+    // fails if an instruction is referencing the same operand twice.
+    std::vector<Value*> Operands(NewInst->op_begin(), NewInst->op_end());
+
+    // Replace old operands with the new ones.
+    for (std::vector<Value*>::iterator UI = Operands.begin(),
+         UE = Operands.end(); UI != UE; ++UI) {
+      Value *newOperand = getOperand(*UI, BBMap);
+
+      if (!newOperand) {
+        assert(!isa<StoreInst>(NewInst)
+               && "Store instructions are always needed!");
+        Add = false;
+        break;
+      }
+
+      NewInst->replaceUsesOfWith(*UI, newOperand);
+    }
+
+    if (!Add) {
+      delete NewInst;
+      return;
+    }
+
+    Builder.Insert(NewInst);
+    BBMap[Inst] = NewInst;
+
+    if (!NewInst->getType()->isVoidTy())
+      NewInst->setName("p_" + Inst->getName());
+  }
 
   // Insert a copy of a basic block in the newly generated code.
   //
@@ -304,78 +375,8 @@ public:
     ValueMapT BBMap;
 
     for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
-         II != IE; ++II) {
-      if (II->isTerminator())
-        continue;
-
-      const Instruction *Inst = &*II;
-
-      if (const LoadInst *load = dyn_cast<LoadInst>(Inst)) {
-        BBMap[Inst] = generateLoad(load, BBMap);
-        type++;
-        continue;
-      }
-
-      if (const BinaryOperator *binaryInst = dyn_cast<BinaryOperator>(Inst)) {
-
-        Value *VectorLHS = getOperand(Inst->getOperand(0), BBMap);
-        Value *VectorRHS = getOperand(Inst->getOperand(1), BBMap);
-
-        std::string newInstructionName =  Inst->getNameStr() + "_vector";
-        BBMap[Inst] = Builder.CreateBinOp(binaryInst->getOpcode(), VectorLHS,
-                                          VectorRHS, newInstructionName);
-        continue;
-      }
-      if (const StoreInst *store = dyn_cast<StoreInst>(Inst)) {
-        if (Vector) {
-          continue;
-
-          const Value *pointer = store->getPointerOperand();
-          const Type *vectorPtrType = getVectorPtrTy(pointer);
-          Value *newPointer = getOperand(pointer, BBMap);
-
-          Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
-                                                   "vector_ptr");
-
-          Value *VectorVal = getOperand(store->getValueOperand(), BBMap);
-          BBMap[Inst] = Builder.CreateStore(VectorVal, VectorPtr);
-        }
-      }
-
-      bool Add = true;
-
-      Instruction *NewInst = Inst->clone();
-
-      // Copy the operands in temporary vector, as an in place update
-      // fails if an instruction is referencing the same operand twice.
-      std::vector<Value*> Operands(NewInst->op_begin(), NewInst->op_end());
-
-      // Replace old operands with the new ones.
-      for (std::vector<Value*>::iterator UI = Operands.begin(),
-           UE = Operands.end(); UI != UE; ++UI) {
-        Value *newOperand = getOperand(*UI, BBMap);
-
-        if (!newOperand) {
-          assert(!isa<StoreInst>(NewInst)
-                 && "Store instructions are always needed!");
-          Add = false;
-          break;
-        }
-
-        NewInst->replaceUsesOfWith(*UI, newOperand);
-      }
-
-      if (!Add) {
-        delete NewInst;
-        continue;
-      }
-
-      Builder.Insert(NewInst);
-      BBMap[Inst] = NewInst;
-
-      if (!NewInst->getType()->isVoidTy())
-        NewInst->setName("p_" + Inst->getName());
-    }
+         II != IE; ++II)
+      copyInstruction(&*II, BBMap);
   }
 
 };
