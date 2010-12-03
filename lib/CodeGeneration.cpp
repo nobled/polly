@@ -316,8 +316,6 @@ public:
       }
     }
 
-    bool Add = true;
-
     Instruction *NewInst = Inst->clone();
 
     // Copy the operands in temporary vector, as an in place update
@@ -332,16 +330,11 @@ public:
       if (!newOperand) {
         assert(!isa<StoreInst>(NewInst)
                && "Store instructions are always needed!");
-        Add = false;
-        break;
+        delete NewInst;
+        return;
       }
 
       NewInst->replaceUsesOfWith(*UI, newOperand);
-    }
-
-    if (!Add) {
-      delete NewInst;
-      return;
     }
 
     Builder.Insert(NewInst);
