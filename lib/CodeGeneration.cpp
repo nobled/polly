@@ -113,104 +113,118 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   Builder->SetInsertPoint(BodyBB);
 }
 
-static Value* getOperand(Value *OldOperand, IRBuilder<> *Builder,
-                         const Region *R, ValueMapT &VMap, ValueMapT &BBMap) {
-  Instruction *OpInst = dyn_cast<Instruction>(OldOperand);
+class LLVMCodeGenerator {
+  IRBuilder<> &Builder;
+  ValueMapT &VMap;
+  Scop &S;
 
-  if (!OpInst)
+public:
+  LLVMCodeGenerator(IRBuilder<> &B, ValueMapT &vmap, Scop &scop) : Builder(B),
+  VMap(vmap), S(scop) {}
+
+  const Region &getRegion() {
+    return S.getRegion();
+  }
+
+  Value* getOperand(Value *OldOperand, ValueMapT &BBMap) {
+    Instruction *OpInst = dyn_cast<Instruction>(OldOperand);
+
+    if (!OpInst)
+      return OldOperand;
+
+    // IVS and Parameters.
+    if (VMap.count(OldOperand)) {
+      Value *NewOperand = VMap[OldOperand];
+
+      // Insert a cast if types are different
+      if (OldOperand->getType()->getScalarSizeInBits()
+          < NewOperand->getType()->getScalarSizeInBits())
+        NewOperand = Builder.CreateTruncOrBitCast(NewOperand,
+                                                   OldOperand->getType());
+
+      return NewOperand;
+    }
+
+    // Instructions calculated in the current BB.
+    if (BBMap.count(OldOperand)) {
+      return BBMap[OldOperand];
+    }
+
+    // Ignore instructions that are referencing ops in the old BB. These
+    // instructions are unused. They where replace by new ones during
+    // createIndependentBlocks().
+    if (getRegion().contains(OpInst->getParent()))
+      return NULL;
+
     return OldOperand;
-
-  // IVS and Parameters.
-  if (VMap.count(OldOperand)) {
-    Value *NewOperand = VMap[OldOperand];
-
-    // Insert a cast if types are different
-    if (OldOperand->getType()->getScalarSizeInBits()
-        < NewOperand->getType()->getScalarSizeInBits())
-      NewOperand = Builder->CreateTruncOrBitCast(NewOperand,
-                                                 OldOperand->getType());
-
-    return NewOperand;
   }
 
-  // Instructions calculated in the current BB.
-  if (BBMap.count(OldOperand)) {
-    return BBMap[OldOperand];
-  }
+  // Insert a copy of a basic block in the newly generated code.
+  //
+  // @param Builder The builder used to insert the code. It also specifies
+  //                where to insert the code.
+  // @param BB      The basic block to copy
+  // @param VMap    A map returning for any old value its new equivalent. This
+  //                is used to update the operands of the statements.
+  //                For new statements a relation old->new is inserted in this
+  //                map.
+  void copyBB(BasicBlock *BB, DominatorTree *DT) {
+    Function *F = Builder.GetInsertBlock()->getParent();
+    LLVMContext &Context = F->getContext();
 
-  // Ignore instructions that are referencing ops in the old BB. These
-  // instructions are unused. They where replace by new ones during
-  // createIndependentBlocks().
-  if (R->contains(OpInst->getParent()))
-    return NULL;
+    BasicBlock *CopyBB = BasicBlock::Create(Context,
+                                            "polly.stmt_" + BB->getNameStr(),
+                                            F);
+    Builder.CreateBr(CopyBB);
+    DT->addNewBlock(CopyBB, Builder.GetInsertBlock());
+    Builder.SetInsertPoint(CopyBB);
 
-  return OldOperand;
-}
+    ValueMapT BBMap;
 
-// Insert a copy of a basic block in the newly generated code.
-//
-// @param Builder The builder used to insert the code. It also specifies
-//                where to insert the code.
-// @param BB      The basic block to copy
-// @param VMap    A map returning for any old value its new equivalent. This
-//                is used to update the operands of the statements.
-//                For new statements a relation old->new is inserted in this
-//                map.
-static void copyBB(IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
-                   DominatorTree *DT, const Region *R) {
-  Function *F = Builder->GetInsertBlock()->getParent();
-  LLVMContext &Context = F->getContext();
+    for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
+         II != IE; ++II) {
+      if (II->isTerminator())
+        continue;
 
-  BasicBlock *CopyBB = BasicBlock::Create(Context,
-                                          "polly.stmt_" + BB->getNameStr(), F);
-  Builder->CreateBr(CopyBB);
-  DT->addNewBlock(CopyBB, Builder->GetInsertBlock());
-  Builder->SetInsertPoint(CopyBB);
+      const Instruction *Inst = &*II;
 
-  ValueMapT BBMap;
+      bool Add = true;
 
-  for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
-       II != IE; ++II) {
-    if (II->isTerminator())
-      continue;
+      Instruction *NewInst = Inst->clone();
 
-    const Instruction *Inst = &*II;
+      // Copy the operands in temporary vector, as an in place update
+      // fails if an instruction is referencing the same operand twice.
+      std::vector<Value*> Operands(NewInst->op_begin(), NewInst->op_end());
 
-    bool Add = true;
+      // Replace old operands with the new ones.
+      for (std::vector<Value*>::iterator UI = Operands.begin(),
+           UE = Operands.end(); UI != UE; ++UI) {
+        Value *newOperand = getOperand(*UI, BBMap);
 
-    Instruction *NewInst = Inst->clone();
+        if (!newOperand) {
+          assert(!isa<StoreInst>(NewInst)
+                 && "Store instructions are always needed!");
+          Add = false;
+          break;
+        }
 
-    // Copy the operands in temporary vector, as an in place update
-    // fails if an instruction is referencing the same operand twice.
-    std::vector<Value*> Operands(NewInst->op_begin(), NewInst->op_end());
-
-    // Replace old operands with the new ones.
-    for (std::vector<Value*>::iterator UI = Operands.begin(),
-         UE = Operands.end(); UI != UE; ++UI) {
-      Value *newOperand = getOperand(*UI, Builder, R, VMap, BBMap);
-
-      if (!newOperand) {
-        assert(!isa<StoreInst>(NewInst)
-               && "Store instructions are always needed!");
-        Add = false;
-        break;
+        NewInst->replaceUsesOfWith(*UI, newOperand);
       }
 
-      NewInst->replaceUsesOfWith(*UI, newOperand);
+      if (!Add) {
+        delete NewInst;
+        continue;
+      }
+
+      Builder.Insert(NewInst);
+      BBMap[Inst] = NewInst;
+
+      if (!NewInst->getType()->isVoidTy())
+        NewInst->setName("p_" + Inst->getName());
     }
-
-    if (!Add) {
-      delete NewInst;
-      continue;
-    }
-
-    Builder->Insert(NewInst);
-    BBMap[Inst] = NewInst;
-
-    if (!NewInst->getType()->isVoidTy())
-      NewInst->setName("p_" + Inst->getName());
   }
-}
+
+};
 
 /// Class to generate LLVM-IR that calculates the value of a clast_expr.
 class ClastExpCodeGen {
@@ -369,8 +383,11 @@ class ClastStmtCodeGen {
   // Codegenerator for clast expressions.
   ClastExpCodeGen ExpGen;
 
+  LLVMCodeGenerator LLVMGenerator;
+
   // Do we currently generate parallel code?
   bool parallelCodeGeneration;
+
 
 public:
   // Map the textual representation of variables in clast to the actual
@@ -417,7 +434,7 @@ public:
     if (u->substitutions)
       codegenSubstitutions(u->substitutions, Statement);
 
-    copyBB(Builder, BB, ValueMap, DT, &S->getRegion());
+    LLVMGenerator.copyBB(BB, DT);
   }
 
   void codegen(const clast_block *b) {
@@ -564,7 +581,7 @@ public:
   ClastStmtCodeGen(Scop *scop, DominatorTree *dt, Dependences *dp,
                    IRBuilder<> *B) :
     S(scop), DT(dt), DP(dp), Builder(B),
-  ExpGen(Builder, &CharMap) {}
+  ExpGen(Builder, &CharMap), LLVMGenerator(*B, ValueMap, *scop) {}
 
 };
 }
