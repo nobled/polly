@@ -113,6 +113,40 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   Builder->SetInsertPoint(BodyBB);
 }
 
+static Value* getOperand(Value *OldOperand, IRBuilder<> *Builder,
+                         const Region *R, ValueMapT &VMap, ValueMapT &BBMap) {
+  Instruction *OpInst = dyn_cast<Instruction>(OldOperand);
+
+  if (!OpInst)
+    return OldOperand;
+
+  // IVS and Parameters.
+  if (VMap.count(OldOperand)) {
+    Value *NewOperand = VMap[OldOperand];
+
+    // Insert a cast if types are different
+    if (OldOperand->getType()->getScalarSizeInBits()
+        < NewOperand->getType()->getScalarSizeInBits())
+      NewOperand = Builder->CreateTruncOrBitCast(NewOperand,
+                                                 OldOperand->getType());
+
+    return NewOperand;
+  }
+
+  // Instructions calculated in the current BB.
+  if (BBMap.count(OldOperand)) {
+    return BBMap[OldOperand];
+  }
+
+  // Ignore instructions that are referencing ops in the old BB. These
+  // instructions are unused. They where replace by new ones during
+  // createIndependentBlocks().
+  if (R->contains(OpInst->getParent()))
+    return NULL;
+
+  return OldOperand;
+}
+
 // Insert a copy of a basic block in the newly generated code.
 //
 // @param Builder The builder used to insert the code. It also specifies
@@ -152,33 +186,18 @@ static void copyBB(IRBuilder<> *Builder, BasicBlock *BB, ValueMapT &VMap,
 
     // Replace old operands with the new ones.
     for (std::vector<Value*>::iterator UI = Operands.begin(),
-         UE = Operands.end(); UI != UE; ++UI)
-      if (Instruction *OpInst = dyn_cast<Instruction>((*UI))) {
-        // IVS and Parameters.
-        if (VMap.find(OpInst) != VMap.end()) {
-          Value *NewOp = VMap[*UI];
+         UE = Operands.end(); UI != UE; ++UI) {
+      Value *newOperand = getOperand(*UI, Builder, R, VMap, BBMap);
 
-          // Insert a cast if the types differ.
-          if ((*UI)->getType()->getScalarSizeInBits()
-              < VMap[*UI]->getType()->getScalarSizeInBits())
-            NewOp = Builder->CreateTruncOrBitCast(NewOp, (*UI)->getType());
-
-          NewInst->replaceUsesOfWith(*UI, NewOp);
-
-          // Instructions calculated in the current BB.
-        } else if (BBMap.find(OpInst) != BBMap.end()) {
-          Value *NewOp = BBMap[*UI];
-          NewInst->replaceUsesOfWith(*UI, NewOp);
-
-          // Ignore instructions that are referencing ops in the old BB. These
-          // instructions are unused. They where replace by new ones during
-          // createIndependentBlocks().
-        } else if (R->contains(OpInst->getParent())) {
-          assert(!isa<StoreInst>(NewInst)
-                 && "Store instructions are always needed!");
-          Add = false;
-        }
+      if (!newOperand) {
+        assert(!isa<StoreInst>(NewInst)
+               && "Store instructions are always needed!");
+        Add = false;
+        break;
       }
+
+      NewInst->replaceUsesOfWith(*UI, newOperand);
+    }
 
     if (!Add) {
       delete NewInst;
