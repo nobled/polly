@@ -632,14 +632,38 @@ public:
     return isParallel;
   }
 
+  /// @brief Add a new definition of an openmp subfunction.
+  void addOpenMPSubfunction(Module *M)
+  {
+      LLVMContext &Context = Builder->getContext();
+
+      // Create name for the subfunction.
+      Function *F = Builder->GetInsertBlock()->getParent();
+      const std::string &Name = F->getNameStr() + ".omp_subfn";
+
+      // Prototype for "subfunction".
+      std::vector<const Type*> Arguments(1, Type::getInt8PtrTy(Context));
+      FunctionType *FT = FunctionType::get(Type::getVoidTy(Context),
+                           Arguments, false);
+      // Get unique name for the subfunction.
+      Function *FN = Function::Create(FT, Function::ExternalLinkage,
+                               Name, M);
+
+      // Create call for the subfunction.
+      Value *functionArgument = ConstantPointerNull::get(Type::getInt8PtrTy(Context));
+      Builder->CreateCall(FN, functionArgument);
+  }
+
   /// @brief Create an OpenMP parallel for loop.
   ///
   /// This loop reflects a loop as if it would have been created by an OpenMP
   /// statement.
   void codegenForOpenMP(const clast_for *f) {
     Module *M = Builder->GetInsertBlock()->getParent()->getParent();
-    Function *FN = M->getFunction("GOMP_parallel_end");
 
+    addOpenMPSubfunction(M);
+
+    Function *FN = M->getFunction("GOMP_parallel_end");
     Builder->CreateCall(FN);
   }
 
