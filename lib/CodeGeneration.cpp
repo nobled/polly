@@ -551,7 +551,8 @@ public:
   }
 
   void codegen(const clast_assignment *a, ScopStmt *Statement,
-               unsigned Dimension) {
+               unsigned Dimension, int vectorDim,
+               std::vector<ValueMapT> *VectorVMap = 0) {
     Value *RHS = ExpGen.codegen(a->RHS);
 
     assert(!a->LHS && "Statement assignments do not have left hand side");
@@ -562,17 +563,22 @@ public:
     if (PN->getNumOperands() == 2)
       V = *(PN->use_begin());
 
+    if (VectorVMap)
+      (*VectorVMap)[vectorDim][V] = RHS;
+
     ValueMap[V] = RHS;
   }
 
   void codegenSubstitutions(const clast_stmt *Assignment,
-                            ScopStmt *Statement) {
+                            ScopStmt *Statement, int vectorDim = 0,
+                            std::vector<ValueMapT> *VectorVMap = 0) {
     int Dimension = 0;
 
     while (Assignment) {
       assert(CLAST_STMT_IS_A(Assignment, stmt_ass)
              && "Substitions are expected to be assignments");
-      codegen((const clast_assignment *)Assignment, Statement, Dimension);
+      codegen((const clast_assignment *)Assignment, Statement, Dimension,
+              vectorDim, VectorVMap);
       Assignment = Assignment->next;
       Dimension++;
     }
@@ -585,6 +591,19 @@ public:
 
     if (u->substitutions)
       codegenSubstitutions(u->substitutions, Statement);
+
+    if (IVS) {
+      assert (u->substitutions && "Substitutions expected!");
+      std::vector<ValueMapT> VectorValueMap(IVS->size());
+
+      int i = 0;
+      for (std::vector<Value*>::iterator II = IVS->begin(), IE = IVS->end();
+           II != IE; ++II) {
+        CharMap[iterator] = *II;
+        codegenSubstitutions(u->substitutions, Statement, i, &VectorValueMap);
+        i++;
+      }
+    }
 
     LLVMGenerator.copyBB(BB, DT);
   }
@@ -603,7 +622,7 @@ public:
     Value *LB = ExpGen.codegen(f->LB);
     Value *UB = ExpGen.codegen(f->UB);
     createLoop(Builder, LB, UB, Stride, IV, AfterBB, IncrementedIV, DT);
-    (CharMap)[f->iterator] = IV;
+    CharMap[f->iterator] = IV;
 
     if (f->body)
       codegen(f->body);
@@ -687,7 +706,7 @@ public:
     for (int i = 1; i < VECTORSIZE; i++)
       IVS[i] = Builder->CreateAdd(IVS[i-1], StrideValue, "p_vector_iv");
 
-    (CharMap)[f->iterator] = LB;
+    CharMap[f->iterator] = LB;
     codegen((const clast_user_stmt *)f->body, &IVS, f->iterator);
 
   }
