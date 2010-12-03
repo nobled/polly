@@ -578,7 +578,8 @@ public:
     }
   }
 
-  void codegen(const clast_user_stmt *u) {
+  void codegen(const clast_user_stmt *u, std::vector<Value*> *IVS = NULL,
+               const char *iterator = NULL) {
     ScopStmt *Statement = (ScopStmt *)u->statement->usr;
     BasicBlock *BB = Statement->getBasicBlock();
 
@@ -651,8 +652,20 @@ public:
     DEBUG(dbgs() << "Vectorizing loop '" << f->iterator << "'\n";);
 
     Value *LB = ExpGen.codegen(f->LB);
+    APInt Stride = APInt_from_MPZ(f->stride);
+    const IntegerType *LoopIVType = dyn_cast<IntegerType>(LB->getType());
+    Stride.zext(LoopIVType->getBitWidth());
+    Value *StrideValue = ConstantInt::get(Builder->getContext(), Stride);
+
+    std::vector<Value*> IVS(VECTORSIZE);
+    IVS[0] = LB;
+
+    for (int i = 1; i < VECTORSIZE; i++)
+      IVS[i] = Builder->CreateAdd(IVS[i-1], StrideValue, "p_vector_iv");
+
     (CharMap)[f->iterator] = LB;
-    codegen(f->body);
+    codegen((const clast_user_stmt *)f->body, &IVS, f->iterator);
+
   }
 
   void codegen(const clast_for *f) {
