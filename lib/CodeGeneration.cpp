@@ -400,13 +400,21 @@ public:
     if (VectorVMap)
       vectorSize = VectorVMap->size();
 
+    ValueMapT &tmpVMap = VMap;
+
     VectorValueMapT BBMap(vectorSize);
     ValueMapT VectorMap;
 
     for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
          II != IE; ++II)
-      for (int i = 0; i < vectorSize; i++)
+      for (int i = 0; i < vectorSize; i++) {
+        if (VectorVMap)
+          VMap = (*VectorVMap)[i];
+
         copyInstruction(&*II, BBMap[i], VectorMap, BBMap);
+      }
+
+    VMap = tmpVMap;
   }
 
 };
