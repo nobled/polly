@@ -218,6 +218,7 @@ class ScopStmt {
   /// The only side effects of a statement are its memory accesses.
   typedef SmallVector<MemoryAccess*, 8> MemoryAccessVec;
   MemoryAccessVec MemAccs;
+  std::map<const Instruction*, MemoryAccess*> InstructionToAccess;
 
   //@}
 
@@ -274,6 +275,10 @@ public:
   ///
   /// @return The BasicBlock represented by this ScopStmt.
   BasicBlock *getBasicBlock() const { return BB; }
+
+  MemoryAccess &getAccessFor(const Instruction *Inst) {
+    return *InstructionToAccess[Inst];
+  }
 
   void setBasicBlock(BasicBlock *Block) { BB = Block; }
 

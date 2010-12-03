@@ -168,7 +168,7 @@ void TempScop::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
 
         for (AccFuncSetType::const_iterator FI = AccFunc->begin(),
              FE = AccFunc->end(); FI != FE; ++FI)
-          OS.indent(ind + 2) << *FI << '\n';
+          OS.indent(ind + 2) << (*FI).first << '\n';
 
         OS.indent(ind) << "}\n";
       }
@@ -219,12 +219,14 @@ void TempScopInfo::buildAccessFunctions(Region &R, ParamSetType &Params,
     if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
       // Create the SCEVAffFunc.
       if (isa<LoadInst>(Inst))
-        Functions.push_back(SCEVAffFunc(SCEVAffFunc::ReadMem));
+        Functions.push_back(std::make_pair(SCEVAffFunc(SCEVAffFunc::ReadMem),
+                                           &Inst));
       else //Else it must be a StoreInst.
-        Functions.push_back(SCEVAffFunc(SCEVAffFunc::WriteMem));
+        Functions.push_back(std::make_pair(SCEVAffFunc(SCEVAffFunc::WriteMem),
+                                           &Inst));
 
       Value *Ptr = getPointerOperand(Inst);
-      buildAffineFunction(SE->getSCEV(Ptr), Functions.back(), R, Params);
+      buildAffineFunction(SE->getSCEV(Ptr), Functions.back().first, R, Params);
     }
   }
 

@@ -276,8 +276,10 @@ void ScopStmt::buildAccesses(TempScop &tempScop, const Region &CurRegion) {
   const AccFuncSetType *AccFuncs = tempScop.getAccessFunctions(BB);
 
   for (AccFuncSetType::const_iterator I = AccFuncs->begin(),
-       E = AccFuncs->end(); I != E; ++I)
-    MemAccs.push_back(new MemoryAccess(*I, this));
+       E = AccFuncs->end(); I != E; ++I) {
+    MemAccs.push_back(new MemoryAccess(I->first, this));
+    InstructionToAccess[I->second] = MemAccs.back();
+  }
 }
 
 static isl_map *MapValueToLHS(isl_ctx *Context, unsigned ParameterNumber) {

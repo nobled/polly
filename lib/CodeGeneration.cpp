@@ -118,10 +118,11 @@ class BlockGenerator {
   IRBuilder<> &Builder;
   ValueMapT &VMap;
   Scop &S;
+  ScopStmt &statement;
 
 public:
-  BlockGenerator(IRBuilder<> &B, ValueMapT &vmap, Scop &scop) : Builder(B),
-  VMap(vmap), S(scop) {}
+  BlockGenerator(IRBuilder<> &B, ValueMapT &vmap, ScopStmt &Stmt)
+    : Builder(B), VMap(vmap), S(*Stmt.getParent()), statement(Stmt) {}
 
   const Region &getRegion() {
     return S.getRegion();
@@ -281,14 +282,14 @@ public:
 
     Value *newLoad;
 
-    if (type == 0) {
+    MemoryAccess &Access = statement.getAccessFor(load);
+
+    if (Access.isConstant(NULL))
       newLoad = generateSplatVectorLoad(load, BBMap);
-    } else if (type == 1) {
-      newLoad = generateScalarVectorLoad(load, BBMap,
-                                         WholeMap);
-    } else {
+    else if (Access.isStrideOne(NULL))
       newLoad = generateFullVectorLoad(load, BBMap);
-    }
+    else
+      newLoad = generateScalarVectorLoad(load, BBMap, WholeMap);
 
     VectorMap[load] = newLoad;
   }
@@ -647,12 +648,12 @@ public:
         i++;
       }
 
-      BlockGenerator Generator(*Builder, ValueMap, *S);
+      BlockGenerator Generator(*Builder, ValueMap, *Statement);
       Generator.copyBB(BB, DT, &VectorValueMap);
       return;
     }
 
-    BlockGenerator LLVMGenerator(*Builder, ValueMap, *S);
+    BlockGenerator Generator(*Builder, ValueMap, *Statement);
     Generator.copyBB(BB, DT);
   }
 
