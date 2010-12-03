@@ -546,7 +546,7 @@ public:
 
   protected:
   void codegen(const clast_assignment *a) {
-    Value *RHS = ExpGen.codegen(a->RHS);
+    //Value *RHS = ExpGen.codegen(a->RHS);
     assert(false && "Here is something missing");
   }
 
