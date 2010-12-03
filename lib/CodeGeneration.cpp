@@ -481,7 +481,10 @@ public:
   /// @brief Create vector instructions for this loop.
   void codegenForVector(const clast_for *f) {
     DEBUG(dbgs() << "Vectorizing loop '" << f->iterator << "'\n";);
-    codegenForSequential(f);
+
+    Value *LB = ExpGen.codegen(f->LB);
+    (CharMap)[f->iterator] = LB;
+    codegen(f->body);
   }
 
   void codegen(const clast_for *f) {
