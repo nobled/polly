@@ -127,11 +127,15 @@ public:
     return S.getRegion();
   }
 
-  Value* getOperand(const Value *OldOperand, ValueMapT &BBMap) {
+  Value* getOperand(const Value *OldOperand, ValueMapT &BBMap,
+                    ValueMapT *VectorMap = 0) {
     const Instruction *OpInst = dyn_cast<Instruction>(OldOperand);
 
     if (!OpInst)
       return const_cast<Value*>(OldOperand);
+
+    if (VectorMap && VectorMap->count(OldOperand))
+      return (*VectorMap)[OldOperand];
 
     // IVS and Parameters.
     if (VMap.count(OldOperand)) {
@@ -266,38 +270,56 @@ public:
   }
 
   /// @brief Load a value (or several values as a vector) from memory.
-  Value *generateLoad(const LoadInst *load, ValueMapT &BBMap) {
+  void generateLoad(const LoadInst *load, ValueMapT &BBMap,
+                    ValueMapT &VectorMap) {
 
-    if (!Vector)
-      return generateScalarLoad(load, BBMap);
+    if (!Vector) {
+      BBMap[load] = generateScalarLoad(load, BBMap);
+      return;
+    }
 
-    if (type == 0)
-      return generateSplatVectorLoad(load, BBMap);
-    else if (type == 1)
-      return generateScalarVectorLoad(load, BBMap);
-    else
-      return generateFullVectorLoad(load, BBMap);
+    Value *newLoad;
+
+    if (type == 0) {
+      newLoad = generateSplatVectorLoad(load, BBMap);
+    } else if (type == 1) {
+      newLoad = generateScalarVectorLoad(load, BBMap);
+    } else {
+      newLoad = generateFullVectorLoad(load, BBMap);
+    }
+
+    VectorMap[load] = newLoad;
   }
 
   int type;
 
-  void copyInstruction(const Instruction *Inst, ValueMapT &BBMap) {
+  void copyInstruction(const Instruction *Inst, ValueMapT &BBMap,
+                       ValueMapT &VectorMap) {
+    if (VectorMap.count(Inst))
+      return;
+
     if (Inst->isTerminator())
       return;
 
     if (const LoadInst *load = dyn_cast<LoadInst>(Inst)) {
-      BBMap[Inst] = generateLoad(load, BBMap);
+      generateLoad(load, BBMap, VectorMap);
       type++;
       return;
     }
 
     if (const BinaryOperator *binaryInst = dyn_cast<BinaryOperator>(Inst)) {
-      Value *VectorLHS = getOperand(Inst->getOperand(0), BBMap);
-      Value *VectorRHS = getOperand(Inst->getOperand(1), BBMap);
+      Value *VectorLHS = getOperand(Inst->getOperand(0), BBMap, &VectorMap);
+      Value *VectorRHS = getOperand(Inst->getOperand(1), BBMap, &VectorMap);
 
       std::string newInstructionName =  Inst->getNameStr() + "_vector";
-      BBMap[Inst] = Builder.CreateBinOp(binaryInst->getOpcode(), VectorLHS,
+      Value *newInst = Builder.CreateBinOp(binaryInst->getOpcode(), VectorLHS,
                                         VectorRHS, newInstructionName);
+      if (VectorMap.count(Inst->getOperand(0))
+          || VectorMap.count(Inst->getOperand(1)))
+        VectorMap[Inst] = newInst;
+      else
+        BBMap[Inst] = newInst;
+
       return;
     }
 
@@ -305,13 +327,17 @@ public:
       if (Vector) {
         const Value *pointer = store->getPointerOperand();
         const Type *vectorPtrType = getVectorPtrTy(pointer);
-        Value *newPointer = getOperand(pointer, BBMap);
+        Value *newPointer = getOperand(pointer, BBMap, &VectorMap);
 
         Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
                                                  "vector_ptr");
 
-        Value *VectorVal = getOperand(store->getValueOperand(), BBMap);
-        BBMap[Inst] = Builder.CreateStore(VectorVal, VectorPtr);
+        Value *VectorVal = getOperand(store->getValueOperand(), BBMap,
+                                      &VectorMap);
+        Value *newInst = Builder.CreateStore(VectorVal, VectorPtr);
+
+        if (VectorMap.count(store->getValueOperand()))
+          VectorMap[Inst] = newInst;
 
         return;
       }
@@ -373,10 +399,12 @@ public:
       vectorSize = VectorVMap->size();
 
     VectorValueMapT BBMap(vectorSize);
+    ValueMapT VectorMap;
 
     for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
          II != IE; ++II)
-      copyInstruction(&*II, BBMap[0]);
+      for (int i = 0; i < vectorSize; i++)
+        copyInstruction(&*II, BBMap[i], VectorMap);
   }
 
 };
