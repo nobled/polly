@@ -802,15 +802,16 @@ class CodeGeneration : public ScopPass {
     }
   }
 
+  // Adding prototypes required if OpenMP is enabled.
   void addOpenMPDefinitions(IRBuilder<> *Builder)
   {
-      // Adding prototypes required if OpenMP is enabled.
       Module *M = Builder->GetInsertBlock()->getParent()->getParent();
-      Function *FN = M->getFunction("GOMP_parallel_end");
+      LLVMContext &Context = Builder->getContext();
 
+      Function *FN = M->getFunction("GOMP_parallel_end");
       // Check if the definition is already added. Otherwise add it.
       if (!FN) {
-          LLVMContext &Context = Builder->getContext();
+          // Prototype for "GOMP_parallel_end".
           FunctionType *FT = FunctionType::get(Type::getVoidTy(Context),
                   std::vector<const Type*>(), false);
           Function::Create(FT, Function::ExternalLinkage, 
