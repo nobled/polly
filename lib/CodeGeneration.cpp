@@ -60,6 +60,12 @@ OpenMP("enable-polly-openmp",
        cl::value_desc("OpenMP code generation enabled if true"),
        cl::init(false));
 
+static cl::opt<std::string>
+CodegenOnly("polly-codegen-only",
+            cl::desc("Codegen only this function"), cl::Hidden,
+            cl::value_desc("The function name to codegen"),
+            cl::ValueRequired, cl::init(""));
+
 typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
 typedef std::vector<ValueMapT> VectorValueMapT;
@@ -921,9 +927,15 @@ class CodeGeneration : public ScopPass {
     C = &getAnalysis<CloogInfo>();
     SD = &getAnalysis<ScopDetection>();
 
-    createSeSeEdges(R);
-
     Function *F = R->getEntry()->getParent();
+
+    if (CodegenOnly != "" && CodegenOnly != F->getNameStr()) {
+      errs() << "Codegenerating only function '" << CodegenOnly
+        << "' skipping '" << F->getNameStr() << "' \n";
+      return false;
+    }
+
+    createSeSeEdges(R);
 
     // Create a basic block in which to start code generation.
     BasicBlock *PollyBB = BasicBlock::Create(F->getContext(), "pollyBB", F);
