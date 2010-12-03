@@ -91,6 +91,7 @@ private:
   std::string BaseName;
   isl_basic_map *createBasicAccessMap(ScopStmt *Statement);
   void setBaseName();
+  ScopStmt *statement;
 
 public:
   // @brief Create an affine memory access.
@@ -121,6 +122,14 @@ public:
   const std::string *getBaseName() const {
     return &BaseName;
   }
+
+  /// @brief Is consecutive memory accessed for a given
+  ///        statement instance set?
+  bool isStrideOne(isl_set *domainSubset) const;
+
+  /// @brief Is always the same memory accessed for a given
+  ///        statement instance set?
+  bool isConstant(isl_set *domainSubset) const;
 
   /// @brief Print the MemoryAccess.
   ///

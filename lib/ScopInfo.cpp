@@ -28,17 +28,32 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/RegionIterator.h"
+#include "llvm/Support/CommandLine.h"
 
 #define DEBUG_TYPE "polly-scops"
 #include "llvm/Support/Debug.h"
 
 #include "isl/constraint.h"
+#include <sstream>
+#include <string>
+#include <vector>
 
 using namespace llvm;
 using namespace polly;
 
 STATISTIC(ScopFound,  "Number of valid Scops");
+static cl::opt<std::string>
+StrideOneArrays("polly-strideOne",
+                cl::desc("The arrays with stride one access"), cl::Hidden,
+                cl::value_desc("A comma separated list of array basenames"),
+                cl::ValueRequired, cl::init(""));
+static cl::opt<std::string>
+ConstantArrays("polly-constant",
+                cl::desc("The arrays with constant access"), cl::Hidden,
+                cl::value_desc("A comma separated list of array basenames"),
+                cl::ValueRequired, cl::init(""));
 STATISTIC(RichScopFound,   "Number of Scops containing a loop");
+
 
 //===----------------------------------------------------------------------===//
 static void setCoefficient(const SCEV *Coeff, mpz_t v, bool negative,
@@ -130,6 +145,7 @@ isl_basic_map *MemoryAccess::createBasicAccessMap(ScopStmt *Statement) {
 MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc, ScopStmt *Statement) {
   BaseAddr = AffFunc.getBaseAddr();
   Type = AffFunc.isRead() ? Read : Write;
+  statement = Statement;
 
   setBaseName();
 
@@ -146,6 +162,7 @@ MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc, ScopStmt *Statement) {
 MemoryAccess::MemoryAccess(const Value *BaseAddress, ScopStmt *Statement) {
   BaseAddr = BaseAddress;
   Type = Read;
+  statement = Statement;
 
   isl_basic_map *BasicAccessMap = createBasicAccessMap(Statement);
   AccessRelation = isl_map_from_basic_map(BasicAccessMap);
@@ -164,6 +181,46 @@ void MemoryAccess::print(raw_ostream &OS) const {
 void MemoryAccess::dump() const {
   print(errs());
 }
+static std::vector<std::string> &split(const std::string &s, char delim,
+                                       std::vector<std::string> &elems) {
+  std::stringstream ss(s);
+  std::string item;
+  while(std::getline(ss, item, delim)) {
+    elems.push_back(item);
+  }
+  return elems;
+}
+
+static std::vector<std::string> split(const std::string &s, char delim) {
+  std::vector<std::string> elems;
+  return split(s, delim, elems);
+}
+
+bool MemoryAccess::isConstant(isl_set *domainSubset) const {
+  std::vector<std::string> Arrays;
+  split(ConstantArrays, ',', Arrays);
+
+  for (std::vector<std::string>::iterator A = Arrays.begin(), AE = Arrays.end();
+       A != AE; ++A)
+    if (*A == *getBaseName())
+      return true;
+
+  return false;
+}
+
+bool MemoryAccess::isStrideOne(isl_set *domainSubset) const {
+  std::vector<std::string> Arrays;
+  split(StrideOneArrays, ',', Arrays);
+
+  for (std::vector<std::string>::iterator A = Arrays.begin(), AE = Arrays.end();
+       A != AE; ++A)
+    if (*A == *getBaseName())
+      return true;
+
+  return false;
+
+}
+
 
 //===----------------------------------------------------------------------===//
 void ScopStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter) {
