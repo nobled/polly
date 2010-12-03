@@ -126,11 +126,11 @@ public:
     return S.getRegion();
   }
 
-  Value* getOperand(Value *OldOperand, ValueMapT &BBMap) {
-    Instruction *OpInst = dyn_cast<Instruction>(OldOperand);
+  Value* getOperand(const Value *OldOperand, ValueMapT &BBMap) {
+    const Instruction *OpInst = dyn_cast<Instruction>(OldOperand);
 
     if (!OpInst)
-      return OldOperand;
+      return const_cast<Value*>(OldOperand);
 
     // IVS and Parameters.
     if (VMap.count(OldOperand)) {
@@ -156,8 +156,129 @@ public:
     if (getRegion().contains(OpInst->getParent()))
       return NULL;
 
-    return OldOperand;
+    return const_cast<Value*>(OldOperand);
   }
+
+#define VECTORSIZE 4
+
+  const Type *getVectorPtrTy(const Value *V, int vectorSize = VECTORSIZE) {
+    const PointerType *pointerType = dyn_cast<PointerType>(V->getType());
+    assert(pointerType && "PointerType expected");
+
+    const Type *scalarType = pointerType->getElementType();
+    VectorType *vectorType = VectorType::get(scalarType, vectorSize);
+
+    return PointerType::getUnqual(vectorType);
+  }
+
+  /// @brief Load a vector from a set of adjacent scalars
+  ///
+  /// In case a set of scalars is known to be next to each other in memory,
+  /// create a vector load that loads those scalars
+  ///
+  /// %vector_ptr= bitcast double* %p to <4 x double>*
+  /// %vec_full = load <4 x double>* %vector_ptr
+  ///
+  Value *generateFullVectorLoad(const LoadInst *load, ValueMapT BBMap,
+                                int size = VECTORSIZE) {
+    const Value *pointer = load->getPointerOperand();
+    const Type *vectorPtrType = getVectorPtrTy(pointer, size);
+    Value *newPointer = getOperand(pointer, BBMap);
+    Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
+                                             "vector_ptr");
+    Value *VecLoad = Builder.CreateLoad(VectorPtr,
+                                        load->getNameStr()
+                                        + "_p_vec_full");
+    return VecLoad;
+  }
+
+  /// @brief Load a vector initialized from a single scalar in memory
+  ///
+  /// In case all elements of a vector are initialized to the same
+  /// scalar value, this value is loaded and shuffeled into all elements
+  /// of the vector.
+  ///
+  /// %splat_one = load <1 x double>* %p
+  /// %splat = shufflevector <1 x double> %splat_one, <1 x
+  ///       double> %splat_one, <4 x i32> zeroinitializer
+  ///
+  Value *generateSplatVectorLoad(const LoadInst *load, ValueMapT BBMap,
+                                 int size = VECTORSIZE) {
+    const Value *pointer = load->getPointerOperand();
+    const Type *vectorPtrType = getVectorPtrTy(pointer, 1);
+    Value *newPointer = getOperand(pointer, BBMap);
+    Value *vectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
+                                             load->getNameStr() + "_p_vec_p");
+    Value *scalarLoad= Builder.CreateLoad(vectorPtr,
+                                          load->getNameStr() + "_p_splat_one");
+    std::vector<Constant*> splat;
+
+    for (int i = 0; i < size; i++)
+      splat.push_back (Builder.getInt32(0));
+
+    Constant *splatVector = ConstantVector::get(splat);
+
+    Value *vectorLoad = Builder.CreateShuffleVector(scalarLoad, scalarLoad,
+                                                    splatVector,
+                                                    load->getNameStr()
+                                                    + "_p_splat");
+    return vectorLoad;
+  }
+
+  /// @Load a vector from scalars distributed in memory
+  ///
+  /// In case some scalars a distributed randomly in memory. Create a vector
+  /// by loading each scalar and by inserting one after the other into the
+  /// vector.
+  ///
+  /// %scalar_1= load double* %p_1
+  /// %vec_1 = insertelement <2 x double> undef, double %scalar_1, i32 0
+  /// %scalar 2 = load double* %p_2
+  /// %vec_2 = insertelement <2 x double> %vec_1, double %scalar_1, i32 1
+  ///
+  Value *generateScalarVectorLoad(const LoadInst *load, ValueMapT BBMap,
+                                  int size = VECTORSIZE) {
+    const Value *pointer = load->getPointerOperand();
+    VectorType *vectorType = VectorType::get(
+      dyn_cast<PointerType>(pointer->getType())->getElementType(), size);
+
+    Value *vector = UndefValue::get(vectorType);
+
+    for (int i = 0; i < size; i++) {
+      Value *newPointer = getOperand(pointer, BBMap);
+      Value *scalarLoad = Builder.CreateLoad(newPointer,
+                                             load->getNameStr() + "_p_scalar_");
+      vector = Builder.CreateInsertElement(vector, scalarLoad,
+                                           Builder.getInt32(i),
+                                           load->getNameStr() + "_p_vec_");
+    }
+
+    return vector;
+  }
+
+  Value *generateScalarLoad(const LoadInst *load, ValueMapT BBMap) {
+    const Value *pointer = load->getPointerOperand();
+    Value *newPointer = getOperand(pointer, BBMap);
+    Value *scalarLoad = Builder.CreateLoad(newPointer,
+                                           load->getNameStr() + "_p_scalar_");
+    return scalarLoad;
+  }
+
+  /// @brief Load a value (or several values as a vector) from memory.
+  Value *generateLoad(const LoadInst *load, ValueMapT BBMap) {
+
+    if (!Vector)
+      return generateScalarLoad(load, BBMap);
+
+    if (type == 0)
+      return generateSplatVectorLoad(load, BBMap);
+    else if (type == 1)
+      return generateScalarVectorLoad(load, BBMap);
+    else
+      return generateFullVectorLoad(load, BBMap);
+  }
+
+  int type;
 
   // Insert a copy of a basic block in the newly generated code.
   //
@@ -171,6 +292,7 @@ public:
   void copyBB(BasicBlock *BB, DominatorTree *DT) {
     Function *F = Builder.GetInsertBlock()->getParent();
     LLVMContext &Context = F->getContext();
+    type = 0;
 
     BasicBlock *CopyBB = BasicBlock::Create(Context,
                                             "polly.stmt_" + BB->getNameStr(),
@@ -187,6 +309,38 @@ public:
         continue;
 
       const Instruction *Inst = &*II;
+
+      if (const LoadInst *load = dyn_cast<LoadInst>(Inst)) {
+        BBMap[Inst] = generateLoad(load, BBMap);
+        type++;
+        continue;
+      }
+
+      if (const BinaryOperator *binaryInst = dyn_cast<BinaryOperator>(Inst)) {
+
+        Value *VectorLHS = getOperand(Inst->getOperand(0), BBMap);
+        Value *VectorRHS = getOperand(Inst->getOperand(1), BBMap);
+
+        std::string newInstructionName =  Inst->getNameStr() + "_vector";
+        BBMap[Inst] = Builder.CreateBinOp(binaryInst->getOpcode(), VectorLHS,
+                                          VectorRHS, newInstructionName);
+        continue;
+      }
+      if (const StoreInst *store = dyn_cast<StoreInst>(Inst)) {
+        if (Vector) {
+          continue;
+
+          const Value *pointer = store->getPointerOperand();
+          const Type *vectorPtrType = getVectorPtrTy(pointer);
+          Value *newPointer = getOperand(pointer, BBMap);
+
+          Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
+                                                   "vector_ptr");
+
+          Value *VectorVal = getOperand(store->getValueOperand(), BBMap);
+          BBMap[Inst] = Builder.CreateStore(VectorVal, VectorPtr);
+        }
+      }
 
       bool Add = true;
 
