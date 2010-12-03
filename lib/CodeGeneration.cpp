@@ -242,6 +242,7 @@ public:
   /// %vec_2 = insertelement <2 x double> %vec_1, double %scalar_1, i32 1
   ///
   Value *generateScalarVectorLoad(const LoadInst *load, ValueMapT &BBMap,
+                                  VectorValueMapT &WholeMap,
                                   int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     VectorType *vectorType = VectorType::get(
@@ -250,7 +251,7 @@ public:
     Value *vector = UndefValue::get(vectorType);
 
     for (int i = 0; i < size; i++) {
-      Value *newPointer = getOperand(pointer, BBMap);
+      Value *newPointer = getOperand(pointer, WholeMap[i]);
       Value *scalarLoad = Builder.CreateLoad(newPointer,
                                              load->getNameStr() + "_p_scalar_");
       vector = Builder.CreateInsertElement(vector, scalarLoad,
@@ -271,7 +272,7 @@ public:
 
   /// @brief Load a value (or several values as a vector) from memory.
   void generateLoad(const LoadInst *load, ValueMapT &BBMap,
-                    ValueMapT &VectorMap) {
+                    ValueMapT &VectorMap, VectorValueMapT &WholeMap) {
 
     if (!Vector) {
       BBMap[load] = generateScalarLoad(load, BBMap);
@@ -283,7 +284,8 @@ public:
     if (type == 0) {
       newLoad = generateSplatVectorLoad(load, BBMap);
     } else if (type == 1) {
-      newLoad = generateScalarVectorLoad(load, BBMap);
+      newLoad = generateScalarVectorLoad(load, BBMap,
+                                         WholeMap);
     } else {
       newLoad = generateFullVectorLoad(load, BBMap);
     }
@@ -294,7 +296,7 @@ public:
   int type;
 
   void copyInstruction(const Instruction *Inst, ValueMapT &BBMap,
-                       ValueMapT &VectorMap) {
+                       ValueMapT &VectorMap, VectorValueMapT &WholeMap) {
     if (VectorMap.count(Inst))
       return;
 
@@ -302,7 +304,7 @@ public:
       return;
 
     if (const LoadInst *load = dyn_cast<LoadInst>(Inst)) {
-      generateLoad(load, BBMap, VectorMap);
+      generateLoad(load, BBMap, VectorMap, WholeMap);
       type++;
       return;
     }
@@ -404,7 +406,7 @@ public:
     for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
          II != IE; ++II)
       for (int i = 0; i < vectorSize; i++)
-        copyInstruction(&*II, BBMap[i], VectorMap);
+        copyInstruction(&*II, BBMap[i], VectorMap, BBMap);
   }
 
 };
