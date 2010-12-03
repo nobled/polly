@@ -545,21 +545,24 @@ public:
   CharMapT CharMap;
 
   protected:
-  void codegen(const clast_assignment *a, ScopStmt *Statement = 0,
-               unsigned Dimension = 0) {
+  void codegen(const clast_assignment *a) {
+    Value *RHS = ExpGen.codegen(a->RHS);
+    assert(false && "Here is something missing");
+  }
+
+  void codegen(const clast_assignment *a, ScopStmt *Statement,
+               unsigned Dimension) {
     Value *RHS = ExpGen.codegen(a->RHS);
 
-    if (!a->LHS) {
-      assert(Statement && "Empty statement in assignment of a substitution.");
-      const PHINode *PN;
-      PN = Statement->getInductionVariableForDimension(Dimension);
-      const Value *V = PN;
+    assert(!a->LHS && "Statement assignments do not have left hand side");
+    const PHINode *PN;
+    PN = Statement->getInductionVariableForDimension(Dimension);
+    const Value *V = PN;
 
-      if (PN->getNumOperands() == 2)
-        V = *(PN->use_begin());
+    if (PN->getNumOperands() == 2)
+      V = *(PN->use_begin());
 
-      ValueMap[V] = RHS;
-    }
+    ValueMap[V] = RHS;
   }
 
   void codegenSubstitutions(const clast_stmt *Assignment,
