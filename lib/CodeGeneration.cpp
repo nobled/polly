@@ -114,13 +114,13 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   Builder->SetInsertPoint(BodyBB);
 }
 
-class LLVMCodeGenerator {
+class BlockGenerator {
   IRBuilder<> &Builder;
   ValueMapT &VMap;
   Scop &S;
 
 public:
-  LLVMCodeGenerator(IRBuilder<> &B, ValueMapT &vmap, Scop &scop) : Builder(B),
+  BlockGenerator(IRBuilder<> &B, ValueMapT &vmap, Scop &scop) : Builder(B),
   VMap(vmap), S(scop) {}
 
   const Region &getRegion() {
@@ -576,8 +576,6 @@ class ClastStmtCodeGen {
   // Codegenerator for clast expressions.
   ClastExpCodeGen ExpGen;
 
-  LLVMCodeGenerator LLVMGenerator;
-
   // Do we currently generate parallel code?
   bool parallelCodeGeneration;
 
@@ -648,11 +646,14 @@ public:
         codegenSubstitutions(u->substitutions, Statement, i, &VectorValueMap);
         i++;
       }
-      LLVMGenerator.copyBB(BB, DT, &VectorValueMap);
+
+      BlockGenerator Generator(*Builder, ValueMap, *S);
+      Generator.copyBB(BB, DT, &VectorValueMap);
       return;
     }
 
-    LLVMGenerator.copyBB(BB, DT);
+    BlockGenerator LLVMGenerator(*Builder, ValueMap, *S);
+    Generator.copyBB(BB, DT);
   }
 
   void codegen(const clast_block *b) {
@@ -834,8 +835,7 @@ public:
   public:
   ClastStmtCodeGen(Scop *scop, DominatorTree *dt, Dependences *dp,
                    IRBuilder<> *B) :
-    S(scop), DT(dt), DP(dp), Builder(B),
-  ExpGen(Builder, &CharMap), LLVMGenerator(*B, ValueMap, *scop) {}
+    S(scop), DT(dt), DP(dp), Builder(B), ExpGen(Builder, &CharMap) {}
 
 };
 }
