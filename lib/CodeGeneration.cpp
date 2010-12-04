@@ -421,7 +421,6 @@ public:
         copyInstruction(&*II, BBMap[i], VectorMap, BBMap);
       }
 
-    VMap = tmpVMap;
   }
 
 };
