@@ -722,6 +722,8 @@ public:
       Function *FN = Function::Create(FT, Function::ExternalLinkage,
                                Name, M);
 
+      // TODO: Create call for GOMP_parallel_start.
+
       // Create call for the subfunction.
       Value *functionArgument = ConstantPointerNull::get(Type::getInt8PtrTy(Context));
       Builder->CreateCall(FN, functionArgument);
@@ -911,6 +913,26 @@ class CodeGeneration : public ScopPass {
       FunctionType *FT = FunctionType::get(Type::getVoidTy(Context),
                                            std::vector<const Type*>(), false);
       Function::Create(FT, Function::ExternalLinkage, "GOMP_parallel_end", M);
+    }
+
+    Function *PsFN = M->getFunction("GOMP_parallel_start");
+    // Check if the definition is already added. Otherwise add it.
+    if (!PsFN) {
+      // Creating type of first argument for GOMP_parallel_start.
+      std::vector<const Type*> Arguments(1, Type::getInt8PtrTy(Context));
+      FunctionType *FnArgTy = FunctionType::get(Type::getVoidTy(Context),
+                                                Arguments, false);
+      PointerType *FnPtrTy = PointerType::getUnqual(FnArgTy);
+
+      // Prototype for GOMP_parallel_start.
+      std::vector<const Type*> PsArguments;
+      PsArguments.push_back(FnPtrTy);
+      PsArguments.push_back(Type::getInt8PtrTy(Context));
+      PsArguments.push_back(Type::getInt32Ty(Context));
+      FunctionType *PsFT = FunctionType::get(Type::getVoidTy(Context),
+                                             PsArguments, false);
+      Function::Create(PsFT, Function::ExternalLinkage, "GOMP_parallel_start",
+                       M);
     }
   }
 
