@@ -191,11 +191,6 @@ static std::vector<std::string> &split(const std::string &s, char delim,
   return elems;
 }
 
-static std::vector<std::string> split(const std::string &s, char delim) {
-  std::vector<std::string> elems;
-  return split(s, delim, elems);
-}
-
 bool MemoryAccess::isConstant(isl_set *domainSubset) const {
   std::vector<std::string> Arrays;
   split(ConstantArrays, ',', Arrays);

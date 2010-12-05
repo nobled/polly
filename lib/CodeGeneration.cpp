@@ -407,8 +407,6 @@ public:
     if (VectorVMap)
       vectorSize = VectorVMap->size();
 
-    ValueMapT &tmpVMap = VMap;
-
     VectorValueMapT BBMap(vectorSize);
     ValueMapT VectorMap;
 
@@ -420,7 +418,6 @@ public:
 
         copyInstruction(&*II, BBMap[i], VectorMap, BBMap);
       }
-
   }
 
 };
