@@ -281,7 +281,7 @@ public:
   void generateLoad(const LoadInst *load, ValueMapT &BBMap,
                     ValueMapT &VectorMap, VectorValueMapT &WholeMap) {
 
-    if (!Vector) {
+    if (WholeMap.size() == 1) {
       BBMap[load] = generateScalarLoad(load, BBMap);
       return;
     }
@@ -333,7 +333,7 @@ public:
     }
 
     if (const StoreInst *store = dyn_cast<StoreInst>(Inst)) {
-      if (Vector) {
+      if (VectorMap.count(store->getValueOperand()) > 0) {
         const Value *pointer = store->getPointerOperand();
         const Type *vectorPtrType = getVectorPtrTy(pointer);
         Value *newPointer = getOperand(pointer, BBMap, &VectorMap);
@@ -768,7 +768,7 @@ public:
   }
 
   void codegen(const clast_for *f) {
-    if (Vector && isInnermostLoop(f) /* && isParallelFor(f))*/ ) {
+    if (Vector && isInnermostLoop(f) && isParallelFor(f)) {
       codegenForVector(f);
     } else if (OpenMP && !parallelCodeGeneration && isParallelFor(f)) {
       parallelCodeGeneration = true;
