@@ -123,12 +123,15 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
 class BlockGenerator {
   IRBuilder<> &Builder;
   ValueMapT &VMap;
+  VectorValueMapT &ValueMaps;
   Scop &S;
   ScopStmt &statement;
 
 public:
-  BlockGenerator(IRBuilder<> &B, ValueMapT &vmap, ScopStmt &Stmt)
-    : Builder(B), VMap(vmap), S(*Stmt.getParent()), statement(Stmt) {}
+  BlockGenerator(IRBuilder<> &B, ValueMapT &vmap, VectorValueMapT &vmaps,
+                 ScopStmt &Stmt)
+    : Builder(B), VMap(vmap), ValueMaps(vmaps), S(*Stmt.getParent()),
+    statement(Stmt) {}
 
   const Region &getRegion() {
     return S.getRegion();
@@ -380,6 +383,14 @@ public:
       NewInst->setName("p_" + Inst->getName());
   }
 
+  int getVectorSize() {
+    return ValueMaps.size();
+  }
+
+  bool isVectorBlock() {
+    return getVectorSize() > 1;
+  }
+
   // Insert a copy of a basic block in the newly generated code.
   //
   // @param Builder The builder used to insert the code. It also specifies
@@ -389,8 +400,7 @@ public:
   //                is used to update the operands of the statements.
   //                For new statements a relation old->new is inserted in this
   //                map.
-  void copyBB(BasicBlock *BB, DominatorTree *DT,
-              std::vector<ValueMapT> *VectorVMap = 0) {
+  void copyBB(BasicBlock *BB, DominatorTree *DT) {
     Function *F = Builder.GetInsertBlock()->getParent();
     LLVMContext &Context = F->getContext();
     type = 0;
@@ -402,21 +412,31 @@ public:
     DT->addNewBlock(CopyBB, Builder.GetInsertBlock());
     Builder.SetInsertPoint(CopyBB);
 
-    int vectorSize = 1;
-
-    if (VectorVMap)
-      vectorSize = VectorVMap->size();
-
-    VectorValueMapT BBMap(vectorSize);
-    ValueMapT VectorMap;
+    // Create two maps that store the mapping from the original instructions of
+    // the old basic block to their copies in the new basic block. Those maps
+    // are basic block local.
+    //
+    // As vector code generation is supported there is one map for scalar values
+    // and one for vector values.
+    //
+    // In case we just do scalar code generation, the vectorMap is not used and
+    // the scalarMap has just one dimension, which contains the mapping.
+    //
+    // In case vector code generation is done, an instruction may either appear
+    // in the vector map once (as it is calculating >vectorwidth< values at a
+    // time. Or (if the values are calculated using scalar operations), it
+    // appears once in every dimension of the scalarMap.
+    VectorValueMapT scalarBlockMap(getVectorSize());
+    ValueMapT vectorBlockMap;
 
     for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
          II != IE; ++II)
-      for (int i = 0; i < vectorSize; i++) {
-        if (VectorVMap)
-          VMap = (*VectorVMap)[i];
+      for (int i = 0; i < getVectorSize(); i++) {
+        if (isVectorBlock())
+          VMap = ValueMaps[i];
 
-        copyInstruction(&*II, BBMap[i], VectorMap, BBMap);
+        copyInstruction(II, scalarBlockMap[i], vectorBlockMap,
+                        scalarBlockMap);
       }
   }
 
@@ -635,13 +655,16 @@ public:
     ScopStmt *Statement = (ScopStmt *)u->statement->usr;
     BasicBlock *BB = Statement->getBasicBlock();
 
+    assert (u->substitutions && "Substitutions expected!");
+
     if (u->substitutions)
       codegenSubstitutions(u->substitutions, Statement);
 
-    if (IVS) {
-      assert (u->substitutions && "Substitutions expected!");
-      std::vector<ValueMapT> VectorValueMap(IVS->size());
+    int vectorDimensions = IVS ? 1 : IVS->size();
 
+    VectorValueMapT VectorValueMap(vectorDimensions);
+
+    if (IVS) {
       int i = 0;
       for (std::vector<Value*>::iterator II = IVS->begin(), IE = IVS->end();
            II != IE; ++II) {
@@ -649,13 +672,9 @@ public:
         codegenSubstitutions(u->substitutions, Statement, i, &VectorValueMap);
         i++;
       }
-
-      BlockGenerator Generator(*Builder, ValueMap, *Statement);
-      Generator.copyBB(BB, DT, &VectorValueMap);
-      return;
     }
 
-    BlockGenerator Generator(*Builder, ValueMap, *Statement);
+    BlockGenerator Generator(*Builder, ValueMap, VectorValueMap, *Statement);
     Generator.copyBB(BB, DT);
   }
 
