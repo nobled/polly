@@ -710,6 +710,8 @@ public:
   /// @param f The clast for loop to check.
   bool isParallelFor(const clast_for *f) {
     isl_set *loopDomain = isl_set_from_cloog_domain(f->domain);
+    assert(loopDomain && "Cannot access domain of loop");
+
     bool isParallel = DP->isParallelDimension(loopDomain,
                                               isl_set_n_dim(loopDomain) - 1);
 
