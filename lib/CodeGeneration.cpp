@@ -703,8 +703,7 @@ public:
   }
 
   /// @brief Add a new definition of an openmp subfunction.
-  void addOpenMPSubfunction(Module *M)
-  {
+  Function* addOpenMPSubfunction(Module *M) {
       LLVMContext &Context = Builder->getContext();
 
       // Create name for the subfunction.
@@ -719,11 +718,7 @@ public:
       Function *FN = Function::Create(FT, Function::ExternalLinkage,
                                Name, M);
 
-      // TODO: Create call for GOMP_parallel_start.
-
-      // Create call for the subfunction.
-      Value *functionArgument = ConstantPointerNull::get(Type::getInt8PtrTy(Context));
-      Builder->CreateCall(FN, functionArgument);
+      return FN;
   }
 
   /// @brief Create an OpenMP parallel for loop.
@@ -733,8 +728,19 @@ public:
   void codegenForOpenMP(const clast_for *f) {
     Module *M = Builder->GetInsertBlock()->getParent()->getParent();
 
-    addOpenMPSubfunction(M);
+    Function *SubFunction = addOpenMPSubfunction(M);
 
+    // Create call for GOMP_parallel_start.
+    Value *nullArgument = ConstantPointerNull::get(Builder->getInt8PtrTy());
+    Value *intArg = Builder->getInt32(0);
+    Function *parallelStartFunction = M->getFunction("GOMP_parallel_start");
+    Builder->CreateCall3(parallelStartFunction, SubFunction,
+                         nullArgument, intArg);
+
+    // Create call for the subfunction.
+    Builder->CreateCall(SubFunction, nullArgument);
+
+    // Create call for GOMP_parallel_end.
     Function *FN = M->getFunction("GOMP_parallel_end");
     Builder->CreateCall(FN);
   }
