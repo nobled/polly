@@ -439,7 +439,6 @@ public:
                         scalarBlockMap);
       }
   }
-
 };
 
 /// Class to generate LLVM-IR that calculates the value of a clast_expr.
