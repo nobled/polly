@@ -654,16 +654,15 @@ public:
     ScopStmt *Statement = (ScopStmt *)u->statement->usr;
     BasicBlock *BB = Statement->getBasicBlock();
 
-    assert (u->substitutions && "Substitutions expected!");
-
     if (u->substitutions)
       codegenSubstitutions(u->substitutions, Statement);
 
-    int vectorDimensions = IVS ? 1 : IVS->size();
+    int vectorDimensions = IVS ? IVS->size() : 1;
 
     VectorValueMapT VectorValueMap(vectorDimensions);
 
     if (IVS) {
+      assert (u->substitutions && "Substitutions expected!");
       int i = 0;
       for (std::vector<Value*>::iterator II = IVS->begin(), IE = IVS->end();
            II != IE; ++II) {
