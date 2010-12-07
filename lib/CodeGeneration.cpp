@@ -251,8 +251,8 @@ public:
   /// %scalar 2 = load double* %p_2
   /// %vec_2 = insertelement <2 x double> %vec_1, double %scalar_1, i32 1
   ///
-  Value *generateScalarVectorLoad(const LoadInst *load, ValueMapT &BBMap,
-                                  VectorValueMapT &WholeMap,
+  Value *generateScalarVectorLoad(const LoadInst *load,
+                                  VectorValueMapT &scalarMaps,
                                   int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     VectorType *vectorType = VectorType::get(
@@ -261,7 +261,7 @@ public:
     Value *vector = UndefValue::get(vectorType);
 
     for (int i = 0; i < size; i++) {
-      Value *newPointer = getOperand(pointer, WholeMap[i]);
+      Value *newPointer = getOperand(pointer, scalarMaps[i]);
       Value *scalarLoad = Builder.CreateLoad(newPointer,
                                              load->getNameStr() + "_p_scalar_");
       vector = Builder.CreateInsertElement(vector, scalarLoad,
@@ -281,11 +281,11 @@ public:
   }
 
   /// @brief Load a value (or several values as a vector) from memory.
-  void generateLoad(const LoadInst *load, ValueMapT &BBMap,
-                    ValueMapT &VectorMap, VectorValueMapT &WholeMap) {
+  void generateLoad(const LoadInst *load, ValueMapT &vectorMap,
+                    VectorValueMapT &scalarMaps) {
 
-    if (WholeMap.size() == 1) {
-      BBMap[load] = generateScalarLoad(load, BBMap);
+    if (scalarMaps.size() == 1) {
+      scalarMaps[0][load] = generateScalarLoad(load, scalarMaps[0]);
       return;
     }
 
@@ -294,38 +294,39 @@ public:
     MemoryAccess &Access = statement.getAccessFor(load);
 
     if (Access.isConstant(NULL))
-      newLoad = generateSplatVectorLoad(load, BBMap);
+      newLoad = generateSplatVectorLoad(load, scalarMaps[0]);
     else if (Access.isStrideOne(NULL))
-      newLoad = generateFullVectorLoad(load, BBMap);
+      newLoad = generateFullVectorLoad(load, scalarMaps[0]);
     else
-      newLoad = generateScalarVectorLoad(load, BBMap, WholeMap);
+      newLoad = generateScalarVectorLoad(load, scalarMaps);
 
-    VectorMap[load] = newLoad;
+    vectorMap[load] = newLoad;
   }
 
   void copyInstruction(const Instruction *Inst, ValueMapT &BBMap,
-                       ValueMapT &VectorMap, VectorValueMapT &WholeMap) {
-    if (VectorMap.count(Inst))
+                       ValueMapT &vectorMap, VectorValueMapT &scalarMaps,
+                       int vectorDimension) {
+    if (vectorMap.count(Inst))
       return;
 
     if (Inst->isTerminator())
       return;
 
     if (const LoadInst *load = dyn_cast<LoadInst>(Inst)) {
-      generateLoad(load, BBMap, VectorMap, WholeMap);
+      generateLoad(load, vectorMap, scalarMaps);
       return;
     }
 
     if (const BinaryOperator *binaryInst = dyn_cast<BinaryOperator>(Inst)) {
-      Value *VectorLHS = getOperand(Inst->getOperand(0), BBMap, &VectorMap);
-      Value *VectorRHS = getOperand(Inst->getOperand(1), BBMap, &VectorMap);
+      Value *VectorLHS = getOperand(Inst->getOperand(0), BBMap, &vectorMap);
+      Value *VectorRHS = getOperand(Inst->getOperand(1), BBMap, &vectorMap);
 
       std::string newInstructionName =  Inst->getNameStr() + "_vector";
       Value *newInst = Builder.CreateBinOp(binaryInst->getOpcode(), VectorLHS,
                                         VectorRHS, newInstructionName);
-      if (VectorMap.count(Inst->getOperand(0))
-          || VectorMap.count(Inst->getOperand(1)))
-        VectorMap[Inst] = newInst;
+      if (vectorMap.count(Inst->getOperand(0))
+          || vectorMap.count(Inst->getOperand(1)))
+        vectorMap[Inst] = newInst;
       else
         BBMap[Inst] = newInst;
 
@@ -333,20 +334,20 @@ public:
     }
 
     if (const StoreInst *store = dyn_cast<StoreInst>(Inst)) {
-      if (VectorMap.count(store->getValueOperand()) > 0) {
+      if (vectorMap.count(store->getValueOperand()) > 0) {
         const Value *pointer = store->getPointerOperand();
         const Type *vectorPtrType = getVectorPtrTy(pointer);
-        Value *newPointer = getOperand(pointer, BBMap, &VectorMap);
+        Value *newPointer = getOperand(pointer, BBMap, &vectorMap);
 
         Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
                                                  "vector_ptr");
 
         Value *VectorVal = getOperand(store->getValueOperand(), BBMap,
-                                      &VectorMap);
+                                      &vectorMap);
         Value *newInst = Builder.CreateStore(VectorVal, VectorPtr);
 
-        if (VectorMap.count(store->getValueOperand()))
-          VectorMap[Inst] = newInst;
+        if (vectorMap.count(store->getValueOperand()))
+          vectorMap[Inst] = newInst;
 
         return;
       }
@@ -431,7 +432,7 @@ public:
           VMap = ValueMaps[i];
 
         copyInstruction(II, scalarBlockMap[i], vectorBlockMap,
-                        scalarBlockMap);
+                        scalarBlockMap, i);
       }
   }
 };
