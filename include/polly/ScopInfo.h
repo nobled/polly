@@ -129,7 +129,7 @@ public:
 
   /// @brief Is always the same memory accessed for a given
   ///        statement instance set?
-  bool isConstant(isl_set *domainSubset) const;
+  bool isStrideZero(isl_set *domainSubset) const;
 
   /// @brief Print the MemoryAccess.
   ///

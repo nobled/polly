@@ -48,8 +48,8 @@ StrideOneArrays("polly-strideOne",
                 cl::value_desc("A comma separated list of array basenames"),
                 cl::ValueRequired, cl::init(""));
 static cl::opt<std::string>
-ConstantArrays("polly-constant",
-                cl::desc("The arrays with constant access"), cl::Hidden,
+ConstantArrays("polly-strideZero",
+                cl::desc("The arrays with stride zero access"), cl::Hidden,
                 cl::value_desc("A comma separated list of array basenames"),
                 cl::ValueRequired, cl::init(""));
 STATISTIC(RichScopFound,   "Number of Scops containing a loop");
@@ -191,7 +191,7 @@ static std::vector<std::string> &split(const std::string &s, char delim,
   return elems;
 }
 
-bool MemoryAccess::isConstant(isl_set *domainSubset) const {
+bool MemoryAccess::isStrideZero(isl_set *domainSubset) const {
   std::vector<std::string> Arrays;
   split(ConstantArrays, ',', Arrays);
 

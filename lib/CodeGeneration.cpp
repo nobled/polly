@@ -197,8 +197,8 @@ public:
   /// %vector_ptr= bitcast double* %p to <4 x double>*
   /// %vec_full = load <4 x double>* %vector_ptr
   ///
-  Value *generateFullVectorLoad(const LoadInst *load, ValueMapT &BBMap,
-                                int size = VECTORSIZE) {
+  Value *generateStrideOneLoad(const LoadInst *load, ValueMapT &BBMap,
+                               int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     const Type *vectorPtrType = getVectorPtrTy(pointer, size);
     Value *newPointer = getOperand(pointer, BBMap);
@@ -220,8 +220,8 @@ public:
   /// %splat = shufflevector <1 x double> %splat_one, <1 x
   ///       double> %splat_one, <4 x i32> zeroinitializer
   ///
-  Value *generateSplatVectorLoad(const LoadInst *load, ValueMapT &BBMap,
-                                 int size = VECTORSIZE) {
+  Value *generateStrideZeroLoad(const LoadInst *load, ValueMapT &BBMap,
+                                int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     const Type *vectorPtrType = getVectorPtrTy(pointer, 1);
     Value *newPointer = getOperand(pointer, BBMap);
@@ -254,9 +254,9 @@ public:
   /// %scalar 2 = load double* %p_2
   /// %vec_2 = insertelement <2 x double> %vec_1, double %scalar_1, i32 1
   ///
-  Value *generateScalarVectorLoad(const LoadInst *load,
-                                  VectorValueMapT &scalarMaps,
-                                  int size = VECTORSIZE) {
+  Value *generateUnknownStrideLoad(const LoadInst *load,
+                                   VectorValueMapT &scalarMaps,
+                                   int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     VectorType *vectorType = VectorType::get(
       dyn_cast<PointerType>(pointer->getType())->getElementType(), size);
@@ -298,12 +298,12 @@ public:
 
     assert(scatteringDomain && "No scattering domain available");
 
-    if (Access.isConstant(scatteringDomain))
-      newLoad = generateSplatVectorLoad(load, scalarMaps[0]);
+    if (Access.isStrideZero(scatteringDomain))
+      newLoad = generateStrideZeroLoad(load, scalarMaps[0]);
     else if (Access.isStrideOne(scatteringDomain))
-      newLoad = generateFullVectorLoad(load, scalarMaps[0]);
+      newLoad = generateStrideOneLoad(load, scalarMaps[0]);
     else
-      newLoad = generateScalarVectorLoad(load, scalarMaps);
+      newLoad = generateUnknownStrideLoad(load, scalarMaps);
 
     vectorMap[load] = newLoad;
   }
