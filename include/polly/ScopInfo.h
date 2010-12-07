@@ -125,11 +125,14 @@ public:
 
   /// @brief Is consecutive memory accessed for a given
   ///        statement instance set?
-  bool isStrideOne(isl_set *domainSubset) const;
+  bool isStrideOne(const isl_set *domainSubset) const;
 
   /// @brief Is always the same memory accessed for a given
   ///        statement instance set?
-  bool isStrideZero(isl_set *domainSubset) const;
+  bool isStrideZero(const isl_set *domainSubset) const;
+
+  /// @brief Get the statement that contains this memory access.
+  ScopStmt *getStatement() const { return statement; }
 
   /// @brief Print the MemoryAccess.
   ///

@@ -34,6 +34,8 @@
 #include "llvm/Support/Debug.h"
 
 #include "isl/constraint.h"
+#include "isl/set.h"
+#include "isl/map.h"
 #include <sstream>
 #include <string>
 #include <vector>
@@ -45,11 +47,6 @@ STATISTIC(ScopFound,  "Number of valid Scops");
 static cl::opt<std::string>
 StrideOneArrays("polly-strideOne",
                 cl::desc("The arrays with stride one access"), cl::Hidden,
-                cl::value_desc("A comma separated list of array basenames"),
-                cl::ValueRequired, cl::init(""));
-static cl::opt<std::string>
-ConstantArrays("polly-strideZero",
-                cl::desc("The arrays with stride zero access"), cl::Hidden,
                 cl::value_desc("A comma separated list of array basenames"),
                 cl::ValueRequired, cl::init(""));
 STATISTIC(RichScopFound,   "Number of Scops containing a loop");
@@ -191,19 +188,29 @@ static std::vector<std::string> &split(const std::string &s, char delim,
   return elems;
 }
 
-bool MemoryAccess::isStrideZero(isl_set *domainSubset) const {
-  std::vector<std::string> Arrays;
-  split(ConstantArrays, ',', Arrays);
+bool MemoryAccess::isStrideZero(const isl_set *domainSubset) const {
+  isl_map *accessRelation = isl_map_copy(getAccessFunction());
+  isl_set *scatteringDomain = isl_set_copy(const_cast<isl_set*>(domainSubset));
+  isl_map *scattering = isl_map_copy(getStatement()->getScattering());
 
-  for (std::vector<std::string>::iterator A = Arrays.begin(), AE = Arrays.end();
-       A != AE; ++A)
-    if (*A == *getBaseName())
-      return true;
+  scattering = isl_map_reverse(scattering);
+  int difference = isl_map_n_in(scattering) - isl_set_n_dim(scatteringDomain);
+  scattering = isl_map_project_out(scattering, isl_dim_in,
+                                   isl_set_n_dim(scatteringDomain), difference);
+  isl_set *subDomain = isl_set_apply(scatteringDomain, scattering);
 
-  return false;
+  // Get the set of accessed memory locations. If the minimal and the maximal
+  // element in this set is the same, the set contains just one element and
+  // this is a memory access, that always accesses the same element.
+  isl_set *accessDomain = isl_set_apply(subDomain, accessRelation);
+
+  isl_set *lexMin = isl_set_lexmin(isl_set_copy(accessDomain));
+  isl_set *lexMax = isl_set_lexmax(accessDomain);
+
+  return isl_set_is_equal(lexMin, lexMax);
 }
 
-bool MemoryAccess::isStrideOne(isl_set *domainSubset) const {
+bool MemoryAccess::isStrideOne(const isl_set *domainSubset) const {
   std::vector<std::string> Arrays;
   split(StrideOneArrays, ',', Arrays);
 
@@ -213,7 +220,6 @@ bool MemoryAccess::isStrideOne(isl_set *domainSubset) const {
       return true;
 
   return false;
-
 }
 
 
