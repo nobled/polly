@@ -303,8 +303,6 @@ public:
     VectorMap[load] = newLoad;
   }
 
-  int type;
-
   void copyInstruction(const Instruction *Inst, ValueMapT &BBMap,
                        ValueMapT &VectorMap, VectorValueMapT &WholeMap) {
     if (VectorMap.count(Inst))
@@ -315,7 +313,6 @@ public:
 
     if (const LoadInst *load = dyn_cast<LoadInst>(Inst)) {
       generateLoad(load, BBMap, VectorMap, WholeMap);
-      type++;
       return;
     }
 
@@ -403,8 +400,6 @@ public:
   void copyBB(BasicBlock *BB, DominatorTree *DT) {
     Function *F = Builder.GetInsertBlock()->getParent();
     LLVMContext &Context = F->getContext();
-    type = 0;
-
     BasicBlock *CopyBB = BasicBlock::Create(Context,
                                             "polly.stmt_" + BB->getNameStr(),
                                             F);
