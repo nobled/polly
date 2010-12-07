@@ -46,6 +46,8 @@
 using namespace polly;
 using namespace llvm;
 
+struct isl_set;
+
 namespace polly {
 
 static cl::opt<bool>
@@ -126,12 +128,13 @@ class BlockGenerator {
   VectorValueMapT &ValueMaps;
   Scop &S;
   ScopStmt &statement;
+  isl_set *scatteringDomain;
 
 public:
   BlockGenerator(IRBuilder<> &B, ValueMapT &vmap, VectorValueMapT &vmaps,
-                 ScopStmt &Stmt)
+                 ScopStmt &Stmt, isl_set *domain)
     : Builder(B), VMap(vmap), ValueMaps(vmaps), S(*Stmt.getParent()),
-    statement(Stmt) {}
+    statement(Stmt), scatteringDomain(domain) {}
 
   const Region &getRegion() {
     return S.getRegion();
@@ -293,9 +296,11 @@ public:
 
     MemoryAccess &Access = statement.getAccessFor(load);
 
-    if (Access.isConstant(NULL))
+    assert(scatteringDomain && "No scattering domain available");
+
+    if (Access.isConstant(scatteringDomain))
       newLoad = generateSplatVectorLoad(load, scalarMaps[0]);
-    else if (Access.isStrideOne(NULL))
+    else if (Access.isStrideOne(scatteringDomain))
       newLoad = generateFullVectorLoad(load, scalarMaps[0]);
     else
       newLoad = generateScalarVectorLoad(load, scalarMaps);
@@ -646,7 +651,7 @@ public:
   }
 
   void codegen(const clast_user_stmt *u, std::vector<Value*> *IVS = NULL,
-               const char *iterator = NULL) {
+               const char *iterator = NULL, isl_set *scatteringDomain = 0) {
     ScopStmt *Statement = (ScopStmt *)u->statement->usr;
     BasicBlock *BB = Statement->getBasicBlock();
 
@@ -668,7 +673,8 @@ public:
       }
     }
 
-    BlockGenerator Generator(*Builder, ValueMap, VectorValueMap, *Statement);
+    BlockGenerator Generator(*Builder, ValueMap, VectorValueMap, *Statement,
+                             scatteringDomain);
     Generator.copyBB(BB, DT);
   }
 
@@ -795,7 +801,11 @@ public:
       IVS[i] = Builder->CreateAdd(IVS[i-1], StrideValue, "p_vector_iv");
 
     CharMap[f->iterator] = LB;
-    codegen((const clast_user_stmt *)f->body, &IVS, f->iterator);
+
+    isl_set *scatteringDomain = isl_set_from_cloog_domain(f->domain);
+
+    codegen((const clast_user_stmt *)f->body, &IVS, f->iterator,
+            scatteringDomain);
 
   }
 
