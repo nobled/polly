@@ -197,6 +197,7 @@ bool MemoryAccess::isStrideZero(const isl_set *domainSubset) const {
   int difference = isl_map_n_in(scattering) - isl_set_n_dim(scatteringDomain);
   scattering = isl_map_project_out(scattering, isl_dim_in,
                                    isl_set_n_dim(scatteringDomain), difference);
+  scatteringDomain = isl_set_set_tuple_name(scatteringDomain, "scattering");
   isl_set *subDomain = isl_set_apply(scatteringDomain, scattering);
 
   // Get the set of accessed memory locations. If the minimal and the maximal
