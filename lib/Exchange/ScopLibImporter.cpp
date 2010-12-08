@@ -271,7 +271,7 @@ bool ScopLibImporter::runOnRegion(Region *R, RGPassManager &RGM) {
 
   std::string FunctionName = R->getEntry()->getParent()->getNameStr();
   errs() << "Reading Scop '" << R->getNameStr() << "' in function '"
-    << FunctionName << "' from '" << FileName << ImportPostfix << "'.\n";
+    << FunctionName << "' from '" << FileName << "'.\n";
 
   bool UpdateSuccessfull = updateScattering(S, scop);
 
