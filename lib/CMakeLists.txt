@@ -8,6 +8,7 @@ endif (OPENSCOP_FOUND)
 if (SCOPLIB_FOUND)
   set(POLLY_SCOPLIB_FILES
       Pocc.cpp
+      Exchange/ScopLib.cpp
       Exchange/ScopLibExporter.cpp
       Exchange/ScopLibImporter.cpp)
 endif (SCOPLIB_FOUND)
