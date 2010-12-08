@@ -7,6 +7,7 @@ if (OPENSCOP_FOUND)
 endif (OPENSCOP_FOUND)
 if (SCOPLIB_FOUND)
   set(POLLY_SCOPLIB_FILES
+      Pocc.cpp
       Exchange/ScopLibExporter.cpp
       Exchange/ScopLibImporter.cpp)
 endif (SCOPLIB_FOUND)
@@ -17,6 +18,7 @@ add_polly_library(LLVMPolly
   CodeGeneration.cpp
   Dependences.cpp
   IndependentBlocks.cpp
+  Pocc.cpp
   ScopPass.cpp
   ScopDetection.cpp
   ScopGraphPrinter.cpp

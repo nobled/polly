@@ -46,6 +46,7 @@ namespace polly {
 #endif
 
 #ifdef SCOPLIB_FOUND
+  Pass *createPoccPass();
   Pass *createScopLibExporterPass();
   Pass *createScopLibImporterPass();
 #endif
@@ -84,6 +85,7 @@ namespace {
        createScopImporterPass();
 #endif
 #ifdef SCOPLIB_FOUND
+       createPoccPass();
        createScopLibExporterPass();
        createScopLibImporterPass();
 #endif
