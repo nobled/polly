@@ -28,6 +28,7 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/RegionIterator.h"
+#include "llvm/Target/TargetData.h"
 #include "llvm/Support/CommandLine.h"
 
 #define DEBUG_TYPE "polly-scops"
@@ -139,7 +140,8 @@ isl_basic_map *MemoryAccess::createBasicAccessMap(ScopStmt *Statement) {
   return isl_basic_map_universe(dim);
 }
 
-MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc, ScopStmt *Statement) {
+MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc, ScopStmt *Statement,
+                           int elementSize) {
   BaseAddr = AffFunc.getBaseAddr();
   Type = AffFunc.isRead() ? Read : Write;
   statement = Statement;
@@ -152,6 +154,24 @@ MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc, ScopStmt *Statement) {
   dim = isl_dim_set_tuple_name(dim, isl_dim_set, Statement->getBaseName());
 
   AccessRelation = getValueOf(AffFunc, Statement, dim);
+
+  // Devide the access function by the size of the elements in the function.
+  isl_dim *dim2 = isl_dim_alloc(Statement->getIslContext(),
+                                    Statement->getNumParams(), 1, 1);
+  isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim2));
+  isl_constraint *c = isl_equality_alloc(dim2);
+  isl_int v;
+  isl_int_init(v);
+  isl_int_set_si(v, -1);
+  isl_constraint_set_coefficient(c, isl_dim_in, 0, v);
+  isl_int_set_si(v, elementSize / 8);
+  isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
+
+  bmap = isl_basic_map_add_constraint(bmap, c);
+  isl_map* dataSizeMap = isl_map_from_basic_map(bmap);
+
+  AccessRelation = isl_map_apply_range(AccessRelation, dataSizeMap);
+
   AccessRelation = isl_map_set_tuple_name(AccessRelation, isl_dim_out,
                                           getBaseName()->c_str());
 }
@@ -274,12 +294,19 @@ void ScopStmt::buildScattering(SmallVectorImpl<unsigned> &Scatter) {
   Scattering = isl_map_from_basic_map(bmap);
 }
 
-void ScopStmt::buildAccesses(TempScop &tempScop, const Region &CurRegion) {
+void ScopStmt::buildAccesses(TempScop &tempScop, const Region &CurRegion,
+                             TargetData &TD) {
   const AccFuncSetType *AccFuncs = tempScop.getAccessFunctions(BB);
 
   for (AccFuncSetType::const_iterator I = AccFuncs->begin(),
        E = AccFuncs->end(); I != E; ++I) {
-    MemAccs.push_back(new MemoryAccess(I->first, this));
+    int size = 8;
+    if (LoadInst *load = dyn_cast<LoadInst>(I->second))
+      size = TD.getTypeSizeInBits(load->getType());
+    if (StoreInst *store = dyn_cast<StoreInst>(I->second))
+      size = TD.getTypeSizeInBits(store->getValueOperand()->getType());
+
+    MemAccs.push_back(new MemoryAccess(I->first, this, size));
     InstructionToAccess[I->second] = MemAccs.back();
   }
 }
@@ -458,7 +485,8 @@ void ScopStmt::buildIterationDomain(TempScop &tempScop, const Region &CurRegion)
 ScopStmt::ScopStmt(Scop &parent, TempScop &tempScop,
                    const Region &CurRegion, BasicBlock &bb,
                    SmallVectorImpl<Loop*> &NestLoops,
-                   SmallVectorImpl<unsigned> &Scatter)
+                   SmallVectorImpl<unsigned> &Scatter,
+                   TargetData &TD)
   : Parent(parent), BB(&bb), IVS(NestLoops.size()) {
   // Setup the induction variables.
   for (unsigned i = 0, e = NestLoops.size(); i < e; ++i) {
@@ -477,7 +505,7 @@ ScopStmt::ScopStmt(Scop &parent, TempScop &tempScop,
 
   buildIterationDomain(tempScop, CurRegion);
   buildScattering(Scatter);
-  buildAccesses(tempScop, CurRegion);
+  buildAccesses(tempScop, CurRegion, TD);
 }
 
 ScopStmt::ScopStmt(Scop &parent, SmallVectorImpl<unsigned> &Scatter)
@@ -605,7 +633,8 @@ void ScopStmt::dump() const { print(dbgs()); }
 
 //===----------------------------------------------------------------------===//
 /// Scop class implement
-Scop::Scop(TempScop &tempScop, LoopInfo &LI, ScalarEvolution &ScalarEvolution)
+Scop::Scop(TempScop &tempScop, LoopInfo &LI, ScalarEvolution &ScalarEvolution,
+           TargetData &TD)
            : SE(&ScalarEvolution), R(tempScop.getMaxRegion()),
            MaxLoopDepth(tempScop.getMaxLoopDepth()) {
   isl_ctx *ctx = isl_ctx_alloc();
@@ -626,7 +655,7 @@ Scop::Scop(TempScop &tempScop, LoopInfo &LI, ScalarEvolution &ScalarEvolution)
 
   // Build the iteration domain, access functions and scattering functions
   // traversing the region tree.
-  buildScop(tempScop, getRegion(), NestLoops, Scatter, LI);
+  buildScop(tempScop, getRegion(), NestLoops, Scatter, LI, TD);
   Stmts.push_back(new ScopStmt(*this, Scatter));
 
   assert(NestLoops.empty() && "NestLoops not empty at top level!");
@@ -689,7 +718,7 @@ void Scop::buildScop(TempScop &tempScop,
                       const Region &CurRegion,
                       SmallVectorImpl<Loop*> &NestLoops,
                       SmallVectorImpl<unsigned> &Scatter,
-                      LoopInfo &LI) {
+                      LoopInfo &LI, TargetData &TD) {
   Loop *L = castToLoop(CurRegion, LI);
 
   if (L)
@@ -702,7 +731,7 @@ void Scop::buildScop(TempScop &tempScop,
        E = CurRegion.element_end(); I != E; ++I)
     if (I->isSubRegion())
       buildScop(tempScop, *(I->getNodeAs<Region>()), NestLoops, Scatter,
-                LI);
+                LI, TD);
     else {
       BasicBlock *BB = I->getNodeAs<BasicBlock>();
 
@@ -710,7 +739,7 @@ void Scop::buildScop(TempScop &tempScop,
         continue;
 
       Stmts.push_back(new ScopStmt(*this, tempScop, CurRegion, *BB, NestLoops,
-                                   Scatter));
+                                   Scatter, TD));
 
       // Increasing the Scattering function is OK for the moment, because
       // we are using a depth first iterator and the program is well structured.
@@ -733,12 +762,14 @@ void ScopInfo::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<RegionInfo>();
   AU.addRequired<ScalarEvolution>();
   AU.addRequired<TempScopInfo>();
+  AU.addRequired<TargetData>();
   AU.setPreservesAll();
 }
 
 bool ScopInfo::runOnRegion(Region *R, RGPassManager &RGM) {
-  LoopInfo *LI = &getAnalysis<LoopInfo>();
-  ScalarEvolution *SE = &getAnalysis<ScalarEvolution>();
+  LoopInfo &LI = getAnalysis<LoopInfo>();
+  ScalarEvolution &SE = getAnalysis<ScalarEvolution>();
+  TargetData &TD = getAnalysis<TargetData>();
 
   TempScop *tempScop = getAnalysis<TempScopInfo>().getTempScop();
 
@@ -752,7 +783,7 @@ bool ScopInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   ++ScopFound;
   if (tempScop->getMaxLoopDepth() > 0) ++RichScopFound;
 
-  scop = new Scop(*tempScop, *LI, *SE);
+  scop = new Scop(*tempScop, LI, SE, TD);
 
   return false;
 }

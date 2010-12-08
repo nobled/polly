@@ -28,8 +28,10 @@ namespace llvm {
   class SCEV;
   class ScalarEvolution;
   class SCEVAddRecExpr;
+  class TargetData;
   class Loop;
   class LoopInfo;
+  class Type;
 }
 
 struct isl_map;
@@ -99,7 +101,8 @@ public:
   // @param AffFunc    The access function.
   // @param Statement  The Statement that contains this access.
   // @param SE         The ScalarEvolution analysis.
-  MemoryAccess(const SCEVAffFunc &AffFunc, ScopStmt *Statement);
+  MemoryAccess(const SCEVAffFunc &AffFunc, ScopStmt *Statement,
+               int elementSize);
 
   // @brief Create a read all access.
   //
@@ -244,13 +247,14 @@ class ScopStmt {
   void buildIterationDomainFromLoops(TempScop &tempScop);
   void buildIterationDomain(TempScop &tempScop, const Region &CurRegion);
   void buildScattering(SmallVectorImpl<unsigned> &Scatter);
-  void buildAccesses(TempScop &tempScop, const Region &CurRegion);
+  void buildAccesses(TempScop &tempScop, const Region &CurRegion,
+                     TargetData &TD);
   //@}
 
   /// Create the ScopStmt from a BasicBlock.
   ScopStmt(Scop &parent, TempScop &tempScop, const Region &CurRegion,
            BasicBlock &bb, SmallVectorImpl<Loop*> &NestLoops,
-           SmallVectorImpl<unsigned> &Scatter);
+           SmallVectorImpl<unsigned> &Scatter, TargetData &TD);
 
   /// Create the finalization statement.
   ScopStmt(Scop &parent, SmallVectorImpl<unsigned> &Scatter);
@@ -373,7 +377,8 @@ class Scop {
 
   /// Create the static control part with a region, max loop depth of this
   /// region and parameters used in this region.
-  explicit Scop(TempScop &TempScop, LoopInfo &LI, ScalarEvolution &SE);
+  explicit Scop(TempScop &TempScop, LoopInfo &LI, ScalarEvolution &SE,
+                TargetData &TD);
 
   /// @brief Check if a basic block is trivial.
   ///
@@ -392,7 +397,7 @@ class Scop {
                   SmallVectorImpl<Loop*> &NestLoops,
                   // The scattering numbers
                   SmallVectorImpl<unsigned> &Scatter,
-                  LoopInfo &LI);
+                  LoopInfo &LI, TargetData &TD);
 
   /// Helper function for printing the Scop.
   void printContext(raw_ostream &OS) const;

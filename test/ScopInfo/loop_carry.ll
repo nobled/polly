@@ -70,11 +70,11 @@ bb2:                                              ; preds = %bb, %entry
 ; CHECK: Reads %k.05.reg2mem at:
 ; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_k.05.reg2mem[0] }
 ; CHECK: Writes %a at:
-; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_a[8 + 8i0] }
+; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_a[1 + i0] }
 ; CHECK: Reads %a at:
-; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_a[16 + 16i0] }
+; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_a[2 + 2i0] }
 ; CHECK: Reads %a at:
-; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_a[32 + 8i0] }
+; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_a[4 + i0] }
 ; CHECK: Writes %k.05.reg2mem at:
 ; CHECK: [p0] -> { Stmt_bb[i0] -> MemRef_k.05.reg2mem[0] }
 ; CHECK: Writes %.reg2mem at:
