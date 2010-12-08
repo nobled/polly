@@ -16,6 +16,7 @@
 #ifdef OPENSCOP_FOUND
 
 #include "polly/ScopInfo.h"
+#include "polly/ScopPass.h"
 
 #include "llvm/Support/CommandLine.h"
 
@@ -35,15 +36,15 @@ ExportDir("polly-export-dir",
           cl::desc("The directory to export the .scop files to."), cl::Hidden,
           cl::value_desc("Directory path"), cl::ValueRequired, cl::init("."));
 
-struct ScopExporter : public RegionPass {
+struct ScopExporter : public ScopPass {
   static char ID;
   Scop *S;
-  explicit ScopExporter() : RegionPass(ID) {}
+  explicit ScopExporter() : ScopPass(ID) {}
 
   std::string getFileName(Region *R) const;
 
-  virtual bool runOnRegion(Region *R, RGPassManager &RGM);
-  void print(raw_ostream &OS, const Module *) const;
+  virtual bool runOnScop(Scop &S);
+  void printScop(raw_ostream &OS) const;
   void getAnalysisUsage(AnalysisUsage &AU) const;
 };
 
@@ -551,15 +552,15 @@ std::string ScopExporter::getFileName(Region *R) const {
   return FileName;
 }
 
-void ScopExporter::print(raw_ostream &OS, const Module *) const {}
+void ScopExporter::printScop(raw_ostream &OS) const {
+  S->print(OS);
+}
 
-bool ScopExporter::runOnRegion(Region *R, RGPassManager &RGM) {
-  S = getAnalysis<ScopInfo>().getScop();
+bool ScopExporter::runOnScop(Scop &scop) {
+  S = &scop;
+  Region &R = S->getRegion();
 
-  if (!S)
-    return false;
-
-  std::string FileName = ExportDir + "/" + getFileName(R);
+  std::string FileName = ExportDir + "/" + getFileName(&R);
   FILE *F = fopen(FileName.c_str(), "w");
 
   if (!F) {
@@ -572,8 +573,8 @@ bool ScopExporter::runOnRegion(Region *R, RGPassManager &RGM) {
   openscop.print(F);
   fclose(F);
 
-  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-  errs() << "Writing Scop '" << R->getNameStr() << "' in function '"
+  std::string FunctionName = R.getEntry()->getParent()->getNameStr();
+  errs() << "Writing Scop '" << R.getNameStr() << "' in function '"
     << FunctionName << "' to '" << FileName << "'.\n";
 
   return false;

@@ -16,6 +16,7 @@
 
 #include "polly/Dependences.h"
 #include "polly/ScopInfo.h"
+#include "polly/ScopPass.h"
 
 #include "llvm/Support/CommandLine.h"
 
@@ -42,16 +43,16 @@ namespace {
                   cl::Hidden, cl::value_desc("File postfix"), cl::ValueRequired,
                   cl::init(""));
 
-  struct ScopImporter : public RegionPass {
+  struct ScopImporter : public ScopPass {
     static char ID;
     Scop *S;
     Dependences *D;
-    explicit ScopImporter() : RegionPass(ID) {}
+    explicit ScopImporter() : ScopPass(ID) {}
     bool updateScattering(Scop *S, openscop_scop_p OScop);
 
     std::string getFileName(Region *R) const;
-    virtual bool runOnRegion(Region *R, RGPassManager &RGM);
-    virtual void print(raw_ostream &OS, const Module *) const;
+    virtual bool runOnScop(Scop &S);
+    virtual void printScop(raw_ostream &OS) const;
     void getAnalysisUsage(AnalysisUsage &AU) const;
   };
 }
@@ -218,16 +219,16 @@ std::string ScopImporter::getFileName(Region *R) const {
   return FileName + ImportPostfix;
 }
 
-void ScopImporter::print(raw_ostream &OS, const Module *) const {}
+void ScopImporter::printScop(raw_ostream &OS) const {
+  S->print(OS);
+}
 
-bool ScopImporter::runOnRegion(Region *R, RGPassManager &RGM) {
-  S = getAnalysis<ScopInfo>().getScop();
+bool ScopImporter::runOnScop(Scop &scop) {
+  S = &scop;
+  Region &R = scop.getRegion();
   D = &getAnalysis<Dependences>();
 
-  if (!S)
-    return false;
-
-  std::string FileName = ImportDir + "/" + getFileName(R);
+  std::string FileName = ImportDir + "/" + getFileName(&R);
   FILE *F = fopen(FileName.c_str(), "r");
 
   if (!F) {
@@ -236,14 +237,14 @@ bool ScopImporter::runOnRegion(Region *R, RGPassManager &RGM) {
     return false;
   }
 
-  openscop_scop_p scop = openscop_scop_read(F);
+  openscop_scop_p openscop = openscop_scop_read(F);
   fclose(F);
 
-  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-  errs() << "Reading Scop '" << R->getNameStr() << "' in function '"
+  std::string FunctionName = R.getEntry()->getParent()->getNameStr();
+  errs() << "Reading Scop '" << R.getNameStr() << "' in function '"
     << FunctionName << "' from '" << FileName << "'.\n";
 
-  bool UpdateSuccessfull = updateScattering(S, scop);
+  bool UpdateSuccessfull = updateScattering(S, openscop);
 
   if (!UpdateSuccessfull) {
     errs() << "Update failed" << "\n";

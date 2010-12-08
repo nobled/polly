@@ -41,7 +41,7 @@ APInt polly::APInt_from_MPZ (const mpz_t mpz) {
 
   if (p) {
     APInt A((unsigned)mpz_sizeinbase(mpz, 2), (unsigned)sz , p);
-    A.zext(A.getBitWidth() + 1);
+    A = A.zext(A.getBitWidth() + 1);
 
     if (mpz_sgn(mpz) == -1)
       return -A;

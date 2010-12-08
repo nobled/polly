@@ -46,6 +46,8 @@
 using namespace polly;
 using namespace llvm;
 
+struct isl_set;
+
 namespace polly {
 
 static cl::opt<bool>
@@ -107,8 +109,8 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   IV->addIncoming(LB, PreheaderBB);
 
   // IV increment.
-  Stride.zext(LoopIVType->getBitWidth());
-  Value *StrideValue = ConstantInt::get(Context, Stride);
+  Value *StrideValue = ConstantInt::get(LoopIVType,
+                                        Stride.zext(LoopIVType->getBitWidth()));
   IncrementedIV = Builder->CreateAdd(IV, StrideValue, "polly.next_loopiv");
 
   // Exit condition.
@@ -123,12 +125,16 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
 class BlockGenerator {
   IRBuilder<> &Builder;
   ValueMapT &VMap;
+  VectorValueMapT &ValueMaps;
   Scop &S;
   ScopStmt &statement;
+  isl_set *scatteringDomain;
 
 public:
-  BlockGenerator(IRBuilder<> &B, ValueMapT &vmap, ScopStmt &Stmt)
-    : Builder(B), VMap(vmap), S(*Stmt.getParent()), statement(Stmt) {}
+  BlockGenerator(IRBuilder<> &B, ValueMapT &vmap, VectorValueMapT &vmaps,
+                 ScopStmt &Stmt, isl_set *domain)
+    : Builder(B), VMap(vmap), ValueMaps(vmaps), S(*Stmt.getParent()),
+    statement(Stmt), scatteringDomain(domain) {}
 
   const Region &getRegion() {
     return S.getRegion();
@@ -191,8 +197,8 @@ public:
   /// %vector_ptr= bitcast double* %p to <4 x double>*
   /// %vec_full = load <4 x double>* %vector_ptr
   ///
-  Value *generateFullVectorLoad(const LoadInst *load, ValueMapT &BBMap,
-                                int size = VECTORSIZE) {
+  Value *generateStrideOneLoad(const LoadInst *load, ValueMapT &BBMap,
+                               int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     const Type *vectorPtrType = getVectorPtrTy(pointer, size);
     Value *newPointer = getOperand(pointer, BBMap);
@@ -214,8 +220,8 @@ public:
   /// %splat = shufflevector <1 x double> %splat_one, <1 x
   ///       double> %splat_one, <4 x i32> zeroinitializer
   ///
-  Value *generateSplatVectorLoad(const LoadInst *load, ValueMapT &BBMap,
-                                 int size = VECTORSIZE) {
+  Value *generateStrideZeroLoad(const LoadInst *load, ValueMapT &BBMap,
+                                int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     const Type *vectorPtrType = getVectorPtrTy(pointer, 1);
     Value *newPointer = getOperand(pointer, BBMap);
@@ -248,9 +254,9 @@ public:
   /// %scalar 2 = load double* %p_2
   /// %vec_2 = insertelement <2 x double> %vec_1, double %scalar_1, i32 1
   ///
-  Value *generateScalarVectorLoad(const LoadInst *load, ValueMapT &BBMap,
-                                  VectorValueMapT &WholeMap,
-                                  int size = VECTORSIZE) {
+  Value *generateUnknownStrideLoad(const LoadInst *load,
+                                   VectorValueMapT &scalarMaps,
+                                   int size = VECTORSIZE) {
     const Value *pointer = load->getPointerOperand();
     VectorType *vectorType = VectorType::get(
       dyn_cast<PointerType>(pointer->getType())->getElementType(), size);
@@ -258,7 +264,7 @@ public:
     Value *vector = UndefValue::get(vectorType);
 
     for (int i = 0; i < size; i++) {
-      Value *newPointer = getOperand(pointer, WholeMap[i]);
+      Value *newPointer = getOperand(pointer, scalarMaps[i]);
       Value *scalarLoad = Builder.CreateLoad(newPointer,
                                              load->getNameStr() + "_p_scalar_");
       vector = Builder.CreateInsertElement(vector, scalarLoad,
@@ -278,11 +284,11 @@ public:
   }
 
   /// @brief Load a value (or several values as a vector) from memory.
-  void generateLoad(const LoadInst *load, ValueMapT &BBMap,
-                    ValueMapT &VectorMap, VectorValueMapT &WholeMap) {
+  void generateLoad(const LoadInst *load, ValueMapT &vectorMap,
+                    VectorValueMapT &scalarMaps) {
 
-    if (WholeMap.size() == 1) {
-      BBMap[load] = generateScalarLoad(load, BBMap);
+    if (scalarMaps.size() == 1) {
+      scalarMaps[0][load] = generateScalarLoad(load, scalarMaps[0]);
       return;
     }
 
@@ -290,42 +296,42 @@ public:
 
     MemoryAccess &Access = statement.getAccessFor(load);
 
-    if (Access.isConstant(NULL))
-      newLoad = generateSplatVectorLoad(load, BBMap);
-    else if (Access.isStrideOne(NULL))
-      newLoad = generateFullVectorLoad(load, BBMap);
-    else
-      newLoad = generateScalarVectorLoad(load, BBMap, WholeMap);
+    assert(scatteringDomain && "No scattering domain available");
 
-    VectorMap[load] = newLoad;
+    if (Access.isStrideZero(scatteringDomain))
+      newLoad = generateStrideZeroLoad(load, scalarMaps[0]);
+    else if (Access.isStrideOne(scatteringDomain))
+      newLoad = generateStrideOneLoad(load, scalarMaps[0]);
+    else
+      newLoad = generateUnknownStrideLoad(load, scalarMaps);
+
+    vectorMap[load] = newLoad;
   }
 
-  int type;
-
   void copyInstruction(const Instruction *Inst, ValueMapT &BBMap,
-                       ValueMapT &VectorMap, VectorValueMapT &WholeMap) {
-    if (VectorMap.count(Inst))
+                       ValueMapT &vectorMap, VectorValueMapT &scalarMaps,
+                       int vectorDimension) {
+    if (vectorMap.count(Inst))
       return;
 
     if (Inst->isTerminator())
       return;
 
     if (const LoadInst *load = dyn_cast<LoadInst>(Inst)) {
-      generateLoad(load, BBMap, VectorMap, WholeMap);
-      type++;
+      generateLoad(load, vectorMap, scalarMaps);
       return;
     }
 
     if (const BinaryOperator *binaryInst = dyn_cast<BinaryOperator>(Inst)) {
-      Value *VectorLHS = getOperand(Inst->getOperand(0), BBMap, &VectorMap);
-      Value *VectorRHS = getOperand(Inst->getOperand(1), BBMap, &VectorMap);
+      Value *VectorLHS = getOperand(Inst->getOperand(0), BBMap, &vectorMap);
+      Value *VectorRHS = getOperand(Inst->getOperand(1), BBMap, &vectorMap);
 
       std::string newInstructionName =  Inst->getNameStr() + "_vector";
       Value *newInst = Builder.CreateBinOp(binaryInst->getOpcode(), VectorLHS,
                                         VectorRHS, newInstructionName);
-      if (VectorMap.count(Inst->getOperand(0))
-          || VectorMap.count(Inst->getOperand(1)))
-        VectorMap[Inst] = newInst;
+      if (vectorMap.count(Inst->getOperand(0))
+          || vectorMap.count(Inst->getOperand(1)))
+        vectorMap[Inst] = newInst;
       else
         BBMap[Inst] = newInst;
 
@@ -333,20 +339,20 @@ public:
     }
 
     if (const StoreInst *store = dyn_cast<StoreInst>(Inst)) {
-      if (VectorMap.count(store->getValueOperand()) > 0) {
+      if (vectorMap.count(store->getValueOperand()) > 0) {
         const Value *pointer = store->getPointerOperand();
         const Type *vectorPtrType = getVectorPtrTy(pointer);
-        Value *newPointer = getOperand(pointer, BBMap, &VectorMap);
+        Value *newPointer = getOperand(pointer, BBMap, &vectorMap);
 
         Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
                                                  "vector_ptr");
 
         Value *VectorVal = getOperand(store->getValueOperand(), BBMap,
-                                      &VectorMap);
+                                      &vectorMap);
         Value *newInst = Builder.CreateStore(VectorVal, VectorPtr);
 
-        if (VectorMap.count(store->getValueOperand()))
-          VectorMap[Inst] = newInst;
+        if (vectorMap.count(store->getValueOperand()))
+          vectorMap[Inst] = newInst;
 
         return;
       }
@@ -380,6 +386,14 @@ public:
       NewInst->setName("p_" + Inst->getName());
   }
 
+  int getVectorSize() {
+    return ValueMaps.size();
+  }
+
+  bool isVectorBlock() {
+    return getVectorSize() > 1;
+  }
+
   // Insert a copy of a basic block in the newly generated code.
   //
   // @param Builder The builder used to insert the code. It also specifies
@@ -389,12 +403,9 @@ public:
   //                is used to update the operands of the statements.
   //                For new statements a relation old->new is inserted in this
   //                map.
-  void copyBB(BasicBlock *BB, DominatorTree *DT,
-              std::vector<ValueMapT> *VectorVMap = 0) {
+  void copyBB(BasicBlock *BB, DominatorTree *DT) {
     Function *F = Builder.GetInsertBlock()->getParent();
     LLVMContext &Context = F->getContext();
-    type = 0;
-
     BasicBlock *CopyBB = BasicBlock::Create(Context,
                                             "polly.stmt_" + BB->getNameStr(),
                                             F);
@@ -402,24 +413,33 @@ public:
     DT->addNewBlock(CopyBB, Builder.GetInsertBlock());
     Builder.SetInsertPoint(CopyBB);
 
-    int vectorSize = 1;
-
-    if (VectorVMap)
-      vectorSize = VectorVMap->size();
-
-    VectorValueMapT BBMap(vectorSize);
-    ValueMapT VectorMap;
+    // Create two maps that store the mapping from the original instructions of
+    // the old basic block to their copies in the new basic block. Those maps
+    // are basic block local.
+    //
+    // As vector code generation is supported there is one map for scalar values
+    // and one for vector values.
+    //
+    // In case we just do scalar code generation, the vectorMap is not used and
+    // the scalarMap has just one dimension, which contains the mapping.
+    //
+    // In case vector code generation is done, an instruction may either appear
+    // in the vector map once (as it is calculating >vectorwidth< values at a
+    // time. Or (if the values are calculated using scalar operations), it
+    // appears once in every dimension of the scalarMap.
+    VectorValueMapT scalarBlockMap(getVectorSize());
+    ValueMapT vectorBlockMap;
 
     for (BasicBlock::const_iterator II = BB->begin(), IE = BB->end();
          II != IE; ++II)
-      for (int i = 0; i < vectorSize; i++) {
-        if (VectorVMap)
-          VMap = (*VectorVMap)[i];
+      for (int i = 0; i < getVectorSize(); i++) {
+        if (isVectorBlock())
+          VMap = ValueMaps[i];
 
-        copyInstruction(&*II, BBMap[i], VectorMap, BBMap);
+        copyInstruction(II, scalarBlockMap[i], vectorBlockMap,
+                        scalarBlockMap, i);
       }
   }
-
 };
 
 /// Class to generate LLVM-IR that calculates the value of a clast_expr.
@@ -631,17 +651,19 @@ public:
   }
 
   void codegen(const clast_user_stmt *u, std::vector<Value*> *IVS = NULL,
-               const char *iterator = NULL) {
+               const char *iterator = NULL, isl_set *scatteringDomain = 0) {
     ScopStmt *Statement = (ScopStmt *)u->statement->usr;
     BasicBlock *BB = Statement->getBasicBlock();
 
     if (u->substitutions)
       codegenSubstitutions(u->substitutions, Statement);
 
+    int vectorDimensions = IVS ? IVS->size() : 1;
+
+    VectorValueMapT VectorValueMap(vectorDimensions);
+
     if (IVS) {
       assert (u->substitutions && "Substitutions expected!");
-      std::vector<ValueMapT> VectorValueMap(IVS->size());
-
       int i = 0;
       for (std::vector<Value*>::iterator II = IVS->begin(), IE = IVS->end();
            II != IE; ++II) {
@@ -649,13 +671,10 @@ public:
         codegenSubstitutions(u->substitutions, Statement, i, &VectorValueMap);
         i++;
       }
-
-      BlockGenerator Generator(*Builder, ValueMap, *Statement);
-      Generator.copyBB(BB, DT, &VectorValueMap);
-      return;
     }
 
-    BlockGenerator Generator(*Builder, ValueMap, *Statement);
+    BlockGenerator Generator(*Builder, ValueMap, VectorValueMap, *Statement,
+                             scatteringDomain);
     Generator.copyBB(BB, DT);
   }
 
@@ -692,6 +711,8 @@ public:
   /// @param f The clast for loop to check.
   bool isParallelFor(const clast_for *f) {
     isl_set *loopDomain = isl_set_from_cloog_domain(f->domain);
+    assert(loopDomain && "Cannot access domain of loop");
+
     bool isParallel = DP->isParallelDimension(loopDomain,
                                               isl_set_n_dim(loopDomain) - 1);
 
@@ -703,8 +724,7 @@ public:
   }
 
   /// @brief Add a new definition of an openmp subfunction.
-  void addOpenMPSubfunction(Module *M)
-  {
+  Function* addOpenMPSubfunction(Module *M) {
       LLVMContext &Context = Builder->getContext();
 
       // Create name for the subfunction.
@@ -719,11 +739,7 @@ public:
       Function *FN = Function::Create(FT, Function::ExternalLinkage,
                                Name, M);
 
-      // TODO: Create call for GOMP_parallel_start.
-
-      // Create call for the subfunction.
-      Value *functionArgument = ConstantPointerNull::get(Type::getInt8PtrTy(Context));
-      Builder->CreateCall(FN, functionArgument);
+      return FN;
   }
 
   /// @brief Create an OpenMP parallel for loop.
@@ -733,8 +749,33 @@ public:
   void codegenForOpenMP(const clast_for *f) {
     Module *M = Builder->GetInsertBlock()->getParent()->getParent();
 
-    addOpenMPSubfunction(M);
+    Function *SubFunction = addOpenMPSubfunction(M);
 
+    // Create call for GOMP_parallel_loop_runtime_start.
+    Value *nullArgument = ConstantPointerNull::get(Builder->getInt8PtrTy());
+    Value *numberOfThreads = Builder->getInt32(0);
+    Value *lowerBound = ExpGen.codegen(f->LB);
+    Value *upperBound = ExpGen.codegen(f->UB);
+    APInt APStride = APInt_from_MPZ(f->stride);
+    const IntegerType *strideType = Builder->getInt64Ty();
+    Value *stride = ConstantInt::get(strideType,
+                                     APStride.zext(strideType->getBitWidth()));
+
+    SmallVector<Value *, 6> Arguments;
+    Arguments.push_back(SubFunction);
+    Arguments.push_back(nullArgument);
+    Arguments.push_back(numberOfThreads);
+    Arguments.push_back(lowerBound);
+    Arguments.push_back(upperBound);
+    Arguments.push_back(stride);
+
+    Function *parallelStartFunction = M->getFunction("GOMP_parallel_loop_runtime_start");
+    Builder->CreateCall(parallelStartFunction, Arguments.begin(), Arguments.end());
+
+    // Create call to the subfunction.
+    Builder->CreateCall(SubFunction, nullArgument);
+
+    // Create call for GOMP_parallel_end.
     Function *FN = M->getFunction("GOMP_parallel_end");
     Builder->CreateCall(FN);
   }
@@ -750,8 +791,8 @@ public:
     Value *LB = ExpGen.codegen(f->LB);
     APInt Stride = APInt_from_MPZ(f->stride);
     const IntegerType *LoopIVType = dyn_cast<IntegerType>(LB->getType());
-    Stride.zext(LoopIVType->getBitWidth());
-    Value *StrideValue = ConstantInt::get(Builder->getContext(), Stride);
+    Value *StrideValue = ConstantInt::get(LoopIVType,
+                                          Stride.zext(LoopIVType->getBitWidth()));
 
     std::vector<Value*> IVS(VECTORSIZE);
     IVS[0] = LB;
@@ -760,7 +801,11 @@ public:
       IVS[i] = Builder->CreateAdd(IVS[i-1], StrideValue, "p_vector_iv");
 
     CharMap[f->iterator] = LB;
-    codegen((const clast_user_stmt *)f->body, &IVS, f->iterator);
+
+    isl_set *scatteringDomain = isl_set_from_cloog_domain(f->domain);
+
+    codegen((const clast_user_stmt *)f->body, &IVS, f->iterator,
+            scatteringDomain);
 
   }
 
@@ -912,24 +957,26 @@ class CodeGeneration : public ScopPass {
       Function::Create(FT, Function::ExternalLinkage, "GOMP_parallel_end", M);
     }
 
-    Function *PsFN = M->getFunction("GOMP_parallel_start");
     // Check if the definition is already added. Otherwise add it.
-    if (!PsFN) {
+    if (!M->getFunction("GOMP_parallel_loop_runtime_start")) {
       // Creating type of first argument for GOMP_parallel_start.
-      std::vector<const Type*> Arguments(1, Type::getInt8PtrTy(Context));
-      FunctionType *FnArgTy = FunctionType::get(Type::getVoidTy(Context),
+      std::vector<const Type*> Arguments(1, Builder->getInt8PtrTy());
+      FunctionType *FnArgTy = FunctionType::get(Builder->getVoidTy(),
                                                 Arguments, false);
       PointerType *FnPtrTy = PointerType::getUnqual(FnArgTy);
 
-      // Prototype for GOMP_parallel_start.
+      // Prototype for GOMP_parallel_loop_runtime_start.
       std::vector<const Type*> PsArguments;
       PsArguments.push_back(FnPtrTy);
-      PsArguments.push_back(Type::getInt8PtrTy(Context));
-      PsArguments.push_back(Type::getInt32Ty(Context));
-      FunctionType *PsFT = FunctionType::get(Type::getVoidTy(Context),
+      PsArguments.push_back(Builder->getInt8PtrTy());
+      PsArguments.push_back(Builder->getInt32Ty());
+      PsArguments.push_back(Builder->getInt64Ty());
+      PsArguments.push_back(Builder->getInt64Ty());
+      PsArguments.push_back(Builder->getInt64Ty());
+      FunctionType *PsFT = FunctionType::get(Builder->getVoidTy(),
                                              PsArguments, false);
-      Function::Create(PsFT, Function::ExternalLinkage, "GOMP_parallel_start",
-                       M);
+      Function::Create(PsFT, Function::ExternalLinkage,
+                       "GOMP_parallel_loop_runtime_start", M);
     }
   }
 

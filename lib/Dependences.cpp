@@ -272,14 +272,17 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
     int missingDimensions = Stmt->getNumScattering()
       - isl_set_n_dim(loopDomain);
 
-    assert(missingDimensions >= 0 && "Scattering space too large");
-
     isl_set *scatteringDomain;
 
     if (missingDimensions > 0)
       scatteringDomain = isl_set_add_dims(isl_set_copy(loopDomain),
                                           isl_dim_set, missingDimensions);
-    else
+    else if (missingDimensions < 0) {
+      scatteringDomain = isl_set_project_out(isl_set_copy(loopDomain),
+                                             isl_dim_set,
+                                             Stmt->getNumScattering(),
+                                             -missingDimensions);
+    } else
       scatteringDomain = isl_set_copy(loopDomain);
 
     scatteringDomain = isl_set_set_tuple_name(scatteringDomain, "scattering");
