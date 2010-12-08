@@ -16,6 +16,7 @@
 #ifdef SCOPLIB_FOUND
 
 #include "polly/ScopInfo.h"
+#include "polly/ScopPass.h"
 #include "polly/ScopLib.h"
 
 #include "llvm/Support/CommandLine.h"
@@ -34,16 +35,15 @@ namespace {
               cl::Hidden, cl::value_desc("Directory path"), cl::ValueRequired,
               cl::init("."));
 
-  class ScopLibExporter : public RegionPass {
+  class ScopLibExporter : public ScopPass {
     Scop *S;
 
     std::string getFileName(Region *R) const;
   public:
     static char ID;
-    explicit ScopLibExporter() : RegionPass(ID) {}
+    explicit ScopLibExporter() : ScopPass(ID) {}
 
-    virtual bool runOnRegion(Region *R, RGPassManager &RGM);
-    void print(raw_ostream &OS, const Module *) const;
+    virtual bool runOnScop(Scop &scop);
     void getAnalysisUsage(AnalysisUsage &AU) const;
   };
 
@@ -73,13 +73,9 @@ std::string ScopLibExporter::getFileName(Region *R) const {
   return FileName;
 }
 
-void ScopLibExporter::print(raw_ostream &OS, const Module *) const {}
-
-bool ScopLibExporter::runOnRegion(Region *R, RGPassManager &RGM) {
-  S = getAnalysis<ScopInfo>().getScop();
-
-  if (!S)
-    return false;
+bool ScopLibExporter::runOnScop(Scop &scop) {
+  S = &scop;
+  Region *R = &S->getRegion();
 
   std::string FileName = ExportDir + "/" + getFileName(R);
   FILE *F = fopen(FileName.c_str(), "w");
