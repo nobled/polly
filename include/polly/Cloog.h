@@ -21,7 +21,7 @@
 // [1] http://www.cloog.org/ - The Chunky Loop Generator
 //
 //===----------------------------------------------------------------------===//
-//
+
 #ifndef POLLY_CLOOG_H
 #define POLLY_CLOOG_H
 #include "polly/ScopPass.h"
