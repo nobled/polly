@@ -18,6 +18,8 @@ using namespace llvm;
 using namespace polly;
 
 bool ScopPass::runOnRegion(Region *R, RGPassManager &RGM) {
+  S = 0;
+
   if ((S = getAnalysis<ScopInfo>().getScop()))
     return runOnScop(*S);
 
