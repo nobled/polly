@@ -212,7 +212,7 @@ bool ScopLibImporter::updateScattering(Scop *S, scoplib_scop_p OScop) {
 
   if (!D->isValidScattering(NewScattering)) {
     errs() << "OpenScop file contains a scattering that changes the "
-      << "dependences.\n";
+      << "dependences. Use -disable-polly-legality to continue anyways\n";
     return false;
   }
 
