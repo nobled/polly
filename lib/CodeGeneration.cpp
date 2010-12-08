@@ -109,8 +109,8 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   IV->addIncoming(LB, PreheaderBB);
 
   // IV increment.
-  Stride.zext(LoopIVType->getBitWidth());
-  Value *StrideValue = ConstantInt::get(Context, Stride);
+  Value *StrideValue = ConstantInt::get(LoopIVType,
+                                        Stride.zext(LoopIVType->getBitWidth()));
   IncrementedIV = Builder->CreateAdd(IV, StrideValue, "polly.next_loopiv");
 
   // Exit condition.
@@ -758,8 +758,8 @@ public:
     Value *upperBound = ExpGen.codegen(f->UB);
     APInt APStride = APInt_from_MPZ(f->stride);
     const IntegerType *strideType = Builder->getInt64Ty();
-    APStride.zext(strideType->getBitWidth());
-    Value *stride = ConstantInt::get(strideType, APStride);
+    Value *stride = ConstantInt::get(strideType,
+                                     APStride.zext(strideType->getBitWidth()));
 
     SmallVector<Value *, 6> Arguments;
     Arguments.push_back(SubFunction);
@@ -791,8 +791,8 @@ public:
     Value *LB = ExpGen.codegen(f->LB);
     APInt Stride = APInt_from_MPZ(f->stride);
     const IntegerType *LoopIVType = dyn_cast<IntegerType>(LB->getType());
-    Stride.zext(LoopIVType->getBitWidth());
-    Value *StrideValue = ConstantInt::get(Builder->getContext(), Stride);
+    Value *StrideValue = ConstantInt::get(LoopIVType,
+                                          Stride.zext(LoopIVType->getBitWidth()));
 
     std::vector<Value*> IVS(VECTORSIZE);
     IVS[0] = LB;
