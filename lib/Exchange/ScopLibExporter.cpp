@@ -28,23 +28,24 @@ using namespace llvm;
 using namespace polly;
 
 namespace {
-static cl::opt<std::string>
-ExportDir("polly-export-scoplib-dir",
-          cl::desc("The directory to export the .scoplib files to."),
-          cl::Hidden, cl::value_desc("Directory path"), cl::ValueRequired,
-          cl::init("."));
+  static cl::opt<std::string>
+    ExportDir("polly-export-scoplib-dir",
+              cl::desc("The directory to export the .scoplib files to."),
+              cl::Hidden, cl::value_desc("Directory path"), cl::ValueRequired,
+              cl::init("."));
 
-struct ScopLibExporter : public RegionPass {
-  static char ID;
-  Scop *S;
-  explicit ScopLibExporter() : RegionPass(ID) {}
+  class ScopLibExporter : public RegionPass {
+    Scop *S;
 
-  std::string getFileName(Region *R) const;
+    std::string getFileName(Region *R) const;
+  public:
+    static char ID;
+    explicit ScopLibExporter() : RegionPass(ID) {}
 
-  virtual bool runOnRegion(Region *R, RGPassManager &RGM);
-  void print(raw_ostream &OS, const Module *) const;
-  void getAnalysisUsage(AnalysisUsage &AU) const;
-};
+    virtual bool runOnRegion(Region *R, RGPassManager &RGM);
+    void print(raw_ostream &OS, const Module *) const;
+    void getAnalysisUsage(AnalysisUsage &AU) const;
+  };
 
 }
 
