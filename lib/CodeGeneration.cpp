@@ -742,6 +742,23 @@ public:
       return FN;
   }
 
+  /// @brief Add body to the subfunction.
+  void addOpenMPSubfunctionBody(Function *FN, const clast_for *f) {
+      LLVMContext &Context = FN->getContext();
+
+      // Create a new basic block to start insertion into.
+      BasicBlock *BB = BasicBlock::Create(Context, "entry", FN);
+
+      // Store the previous basic block.
+      BasicBlock *PrevBB = Builder->GetInsertBlock();
+
+      // Add the return instruction.
+      Builder->SetInsertPoint(BB);
+      Builder->CreateRetVoid();
+
+      // Restore the builder back to previous basic block.
+      Builder->SetInsertPoint(PrevBB);
+  }
   /// @brief Create an OpenMP parallel for loop.
   ///
   /// This loop reflects a loop as if it would have been created by an OpenMP
@@ -750,6 +767,8 @@ public:
     Module *M = Builder->GetInsertBlock()->getParent()->getParent();
 
     Function *SubFunction = addOpenMPSubfunction(M);
+
+    addOpenMPSubfunctionBody(SubFunction, f);
 
     // Create call for GOMP_parallel_loop_runtime_start.
     Value *nullArgument = ConstantPointerNull::get(Builder->getInt8PtrTy());
