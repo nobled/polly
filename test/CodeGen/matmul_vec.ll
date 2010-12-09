@@ -1,6 +1,4 @@
 ; RUN: %opt -polly-import -polly-import-dir=`dirname %s` -polly-codegen -enable-polly-vector -S -dce %s | FileCheck %s 
-; Currently fails because of a Cloog bug
-; XFAIL: *
 
 
 ; ModuleID = 'matmul_vec.s'
