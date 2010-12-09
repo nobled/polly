@@ -21,28 +21,39 @@
 
 #ifdef SCOPLIB_FOUND
 #include "polly/ScopInfo.h"
-#include "polly/ScopLib.h"
+#include "polly/Dependences.h"
 
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Program.h"
+#include "llvm/Support/MemoryBuffer.h"
+
+#include "polly/ScopLib.h"
 
 using namespace llvm;
 using namespace polly;
 
 namespace {
 
-  struct Pocc : public ScopPass {
+  class Pocc : public ScopPass {
+    sys::Path plutoStderr;
+    sys::Path plutoStdout;
+
+  public:
     static char ID;
     explicit Pocc() : ScopPass(ID) {}
 
     std::string getFileName(Region *R) const;
     virtual bool runOnScop(Scop &S);
+    void printScop(llvm::raw_ostream &OS) const;
     void getAnalysisUsage(AnalysisUsage &AU) const;
   };
 
 }
+
 char Pocc::ID = 0;
 bool Pocc::runOnScop(Scop &S) {
+  Dependences *D = 0; //&getAnalysis<Dependences>();
+
   // Create the scop file.
   sys::Path tempDir = sys::Path::GetTemporaryDirectory();
   sys::Path scopFile = tempDir;
@@ -64,8 +75,7 @@ bool Pocc::runOnScop(Scop &S) {
   // Execute pocc
   sys::Program program;
 
-  std::string poccName = "pocc";
-  sys::Path pocc = sys::Program::FindProgramByName(poccName);
+  sys::Path pocc = sys::Program::FindProgramByName("pocc");
 
   std::vector<const char*> arguments;
   arguments.push_back("pocc");
@@ -76,9 +86,9 @@ bool Pocc::runOnScop(Scop &S) {
   arguments.push_back("--output-scop");
   arguments.push_back(0);
 
-  sys::Path plutoStdout = tempDir;
+  plutoStdout = tempDir;
   plutoStdout.appendComponent("pluto.stdout");
-  sys::Path plutoStderr = tempDir;
+  plutoStderr = tempDir;
   plutoStderr.appendComponent("pluto.stderr");
 
   std::vector<sys::Path*> redirect;
@@ -86,14 +96,40 @@ bool Pocc::runOnScop(Scop &S) {
   redirect.push_back(&plutoStdout);
   redirect.push_back(&plutoStderr);
 
-  program.Execute(pocc, &arguments[0], 0, (sys::Path const **) &redirect[0]);
+  program.ExecuteAndWait(pocc, &arguments[0], 0,
+                         (sys::Path const **) &redirect[0]);
+
+  // Read the created scop file
+  sys::Path newScopFile = tempDir;
+  newScopFile.appendComponent("polly.pocc.c.scop");
+
+  FILE *poccFile = fopen(scopFile.c_str(), "r");
 
   return false;
+}
+
+void Pocc::printScop(raw_ostream &OS) const {
+  MemoryBuffer *stdoutBuffer = MemoryBuffer::getFile(plutoStdout.c_str());
+  MemoryBuffer *stderrBuffer = MemoryBuffer::getFile(plutoStderr.c_str());
+
+  errs() << "Pocc output\n";
+
+  if (stdoutBuffer) {
+    OS << "pocc stdout: " << stdoutBuffer->getBufferIdentifier() << "\n";
+    OS << stdoutBuffer->getBuffer() << "\n";
+  }
+
+  if (stderrBuffer) {
+    OS << "pocc stderr: " << plutoStderr.c_str() << "\n";
+    OS << stderrBuffer->getBuffer() << "\n";
+  }
+
 }
 
 void Pocc::getAnalysisUsage(AnalysisUsage &AU) const {
   ScopPass::getAnalysisUsage(AU);
   AU.addRequired<ScopInfo>();
+  AU.addRequired<Dependences>();
 }
 
 static RegisterPass<Pocc> A("polly-pocc",
