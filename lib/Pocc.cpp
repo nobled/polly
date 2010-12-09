@@ -26,11 +26,23 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/CommandLine.h"
 
 #include "polly/ScopLib.h"
 
 using namespace llvm;
 using namespace polly;
+
+static cl::opt<bool>
+PlutoTile("enable-pluto-tile",
+          cl::desc("Enable pluto tiling for polly"), cl::Hidden,
+          cl::value_desc("Pluto tiling enabled if true"),
+          cl::init(false));
+static cl::opt<bool>
+PlutoPrevector("enable-pluto-prevector",
+               cl::desc("Enable pluto prevectorization for polly"), cl::Hidden,
+               cl::value_desc("Pluto prevectorization enabled if true"),
+               cl::init(false));
 
 namespace {
 
@@ -84,6 +96,14 @@ bool Pocc::runOnScop(Scop &S) {
   arguments.push_back("--pluto-tile-scat");
   arguments.push_back("--cloogify-scheds");
   arguments.push_back("--output-scop");
+  arguments.push_back("--pluto");
+
+  if (PlutoTile)
+    arguments.push_back("--pluto-tile");
+
+  if (PlutoPrevector)
+    arguments.push_back("--pluto-prevector");
+
   arguments.push_back(0);
 
   plutoStdout = tempDir;
@@ -103,9 +123,9 @@ bool Pocc::runOnScop(Scop &S) {
   sys::Path newScopFile = tempDir;
   newScopFile.appendComponent("polly.pocc.c.scop");
 
-  FILE *poccFile = fopen(scopFile.c_str(), "r");
+  FILE *poccFile = fopen(newScopFile.c_str(), "r");
   ScopLib newScoplib(&S, poccFile, D);
-  scoplib.updateScattering();
+  if (newScoplib.updateScattering())
   fclose(poccFile);
 
   return false;
@@ -114,8 +134,6 @@ bool Pocc::runOnScop(Scop &S) {
 void Pocc::printScop(raw_ostream &OS) const {
   MemoryBuffer *stdoutBuffer = MemoryBuffer::getFile(plutoStdout.c_str());
   MemoryBuffer *stderrBuffer = MemoryBuffer::getFile(plutoStderr.c_str());
-
-  errs() << "Pocc output\n";
 
   if (stdoutBuffer) {
     OS << "pocc stdout: " << stdoutBuffer->getBufferIdentifier() << "\n";
