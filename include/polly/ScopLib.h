@@ -31,11 +31,13 @@ struct isl_map;
 struct isl_set;
 
 namespace polly {
+  class Dependences;
   class ScopStmt;
   class Scop;
   class ScopLib {
     Scop *PollyScop;
     scoplib_scop_p scoplib;
+    Dependences *D;
 
     std::map<const llvm::Value*, int> ArrayMap;
 
@@ -57,8 +59,10 @@ namespace polly {
 
   public:
     ScopLib(Scop *S);
+    ScopLib(Scop *S, FILE *F, Dependences *D);
     ~ScopLib();
     void print(FILE *F);
+    bool updateScattering();
 
   };
 }
