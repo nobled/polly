@@ -213,15 +213,30 @@ void TempScopInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
 
 bool TempScopInfo::isReduction(BasicBlock &BB) {
   int loadAccess = 0, storeAccess = 0;
+  const Value *storePointer;
+  const Value *loadPointer[2];
+
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
     Instruction &Inst = *I;
-    if (isa<LoadInst>(&Inst))
+    if (isa<LoadInst>(&Inst)) {
+      if (loadAccess >= 2)
+        return false;
+      loadPointer[loadAccess] = dyn_cast<LoadInst>(&Inst)->getPointerOperand();
       loadAccess++;
-    else if (isa<StoreInst>(&Inst))
+    } else if (isa<StoreInst>(&Inst)) {
+      if (storeAccess >= 1)
+        return false;
+      storePointer = dyn_cast<StoreInst>(&Inst)->getPointerOperand();
       storeAccess++;
+    }
   }
 
-  return (loadAccess == 2) && (storeAccess == 1);
+  if (storePointer == loadPointer[0])
+    return (storePointer != loadPointer[1]);
+  else if (storePointer == loadPointer[1])
+    return (storePointer != loadPointer[0]);
+
+  return false;
 }
 
 void TempScopInfo::buildAccessFunctions(Region &R, ParamSetType &Params,
