@@ -323,6 +323,8 @@ class TempScopInfo : public RegionPass {
   // of Scop.
   TempScop *buildTempScop(Region &R);
 
+  bool isReduction(BasicBlock &BB);
+
   void buildAccessFunctions(Region &RefRegion, ParamSetType &Params,
                             BasicBlock &BB);
 
