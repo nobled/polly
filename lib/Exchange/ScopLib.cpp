@@ -540,6 +540,58 @@ isl_map *mapFromMatrix(scoplib_matrix_p m, isl_dim *dim,
 
   return isl_map_from_basic_map(bmap);
 }
+/// @brief Create an isl constraint from a row of OpenScop integers.
+///
+/// @param row An array of isl/OpenScop integers.
+/// @param dim An isl dim object, describing how to spilt the dimensions.
+///
+/// @return An isl constraint representing this integer array.
+isl_constraint *constraintFromMatrixRowFull(isl_int *row, isl_dim *dim) {
+  isl_constraint *c;
+
+  unsigned NbOut = isl_dim_size(dim, isl_dim_out);
+  unsigned NbIn = isl_dim_size(dim, isl_dim_in);
+  unsigned NbParam = isl_dim_size(dim, isl_dim_param);
+
+  if (isl_int_is_zero(row[0]))
+    c = isl_equality_alloc(isl_dim_copy(dim));
+  else
+    c = isl_inequality_alloc(isl_dim_copy(dim));
+
+  unsigned current_column = 1;
+
+  for (unsigned j = 0; j < NbOut; ++j)
+    isl_constraint_set_coefficient(c, isl_dim_out, j, row[current_column++]);
+
+  for (unsigned j = 0; j < NbIn; ++j)
+    isl_constraint_set_coefficient(c, isl_dim_in, j, row[current_column++]);
+
+  for (unsigned j = 0; j < NbParam; ++j)
+    isl_constraint_set_coefficient(c, isl_dim_param, j, row[current_column++]);
+
+  isl_constraint_set_constant(c, row[current_column]);
+
+  return c;
+}
+
+/// @brief Create an isl map from a OpenScop matrix.
+///
+/// @param m The OpenScop matrix to translate.
+/// @param dim The dimensions that are contained in the OpenScop matrix.
+///
+/// @return An isl map representing m.
+isl_map *mapFromMatrix(scoplib_matrix_p m, isl_dim *dim) {
+  isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+
+  for (unsigned i = 0; i < m->NbRows; ++i) {
+    isl_constraint *c;
+
+    c = constraintFromMatrixRowFull(m->p[i], dim);
+    bmap = isl_basic_map_add_constraint(bmap, c);
+  }
+
+  return isl_map_from_basic_map(bmap);
+}
 
 /// @brief Create a new scattering for PollyStmt.
 ///
@@ -548,16 +600,28 @@ isl_map *mapFromMatrix(scoplib_matrix_p m, isl_dim *dim,
 ///
 /// @return An isl_map describing the scattering.
 isl_map *scatteringForStmt(scoplib_matrix_p m, ScopStmt *PollyStmt,
-                           unsigned scatteringDims) {
+                           int scatteringDims) {
 
   unsigned NbParam = PollyStmt->getNumParams();
   unsigned NbIterators = PollyStmt->getNumIterators();
+  unsigned NbScattering;
+
+  if (scatteringDims == -1)
+    NbScattering = m->NbColumns - 2 - NbParam - NbIterators;
+  else
+    NbScattering = scatteringDims;
 
   isl_ctx *ctx = PollyStmt->getParent()->getCtx();
-  isl_dim *dim = isl_dim_alloc(ctx, NbParam, NbIterators, scatteringDims);
+  isl_dim *dim = isl_dim_alloc(ctx, NbParam, NbIterators, NbScattering);
   dim = isl_dim_set_tuple_name(dim, isl_dim_out, "scattering");
   dim = isl_dim_set_tuple_name(dim, isl_dim_in, PollyStmt->getBaseName());
-  isl_map *map = mapFromMatrix(m, dim, scatteringDims);
+
+  isl_map *map;
+
+  if (scatteringDims == -1)
+    map = mapFromMatrix(m, dim);
+  else
+    map = mapFromMatrix(m, dim, scatteringDims);
 
   isl_dim_free(dim);
 
@@ -584,8 +648,18 @@ typedef Dependences::StatementToIslMapTy StatementToIslMapTy;
 /// @return A map that contains for each Statement the new scattering.
 StatementToIslMapTy *readScattering(Scop *S, scoplib_scop_p OScop) {
   StatementToIslMapTy &NewScattering = *(new StatementToIslMapTy());
+
   scoplib_statement_p stmt = OScop->statement;
-  unsigned numScatteringDims = maxScattering(stmt);
+
+  // Check if we have dimensions for each scattering or if each row
+  // represents a scattering dimension.
+  int numScatteringDims = -1;
+  ScopStmt *pollyStmt = *S->begin();
+
+  if (stmt->schedule->NbColumns
+      == 2 + pollyStmt->getNumParams() + pollyStmt->getNumIterators()) {
+    numScatteringDims = maxScattering(stmt);
+  }
 
   for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
 
