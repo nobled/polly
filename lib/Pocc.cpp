@@ -18,6 +18,8 @@
 
 #include "polly/Cloog.h"
 #include "polly/LinkAllPasses.h"
+
+#ifdef SCOPLIB_FOUND
 #include "polly/ScopInfo.h"
 #include "polly/ScopLib.h"
 
@@ -100,3 +102,4 @@ static RegisterPass<Pocc> A("polly-pocc",
 Pass* polly::createPoccPass() {
   return new Pocc();
 }
+#endif /* SCOPLIB_FOUND */
