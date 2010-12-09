@@ -52,7 +52,7 @@ namespace {
 
 char Pocc::ID = 0;
 bool Pocc::runOnScop(Scop &S) {
-  Dependences *D = 0; //&getAnalysis<Dependences>();
+  Dependences *D = &getAnalysis<Dependences>();
 
   // Create the scop file.
   sys::Path tempDir = sys::Path::GetTemporaryDirectory();
@@ -104,6 +104,9 @@ bool Pocc::runOnScop(Scop &S) {
   newScopFile.appendComponent("polly.pocc.c.scop");
 
   FILE *poccFile = fopen(scopFile.c_str(), "r");
+  ScopLib newScoplib(&S, poccFile, D);
+  scoplib.updateScattering();
+  fclose(poccFile);
 
   return false;
 }
