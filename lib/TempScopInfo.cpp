@@ -213,7 +213,9 @@ void TempScopInfo::buildAffineFunction(const SCEV *S, SCEVAffFunc &FuncToBuild,
 
 bool TempScopInfo::isReduction(BasicBlock &BB) {
   int loadAccess = 0, storeAccess = 0;
+  const StoreInst *storeInst;
   const Value *storePointer;
+  const LoadInst *loadInst[2];
   const Value *loadPointer[2];
 
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I) {
@@ -221,20 +223,45 @@ bool TempScopInfo::isReduction(BasicBlock &BB) {
     if (isa<LoadInst>(&Inst)) {
       if (loadAccess >= 2)
         return false;
-      loadPointer[loadAccess] = dyn_cast<LoadInst>(&Inst)->getPointerOperand();
+      loadInst[loadAccess] = dyn_cast<LoadInst>(&Inst);
+      loadPointer[loadAccess] = loadInst[loadAccess]->getPointerOperand();
       loadAccess++;
     } else if (isa<StoreInst>(&Inst)) {
       if (storeAccess >= 1)
         return false;
-      storePointer = dyn_cast<StoreInst>(&Inst)->getPointerOperand();
+      storeInst = dyn_cast<StoreInst>(&Inst);
+      storePointer = storeInst->getPointerOperand();
       storeAccess++;
     }
   }
 
+  if (loadPointer[0] == loadPointer[1])
+   return false;
+
+  const Value *reductionLoadInst;
   if (storePointer == loadPointer[0])
-    return (storePointer != loadPointer[1]);
+    reductionLoadInst = loadInst[0];
   else if (storePointer == loadPointer[1])
-    return (storePointer != loadPointer[0]);
+    reductionLoadInst = loadInst[1];
+  else
+    return false;
+
+  const Instruction *reductionInst =
+    dyn_cast<Instruction>(storeInst->getValueOperand());
+
+  // Check if the value stored is an instruction
+  if (!reductionInst)
+    return false;
+
+  // Check if this instruction is using the loaded value
+  for (User::const_op_iterator I = reductionInst->op_begin(),
+       E = reductionInst->op_end(); I != E; I++) {
+    const Value *operand = I->get();
+    if (operand == reductionLoadInst) {
+      // The loaded value's one and only use must be this one.
+      return operand->hasOneUse();
+    }
+  }
 
   return false;
 }
