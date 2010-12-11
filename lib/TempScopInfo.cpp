@@ -170,6 +170,9 @@ void TempScop::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
              FE = AccFunc->end(); FI != FE; ++FI)
           OS.indent(ind + 2) << (*FI).first << '\n';
 
+        if (Reductions.count(BB))
+          OS.indent(ind + 2) << "Reduction\n";
+
         OS.indent(ind) << "}\n";
       }
     }
@@ -423,6 +426,8 @@ TempScop *TempScopInfo::buildTempScop(Region &R) {
     BasicBlock *BB =  I->getNodeAs<BasicBlock>();
     buildAccessFunctions(R, TScop->getParamSet(), *BB);
     buildCondition(BB, R.getEntry(), *TScop);
+    if (isReduction(*BB))
+      TScop->Reductions.insert(BB);
   }
 
   buildLoopBounds(*TScop);

@@ -171,6 +171,9 @@ class TempScop {
   // Access function of bbs.
   const AccFuncMapType &AccFuncMap;
 
+  // Basic blocks detected as reductions
+  std::set<BasicBlock*> Reductions;
+
   friend class TempScopInfo;
 
   explicit TempScop(Region &r, LoopBoundMapType &loopBounds,
