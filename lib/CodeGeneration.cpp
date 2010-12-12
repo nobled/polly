@@ -744,16 +744,36 @@ public:
 
   /// @brief Add body to the subfunction.
   void addOpenMPSubfunctionBody(Function *FN, const clast_for *f) {
+      Module *M = Builder->GetInsertBlock()->getParent()->getParent();
       LLVMContext &Context = FN->getContext();
-
-      // Create a new basic block to start insertion into.
-      BasicBlock *BB = BasicBlock::Create(Context, "entry", FN);
 
       // Store the previous basic block.
       BasicBlock *PrevBB = Builder->GetInsertBlock();
 
+      // Create basic blocks.
+      BasicBlock *HeaderBB = BasicBlock::Create(Context, "entry", FN);
+      BasicBlock *ExitBB = BasicBlock::Create(Context, "exit", FN);
+      BasicBlock *BB1 = BasicBlock::Create(Context, "bb1", FN);
+      DT->addNewBlock(HeaderBB, PrevBB);
+      DT->addNewBlock(ExitBB, HeaderBB);
+      DT->addNewBlock(BB1, HeaderBB);
+
+      Builder->SetInsertPoint(HeaderBB);
+      Value *memTmp = Builder->CreateAlloca(Builder->getInt64Ty(),
+                                 0, "memtmp");
+      Value *memTmp1 = Builder->CreateAlloca(Builder->getInt64Ty(),
+                                 0, "memtmp1");
+      Builder->CreateBr(BB1);
+
+	  Builder->SetInsertPoint(BB1);
+      //Create call to GOMP_loop_runtime_next.
+      Function *runtimeNextFunction = M->getFunction("GOMP_loop_runtime_next");
+      runtimeNextFunction->addFnAttr(Attribute::NoUnwind);
+      Builder->CreateCall2(runtimeNextFunction, memTmp, memTmp1);
+      Builder->CreateBr(ExitBB);
+
+      Builder->SetInsertPoint(ExitBB);
       // Add the return instruction.
-      Builder->SetInsertPoint(BB);
       Builder->CreateRetVoid();
 
       // Restore the builder back to previous basic block.
@@ -997,6 +1017,20 @@ class CodeGeneration : public ScopPass {
       Function::Create(PsFT, Function::ExternalLinkage,
                        "GOMP_parallel_loop_runtime_start", M);
     }
+
+    // Check if the definition is already added. Otherwise add it.
+    if (!M->getFunction("GOMP_loop_runtime_next")) {
+      // Prototype for GOMP_parallel_loop_runtime_start.
+      std::vector<const Type*> runtimeNextArguments;
+      PointerType *int64PtrTy = PointerType::getUnqual(Builder->getInt64Ty());
+      runtimeNextArguments.push_back(int64PtrTy);
+      runtimeNextArguments.push_back(int64PtrTy);
+      FunctionType *runtimeNextFT = FunctionType::get(Builder->getInt8Ty(),
+                                             runtimeNextArguments, false);
+      Function::Create(runtimeNextFT, Function::ExternalLinkage,
+                       "GOMP_loop_runtime_next", M);
+	}
+
   }
 
   bool runOnScop(Scop &scop) {
