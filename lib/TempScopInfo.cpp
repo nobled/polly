@@ -253,10 +253,6 @@ bool TempScopInfo::isReduction(BasicBlock &BB) {
   if (!reductionInst)
     return false;
 
-  // Reduction operations must be associative and commutative
-  if (!reductionInst->isAssociative() || !reductionInst->isCommutative())
-    return false;
-
   // Check if this instruction is using the loaded value
   for (User::const_op_iterator I = reductionInst->op_begin(),
        E = reductionInst->op_end(); I != E; I++) {
