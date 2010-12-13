@@ -45,11 +45,6 @@ using namespace llvm;
 using namespace polly;
 
 STATISTIC(ScopFound,  "Number of valid Scops");
-static cl::opt<std::string>
-StrideOneArrays("polly-strideOne",
-                cl::desc("The arrays with stride one access"), cl::Hidden,
-                cl::value_desc("A comma separated list of array basenames"),
-                cl::ValueRequired, cl::init(""));
 STATISTIC(RichScopFound,   "Number of Scops containing a loop");
 
 
@@ -231,15 +226,78 @@ bool MemoryAccess::isStrideZero(const isl_set *domainSubset) const {
 }
 
 bool MemoryAccess::isStrideOne(const isl_set *domainSubset) const {
-  std::vector<std::string> Arrays;
-  split(StrideOneArrays, ',', Arrays);
+  isl_map *accessRelation = isl_map_copy(getAccessFunction());
+  isl_set *scatteringDomain = isl_set_copy(const_cast<isl_set*>(domainSubset));
+  isl_map *scattering = isl_map_copy(getStatement()->getScattering());
 
-  for (std::vector<std::string>::iterator A = Arrays.begin(), AE = Arrays.end();
-       A != AE; ++A)
-    if (*A == *getBaseName())
-      return true;
+  scattering = isl_map_reverse(scattering);
+  int difference = isl_map_n_in(scattering) - isl_set_n_dim(scatteringDomain);
+  scattering = isl_map_project_out(scattering, isl_dim_in,
+                                   isl_set_n_dim(scatteringDomain), difference);
+  scatteringDomain = isl_set_set_tuple_name(scatteringDomain, "scattering");
+  scattering = isl_map_set_tuple_name(scattering, isl_dim_in, "scattering");
+  isl_set *subDomain = isl_set_apply(isl_set_copy(scatteringDomain),
+                                     isl_map_copy(scattering));
 
-  return false;
+  // Get the set of accessed memory locations. If the minimal and the maximal
+  // element in this set is the same, the set contains just one element and
+  // this is a memory access, that always accesses the same element.
+  isl_set *accessDomain = isl_set_apply(subDomain,
+                                        isl_map_copy(accessRelation));
+
+  isl_dim *dim = isl_dim_alloc(getStatement()->getIslContext(),
+                               isl_set_n_param(accessDomain),
+                               isl_set_n_dim(accessDomain),
+                               isl_set_n_dim(accessDomain));
+
+  dim = isl_dim_set_tuple_name(dim, isl_dim_in,
+                               isl_set_get_tuple_name(accessDomain));
+  dim = isl_dim_set_tuple_name(dim, isl_dim_out,
+                               isl_set_get_tuple_name(accessDomain));
+
+  isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+  isl_int v;
+  isl_int_init(v);
+
+  // Only allow stride one access
+  for (int i = 0; i < isl_set_n_dim(accessDomain); ++i) {
+    isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+    isl_int_set_si(v, 1);
+    isl_constraint_set_coefficient(c, isl_dim_in, i, v);
+    isl_int_set_si(v, -1);
+    isl_constraint_set_coefficient(c, isl_dim_out, i, v);
+
+    if (i + 1 == isl_set_n_dim(accessDomain)) {
+      isl_int_set_si(v, -1);
+      isl_constraint_set_constant(c, v);
+    }
+
+    bmap = isl_basic_map_add_constraint(bmap, c);
+  }
+
+  isl_int_clear(v);
+
+  isl_map *map = isl_map_from_basic_map(bmap);
+
+  map = isl_map_intersect_range(map, isl_set_copy(accessDomain));
+  map = isl_map_intersect_domain(map, accessDomain);
+
+  // Get the next iteration
+  isl_map *nextScatt = isl_map_lex_gt(isl_set_get_dim(scatteringDomain));
+  nextScatt = isl_map_intersect_domain(nextScatt,
+                                       isl_set_copy(scatteringDomain));
+  nextScatt = isl_map_intersect_range(nextScatt,
+                                      isl_set_copy(scatteringDomain));
+  nextScatt = isl_map_lexmin(nextScatt);
+
+  nextScatt = isl_map_apply_range(nextScatt, isl_map_copy(scattering));
+  nextScatt = isl_map_apply_range(nextScatt, isl_map_copy(accessRelation));
+  nextScatt = isl_map_apply_domain(nextScatt, scattering);
+  nextScatt = isl_map_apply_domain(nextScatt, accessRelation);
+
+  map = isl_map_intersect(map, nextScatt);
+
+  return !isl_map_is_empty(map);
 }
 
 
