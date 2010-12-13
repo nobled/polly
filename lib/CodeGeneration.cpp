@@ -765,14 +765,23 @@ public:
                                  0, "memtmp1");
       Builder->CreateBr(BB1);
 
-	  Builder->SetInsertPoint(BB1);
-      //Create call to GOMP_loop_runtime_next.
+      Builder->SetInsertPoint(BB1);
+      // Create call to GOMP_loop_runtime_next.
       Function *runtimeNextFunction = M->getFunction("GOMP_loop_runtime_next");
-      runtimeNextFunction->addFnAttr(Attribute::NoUnwind);
-      Builder->CreateCall2(runtimeNextFunction, memTmp, memTmp1);
+      Value *ret1 = Builder->CreateCall2(runtimeNextFunction, memTmp, memTmp1);
+      Value *ret2 = Builder->CreateTrunc(ret1, Builder->getInt1Ty());
+      Builder->CreateICmpNE(ret2,
+                            Constant::getNullValue(ret2->getType()));
+      // TODO: This should be a conditional branch when the
+      //       actual body of the loop is written.
       Builder->CreateBr(ExitBB);
 
       Builder->SetInsertPoint(ExitBB);
+      // Create call to GOMP_loop_end_nowait.
+      // TODO: The call should be moved up to another basic block
+      //       when the actual body of the loop is written.
+      Function *endnowaitFunction = M->getFunction("GOMP_loop_end_nowait");
+      Builder->CreateCall(endnowaitFunction);
       // Add the return instruction.
       Builder->CreateRetVoid();
 
@@ -1031,6 +1040,14 @@ class CodeGeneration : public ScopPass {
                        "GOMP_loop_runtime_next", M);
 	}
 
+    // Check if the definition is already added. Otherwise add it.
+    if (!M->getFunction("GOMP_loop_end_nowait")) {
+      // Prototype for "GOMP_loop_end_nowait".
+      FunctionType *FT = FunctionType::get(Builder->getVoidTy(),
+                                           std::vector<const Type*>(), false);
+      Function::Create(FT, Function::ExternalLinkage,
+		       "GOMP_loop_end_nowait", M);
+    }
   }
 
   bool runOnScop(Scop &scop) {
