@@ -365,8 +365,7 @@ public:
                                                    "vector_ptr");
           Builder.CreateStore(vector, VectorPtr);
         } else {
-
-          for (int i = 0; i < scalarMaps.size(); i++) {
+          for (unsigned i = 0; i < scalarMaps.size(); i++) {
             Value *scalar = Builder.CreateExtractElement(vector,
                                                          Builder.getInt32(i));
             Value *newPointer = getOperand(pointer, scalarMaps[i]);
