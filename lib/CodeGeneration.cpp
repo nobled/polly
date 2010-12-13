@@ -345,13 +345,17 @@ public:
 
     if (const StoreInst *store = dyn_cast<StoreInst>(Inst)) {
       if (vectorMap.count(store->getValueOperand()) > 0) {
+
+        // We only need to generate one store if we are in vector mode.
+        if (vectorDimension > 0)
+          return;
+
         MemoryAccess &Access = statement.getAccessFor(store);
 
         assert(scatteringDomain && "No scattering domain available");
 
         const Value *pointer = store->getPointerOperand();
         Value *vector = getOperand(store->getValueOperand(), BBMap, &vectorMap);
-        Value *newInst;
 
         if (Access.isStrideOne(scatteringDomain)) {
           const Type *vectorPtrType = getVectorPtrTy(pointer);
@@ -359,19 +363,16 @@ public:
 
           Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
                                                    "vector_ptr");
-          newInst = Builder.CreateStore(vector, VectorPtr);
+          Builder.CreateStore(vector, VectorPtr);
         } else {
 
           for (int i = 0; i < scalarMaps.size(); i++) {
             Value *scalar = Builder.CreateExtractElement(vector,
                                                          Builder.getInt32(i));
             Value *newPointer = getOperand(pointer, scalarMaps[i]);
-            newInst = Builder.CreateStore(scalar, newPointer);
+            Builder.CreateStore(scalar, newPointer);
           }
         }
-
-        if (vectorMap.count(store->getValueOperand()))
-          vectorMap[Inst] = newInst;
 
         return;
       }
