@@ -238,6 +238,9 @@ bool TempScopInfo::isReduction(BasicBlock &BB) {
     }
   }
 
+  if (loadAccess < 2)
+    return false;
+
   if (loadPointer[0] == loadPointer[1])
    return false;
 
