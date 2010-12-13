@@ -186,12 +186,10 @@ MemoryAccess::MemoryAccess(const Value *BaseAddress, ScopStmt *Statement) {
 }
 
 void MemoryAccess::print(raw_ostream &OS) const {
-  OS.indent(12) << (isRead() ? "Reads" : "Writes") << " ";
-  WriteAsOperand(OS, getBaseAddr(), false);
-  OS << " at:\n";
+  OS.indent(12) << (isRead() ? "Read" : "Write") << "Access := \n";
   isl_printer *p = isl_printer_to_str(isl_map_get_ctx(getAccessFunction()));
   isl_printer_print_map(p, getAccessFunction());
-  OS.indent(16) << isl_printer_get_str(p) << "\n";
+  OS.indent(16) << isl_printer_get_str(p) << ";\n";
   isl_printer_free(p);
 }
 
@@ -609,21 +607,21 @@ void ScopStmt::print(raw_ostream &OS) const {
   OS << "\t" << getBaseName() << "\n";
   isl_printer *p = isl_printer_to_str(Parent.getCtx());
 
-  OS.indent(12) << "Domain:\n";
+  OS.indent(12) << "Domain :=\n";
 
   if (Domain) {
     isl_printer_print_set(p, Domain);
-    OS.indent(16) << isl_printer_get_str(p) << "\n";
+    OS.indent(16) << isl_printer_get_str(p) << ";\n";
   } else
     OS.indent(16) << "n/a\n";
 
-  OS.indent(12) << "Scattering:\n";
+  OS.indent(12) << "Scattering :=\n";
 
   isl_printer_flush(p);
 
   if (Domain) {
     isl_printer_print_map(p, Scattering);
-    OS.indent(16) << isl_printer_get_str(p) << "\n";
+    OS.indent(16) << isl_printer_get_str(p) << ";\n";
   } else
     OS.indent(16) << "n/a\n";
 
