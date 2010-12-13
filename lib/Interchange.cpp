@@ -18,6 +18,11 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/CommandLine.h"
 
+#include <isl/map.h>
+
+#define DEBUG_TYPE "polly-interchange"
+#include "llvm/Support/Debug.h"
+
 using namespace llvm;
 using namespace polly;
 
@@ -36,7 +41,18 @@ namespace {
 
 char Interchange::ID = 0;
 bool Interchange::runOnScop(Scop &S) {
-  // Execute Interchange
+  for (Scop::iterator SI = S.begin(), SE = S.end(); SI != SE; ++SI) {
+    ScopStmt *Stmt = *SI;
+    isl_map *Scattering = isl_map_copy(Stmt->getScattering());
+
+    DEBUG(
+      isl_printer *p = isl_printer_to_str(S.getCtx());
+      isl_printer_print_map(p, Scattering);
+      dbgs() << isl_printer_get_str(p) << '\n';
+      isl_printer_flush(p);
+      isl_printer_free(p);
+    );
+  }
 
   return false;
 }
