@@ -19,6 +19,7 @@ add_polly_library(LLVMPolly
   CodeGeneration.cpp
   Dependences.cpp
   IndependentBlocks.cpp
+  Interchange.cpp
   Pocc.cpp
   ScopPass.cpp
   ScopDetection.cpp

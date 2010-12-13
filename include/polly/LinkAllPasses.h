@@ -38,6 +38,7 @@ namespace polly {
   Pass *createDOTPrinterPass();
   Pass *createDOTViewerPass();
   Pass *createIndependentBlocksPass();
+  Pass *createInterchangePass();
   Pass *createScopInfoPass();
 
 #ifdef OPENSCOP_FOUND
@@ -78,6 +79,7 @@ namespace {
        createDOTPrinterPass();
        createDOTViewerPass();
        createIndependentBlocksPass();
+       createInterchangePass();
        createScopInfoPass();
 
 #ifdef OPENSCOP_FOUND
