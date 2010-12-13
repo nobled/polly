@@ -1,6 +1,4 @@
 ; RUN: %opt -polly-codegen -enable-polly-vector  -dce -S %s | FileCheck %s
-; Non stride one vector stores not yet supported.
-; XFAIL: *
 ; ModuleID = 'simple_vec_stride_x.s'
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
@@ -49,5 +47,13 @@ bb:
 ; CHECK: insertelement <4 x float> %tmp4_p_vec_8, float %tmp4_p_scalar_9, i32 2
 ; CHECK: load float* %p_scevgep1.moved.to.bb33
 ; CHECK: insertelement <4 x float> %tmp4_p_vec_10, float %tmp4_p_scalar_11, i32 3
-; CHECK: bitcast float* %p_scevgep.moved.to.bb3 to <4 x float>*
+; CHECK: extractelement <4 x float> %tmp4_p_vec_12, i32 0
+; CHECK: store float %0, float* %p_scevgep.moved.to.bb3
+; CHECK: extractelement <4 x float> %tmp4_p_vec_12, i32 1
+; CHECK: store float %1, float* %p_scevgep.moved.to.bb34
+; CHECK: extractelement <4 x float> %tmp4_p_vec_12, i32 2
+; CHECK: store float %2, float* %p_scevgep.moved.to.bb35
+; CHECK: extractelement <4 x float> %tmp4_p_vec_12, i32 3
+; CHECK: store float %3, float* %p_scevgep.moved.to.bb36
+
 

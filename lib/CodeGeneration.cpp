@@ -349,25 +349,31 @@ public:
 
         assert(scatteringDomain && "No scattering domain available");
 
+        const Value *pointer = store->getPointerOperand();
+        Value *vector = getOperand(store->getValueOperand(), BBMap, &vectorMap);
+        Value *newInst;
+
         if (Access.isStrideOne(scatteringDomain)) {
-          const Value *pointer = store->getPointerOperand();
           const Type *vectorPtrType = getVectorPtrTy(pointer);
           Value *newPointer = getOperand(pointer, BBMap, &vectorMap);
 
           Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
                                                    "vector_ptr");
+          newInst = Builder.CreateStore(vector, VectorPtr);
+        } else {
 
-          Value *VectorVal = getOperand(store->getValueOperand(), BBMap,
-                                        &vectorMap);
-          Value *newInst = Builder.CreateStore(VectorVal, VectorPtr);
-
-          if (vectorMap.count(store->getValueOperand()))
-            vectorMap[Inst] = newInst;
-
-          return;
+          for (int i = 0; i < scalarMaps.size(); i++) {
+            Value *scalar = Builder.CreateExtractElement(vector,
+                                                         Builder.getInt32(i));
+            Value *newPointer = getOperand(pointer, scalarMaps[i]);
+            newInst = Builder.CreateStore(scalar, newPointer);
+          }
         }
 
-        assert(false && "Non stride one vector stores not yet supported");
+        if (vectorMap.count(store->getValueOperand()))
+          vectorMap[Inst] = newInst;
+
+        return;
       }
     }
 
