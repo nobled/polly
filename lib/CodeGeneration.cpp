@@ -345,21 +345,29 @@ public:
 
     if (const StoreInst *store = dyn_cast<StoreInst>(Inst)) {
       if (vectorMap.count(store->getValueOperand()) > 0) {
-        const Value *pointer = store->getPointerOperand();
-        const Type *vectorPtrType = getVectorPtrTy(pointer);
-        Value *newPointer = getOperand(pointer, BBMap, &vectorMap);
+        MemoryAccess &Access = statement.getAccessFor(store);
 
-        Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
-                                                 "vector_ptr");
+        assert(scatteringDomain && "No scattering domain available");
 
-        Value *VectorVal = getOperand(store->getValueOperand(), BBMap,
-                                      &vectorMap);
-        Value *newInst = Builder.CreateStore(VectorVal, VectorPtr);
+        if (Access.isStrideOne(scatteringDomain)) {
+          const Value *pointer = store->getPointerOperand();
+          const Type *vectorPtrType = getVectorPtrTy(pointer);
+          Value *newPointer = getOperand(pointer, BBMap, &vectorMap);
 
-        if (vectorMap.count(store->getValueOperand()))
-          vectorMap[Inst] = newInst;
+          Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
+                                                   "vector_ptr");
 
-        return;
+          Value *VectorVal = getOperand(store->getValueOperand(), BBMap,
+                                        &vectorMap);
+          Value *newInst = Builder.CreateStore(VectorVal, VectorPtr);
+
+          if (vectorMap.count(store->getValueOperand()))
+            vectorMap[Inst] = newInst;
+
+          return;
+        }
+
+        assert(false && "Non stride one vector stores not yet supported");
       }
     }
 
