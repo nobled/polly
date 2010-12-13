@@ -506,6 +506,8 @@ ScopStmt::ScopStmt(Scop &parent, TempScop &tempScop,
   buildIterationDomain(tempScop, CurRegion);
   buildScattering(Scatter);
   buildAccesses(tempScop, CurRegion, TD);
+
+  IsReduction = tempScop.is_Reduction(*BB);
 }
 
 ScopStmt::ScopStmt(Scop &parent, SmallVectorImpl<unsigned> &Scatter)
@@ -555,6 +557,8 @@ ScopStmt::ScopStmt(Scop &parent, SmallVectorImpl<unsigned> &Scatter)
   for (std::set<const Value*>::iterator BI = BaseAddressSet.begin(),
        BE = BaseAddressSet.end(); BI != BE; ++BI)
     MemAccs.push_back(new MemoryAccess(*BI, this));
+
+  IsReduction = false;
 }
 
 unsigned ScopStmt::getNumParams() const {

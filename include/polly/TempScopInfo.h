@@ -182,6 +182,8 @@ class TempScop {
     AccFuncMap(accFuncMap) {}
 public:
 
+  bool is_Reduction(BasicBlock &BB) { return Reductions.count(&BB) != 0; }
+
   /// @name Information about this Temporary Scop.
   ///
   //@{

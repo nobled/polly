@@ -41,8 +41,14 @@ namespace {
 
 char Interchange::ID = 0;
 bool Interchange::runOnScop(Scop &S) {
+  if (std::distance(S.begin(), S.end()) != 2) // One statement besides the final statement
+    return false;
+
   for (Scop::iterator SI = S.begin(), SE = S.end(); SI != SE; ++SI) {
     ScopStmt *Stmt = *SI;
+    if (!Stmt->isReduction())
+      continue;
+
     isl_map *Scattering = isl_map_copy(Stmt->getScattering());
 
     const std::string MapString = "{scattering[i0, i1, i2, i3, i4] -> scattering[i0, i1, i2, i3, i4]}";
