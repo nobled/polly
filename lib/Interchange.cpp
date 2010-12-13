@@ -45,6 +45,13 @@ bool Interchange::runOnScop(Scop &S) {
     ScopStmt *Stmt = *SI;
     isl_map *Scattering = isl_map_copy(Stmt->getScattering());
 
+    const std::string MapString = "{scattering[i0, i1, i2, i3, i4] -> scattering[i0, i1, i2, i3, i4]}";
+    isl_map *Map = isl_map_read_from_str(Stmt->getIslContext(), MapString.c_str(), -1);
+
+    isl_map_add_dims(Map, isl_dim_param, Stmt->getNumParams());
+    Scattering = isl_map_apply_range(Scattering, Map);
+    Stmt->setScattering(Scattering);
+
     DEBUG(
       isl_printer *p = isl_printer_to_str(S.getCtx());
       isl_printer_print_map(p, Scattering);
