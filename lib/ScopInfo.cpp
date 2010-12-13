@@ -251,7 +251,7 @@ bool MemoryAccess::isStrideOne(const isl_set *domainSubset) const {
   isl_int_init(v);
 
   // Only allow stride one access
-  for (int i = 0; i < isl_set_n_dim(accessDomain); ++i) {
+  for (unsigned i = 0; i < isl_set_n_dim(accessDomain); ++i) {
     isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, 1);
     isl_constraint_set_coefficient(c, isl_dim_in, i, v);
