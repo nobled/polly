@@ -311,9 +311,14 @@ public:
   void copyInstruction(const Instruction *Inst, ValueMapT &BBMap,
                        ValueMapT &vectorMap, VectorValueMapT &scalarMaps,
                        int vectorDimension) {
+    // If this instruction is already in the vectorMap, a vector instruction
+    // was already issued, that calculates the values of all dimensions. No
+    // need to create any more instructions.
     if (vectorMap.count(Inst))
       return;
 
+    // Terminator instructions control the control flow. They are explicitally
+    // expressed in the clast and do not need to be copied.
     if (Inst->isTerminator())
       return;
 
