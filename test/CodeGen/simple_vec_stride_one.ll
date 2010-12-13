@@ -39,4 +39,5 @@ define i32 @main() nounwind {
 
 ; CHECK: bitcast float* {{.*}} to <4 x float>*
 ; CHECK: load <4 x float>*
+; CHECK: store <4 x float> %_p_vec_full, <4 x float>* %vector_ptr7
 
