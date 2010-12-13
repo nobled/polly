@@ -200,17 +200,38 @@ static cl::opt<bool>
                                &temp_must_dep, &temp_may_dep,
                                &temp_must_no_source, &temp_may_no_source);
 
+    DEBUG(errs().indent(4) << "\nDependences calculated\n");
+    DEBUG(
+      isl_printer *p = isl_printer_to_str(S->getCtx());
+
+      errs().indent(4) << "TempMustDep:=\n";
+      isl_printer_print_union_map(p, temp_must_dep);
+      errs().indent(8) << isl_printer_get_str(p) << ";\n";
+      isl_printer_flush(p);
+
+      errs().indent(4) << "MustDep:=\n";
+      isl_printer_print_union_map(p, must_dep);
+      errs().indent(8) << isl_printer_get_str(p) << ";\n";
+      isl_printer_flush(p);
+      isl_printer_free(p));
+
     // Remove redundant statements.
     temp_must_dep = isl_union_map_coalesce(temp_must_dep);
     temp_may_dep = isl_union_map_coalesce(temp_may_dep);
     temp_must_no_source = isl_union_set_coalesce(temp_must_no_source);
     temp_may_no_source = isl_union_set_coalesce(temp_may_no_source);
 
-    if (!isl_union_map_is_equal(temp_must_dep, must_dep))
+    if (!isl_union_map_is_equal(temp_must_dep, must_dep)) {
+      DEBUG(errs().indent(4) << "\nEqual 1 calculated\n");
       return false;
+    }
+
+    DEBUG(errs().indent(4) << "\nEqual 1 calculated\n");
 
     if (!isl_union_map_is_equal(temp_may_dep, may_dep))
       return false;
+
+    DEBUG(errs().indent(4) << "\nEqual 2 calculated\n");
 
     if (!isl_union_set_is_equal(temp_must_no_source, must_no_source))
       return false;
