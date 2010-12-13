@@ -27,6 +27,7 @@
 #include "llvm/Support/Program.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/system_error.h"
 
 #include "polly/ScopLib.h"
 
@@ -132,8 +133,9 @@ bool Pocc::runOnScop(Scop &S) {
 }
 
 void Pocc::printScop(raw_ostream &OS) const {
-  MemoryBuffer *stdoutBuffer = MemoryBuffer::getFile(plutoStdout.c_str());
-  MemoryBuffer *stderrBuffer = MemoryBuffer::getFile(plutoStderr.c_str());
+  error_code ec;
+  MemoryBuffer *stdoutBuffer = MemoryBuffer::getFile(plutoStdout.c_str(), ec);
+  MemoryBuffer *stderrBuffer = MemoryBuffer::getFile(plutoStderr.c_str(), ec);
 
   if (stdoutBuffer) {
     OS << "pocc stdout: " << stdoutBuffer->getBufferIdentifier() << "\n";
