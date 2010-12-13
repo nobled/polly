@@ -191,15 +191,6 @@ void MemoryAccess::print(raw_ostream &OS) const {
 void MemoryAccess::dump() const {
   print(errs());
 }
-static std::vector<std::string> &split(const std::string &s, char delim,
-                                       std::vector<std::string> &elems) {
-  std::stringstream ss(s);
-  std::string item;
-  while(std::getline(ss, item, delim)) {
-    elems.push_back(item);
-  }
-  return elems;
-}
 
 bool MemoryAccess::isStrideZero(const isl_set *domainSubset) const {
   isl_map *accessRelation = isl_map_copy(getAccessFunction());
