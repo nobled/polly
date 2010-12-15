@@ -857,8 +857,10 @@ public:
     Arguments.push_back(upperBound);
     Arguments.push_back(stride);
 
-    Function *parallelStartFunction = M->getFunction("GOMP_parallel_loop_runtime_start");
-    Builder->CreateCall(parallelStartFunction, Arguments.begin(), Arguments.end());
+    Function *parallelStartFunction =
+      M->getFunction("GOMP_parallel_loop_runtime_start");
+    Builder->CreateCall(parallelStartFunction, Arguments.begin(),
+                        Arguments.end());
 
     // Create call to the subfunction.
     Builder->CreateCall(SubFunction, nullArgument);
@@ -879,8 +881,8 @@ public:
     Value *LB = ExpGen.codegen(f->LB);
     APInt Stride = APInt_from_MPZ(f->stride);
     const IntegerType *LoopIVType = dyn_cast<IntegerType>(LB->getType());
-    Value *StrideValue = ConstantInt::get(LoopIVType,
-                                          Stride.zext(LoopIVType->getBitWidth()));
+     Stride =Stride.zext(LoopIVType->getBitWidth());
+    Value *StrideValue = ConstantInt::get(LoopIVType, Stride);
 
     std::vector<Value*> IVS(VECTORSIZE);
     IVS[0] = LB;
