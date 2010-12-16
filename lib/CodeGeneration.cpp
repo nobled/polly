@@ -783,10 +783,13 @@ public:
       BasicBlock *HeaderBB = BasicBlock::Create(Context, "entry", FN);
       BasicBlock *ExitBB = BasicBlock::Create(Context, "exit", FN);
       BasicBlock *BB1 = BasicBlock::Create(Context, "bb1", FN);
+      BasicBlock *BB2 = BasicBlock::Create(Context, "bb2", FN);
       DT->addNewBlock(HeaderBB, PrevBB);
       DT->addNewBlock(ExitBB, HeaderBB);
       DT->addNewBlock(BB1, HeaderBB);
+      DT->addNewBlock(BB2, HeaderBB);
 
+      // Fill up basic block HeaderBB.
       Builder->SetInsertPoint(HeaderBB);
       Value *memTmp = Builder->CreateAlloca(Builder->getInt64Ty(),
                                  0, "memtmp");
@@ -794,21 +797,30 @@ public:
                                  0, "memtmp1");
       Builder->CreateBr(BB1);
 
+      // Fill up basic block BB1.
       Builder->SetInsertPoint(BB1);
       // Create call to GOMP_loop_runtime_next.
       Function *runtimeNextFunction = M->getFunction("GOMP_loop_runtime_next");
       Value *ret1 = Builder->CreateCall2(runtimeNextFunction, memTmp, memTmp1);
       Value *ret2 = Builder->CreateTrunc(ret1, Builder->getInt1Ty());
-      Builder->CreateICmpNE(ret2,
+      Value *ret3 = Builder->CreateICmpNE(ret2,
                             Constant::getNullValue(ret2->getType()));
-      // TODO: This should be a conditional branch when the
-      //       actual body of the loop is written.
+      Builder->CreateCondBr(ret3, BB2, ExitBB);
+
+      // Fill up basic block BB2.
+      Builder->SetInsertPoint(BB2);
+      Value *ret4 = Builder->CreateLoad(memTmp);
+      Value *lowerBound = Builder->CreateTrunc(ret4, Builder->getInt32Ty());
+      Value *ret6 = Builder->CreateLoad(memTmp1);
+      Value *upperBound = Builder->CreateTrunc(ret6, Builder->getInt32Ty());
+
+      // Create body for the parallel loop.
+      codegenForSequential(f, lowerBound, upperBound);
       Builder->CreateBr(ExitBB);
 
+      // Fill up basic block ExitBB.
       Builder->SetInsertPoint(ExitBB);
       // Create call to GOMP_loop_end_nowait.
-      // TODO: The call should be moved up to another basic block
-      //       when the actual body of the loop is written.
       Function *endnowaitFunction = M->getFunction("GOMP_loop_end_nowait");
       Builder->CreateCall(endnowaitFunction);
       // Add the return instruction.
