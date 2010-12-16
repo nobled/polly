@@ -704,13 +704,19 @@ public:
   }
 
   /// @brief Create a classical sequential loop.
-  void codegenForSequential(const clast_for *f) {
+  void codegenForSequential(const clast_for *f, Value *LB = 0,
+                                                Value *UB = 0) {
     APInt Stride = APInt_from_MPZ(f->stride);
     PHINode *IV;
     Value *IncrementedIV;
     BasicBlock *AfterBB;
-    Value *LB = ExpGen.codegen(f->LB);
-    Value *UB = ExpGen.codegen(f->UB);
+    // The value of lowerbound and upperbound will be
+    // supplied, if this function is called while
+    // generating OpenMP code. Otherwise get the values.
+    if (LB == 0 && UB == 0) {
+        LB = ExpGen.codegen(f->LB);
+        UB = ExpGen.codegen(f->UB);
+    }
     createLoop(Builder, LB, UB, Stride, IV, AfterBB, IncrementedIV, DT);
     CharMap[f->iterator] = IV;
 
