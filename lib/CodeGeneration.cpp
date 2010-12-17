@@ -62,6 +62,13 @@ OpenMP("enable-polly-openmp",
        cl::value_desc("OpenMP code generation enabled if true"),
        cl::init(false));
 
+static cl::opt<bool>
+AtLeastOnce("enable-polly-atLeastOnce",
+       cl::desc("Give polly the hint, that every loop is executed at least"
+                "once"), cl::Hidden,
+       cl::value_desc("OpenMP code generation enabled if true"),
+       cl::init(false));
+
 static cl::opt<std::string>
 CodegenOnly("polly-codegen-only",
             cl::desc("Codegen only this function"), cl::Hidden,
@@ -114,8 +121,14 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   IncrementedIV = Builder->CreateAdd(IV, StrideValue, "polly.next_loopiv");
 
   // Exit condition.
-  Value *CMP = Builder->CreateICmpSLE(IV, UB);
-  Builder->CreateCondBr(CMP, BodyBB, AfterBB);
+  if (AtLeastOnce) { // At least on iteration.
+    UB = Builder->CreateAdd(UB, Builder->getInt64(1));
+    Value *CMP = Builder->CreateICmpEQ(IV, UB);
+    Builder->CreateCondBr(CMP, AfterBB, BodyBB);
+  } else { // Maybe not executed at all.
+    Value *CMP = Builder->CreateICmpSLE(IV, UB);
+    Builder->CreateCondBr(CMP, BodyBB, AfterBB);
+  }
   DT->addNewBlock(BodyBB, HeaderBB);
   DT->addNewBlock(AfterBB, HeaderBB);
 
