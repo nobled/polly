@@ -14,6 +14,7 @@
 #include "polly/LinkAllPasses.h"
 #include "polly/ScopDetection.h"
 #include "polly/Support/ScopHelper.h"
+#include "polly/Cloog.h"
 
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/RegionInfo.h"
@@ -490,6 +491,7 @@ void IndependentBlocks::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<ScalarEvolution>();
   AU.addRequired<ScopDetection>();
   AU.addPreserved<ScopDetection>();
+  AU.addPreserved<CloogInfo>();
 }
 
 bool IndependentBlocks::runOnFunction(llvm::Function &F) {
