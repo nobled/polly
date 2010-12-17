@@ -28,6 +28,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/system_error.h"
+#include "llvm/ADT/OwningPtr.h"
 
 #include "polly/ScopLib.h"
 
@@ -133,20 +134,22 @@ bool Pocc::runOnScop(Scop &S) {
 }
 
 void Pocc::printScop(raw_ostream &OS) const {
-  error_code ec;
-  MemoryBuffer *stdoutBuffer = MemoryBuffer::getFile(plutoStdout.c_str(), ec);
-  MemoryBuffer *stderrBuffer = MemoryBuffer::getFile(plutoStderr.c_str(), ec);
+  OwningPtr<MemoryBuffer> stdoutBuffer;
+  OwningPtr<MemoryBuffer> stderrBuffer;
 
-  if (stdoutBuffer) {
+  if (error_code ec = MemoryBuffer::getFile(plutoStdout.c_str(), stdoutBuffer))
+    OS << "Could not open pocc stdout file: " + ec.message();
+  else {
     OS << "pocc stdout: " << stdoutBuffer->getBufferIdentifier() << "\n";
     OS << stdoutBuffer->getBuffer() << "\n";
   }
 
-  if (stderrBuffer) {
+  if (error_code ec = MemoryBuffer::getFile(plutoStderr.c_str(), stderrBuffer))
+    OS << "Could not open pocc stderr file: " + ec.message();
+  else {
     OS << "pocc stderr: " << plutoStderr.c_str() << "\n";
     OS << stderrBuffer->getBuffer() << "\n";
   }
-
 }
 
 void Pocc::getAnalysisUsage(AnalysisUsage &AU) const {
