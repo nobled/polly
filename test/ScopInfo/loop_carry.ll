@@ -83,7 +83,7 @@ bb2:                                              ; preds = %bb, %entry
 ; CHECK:             Domain :=
 ; CHECK:                 [p0] -> { FinalRead[0] };
 ; CHECK:             Scattering :=
-; CHECK:                 [p0] -> { FinalRead[i0] -> scattering[2, o1, o2] };
+; CHECK:                 [p0] -> { FinalRead[i0] -> scattering[200000000, o1, o2] };
 ; CHECK:             ReadAccess := 
 ; CHECK:                 [p0] -> { FinalRead[i0] -> MemRef_a[o0] };
 ; CHECK:             ReadAccess := 

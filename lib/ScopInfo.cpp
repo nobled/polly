@@ -605,7 +605,10 @@ ScopStmt::ScopStmt(Scop &parent, SmallVectorImpl<unsigned> &Scatter)
   isl_constraint *c = isl_equality_alloc(dim);
   isl_int_set_si(v, -1);
   isl_constraint_set_coefficient(c, isl_dim_out, 0, v);
-  isl_int_set_si(v, Scatter[0]);
+
+  // TODO: This is incorrect. We should not use a very large number to ensure
+  // that this statement is executed last.
+  isl_int_set_si(v, 200000000);
   isl_constraint_set_constant(c, v);
 
   bmap = isl_basic_map_add_constraint(bmap, c);
