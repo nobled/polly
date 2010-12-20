@@ -192,103 +192,125 @@ void MemoryAccess::dump() const {
   print(errs());
 }
 
-bool MemoryAccess::isStrideZero(const isl_set *domainSubset) const {
-  isl_map *accessRelation = isl_map_copy(getAccessFunction());
-  isl_set *scatteringDomain = isl_set_copy(const_cast<isl_set*>(domainSubset));
-  isl_map *scattering = isl_map_copy(getStatement()->getScattering());
+// Create a map in the size of the provided set domain, that maps from the
+// one element of the provided set domain to another element of the provided
+// set domain.
+// The mapping is limited to all points that are equal in all but the last
+// dimension and for which the last dimension of the input is strict smaller
+// than the last dimension of the output.
+//
+//   getEqualAndLarger(set[i0, i1, ..., iX]):
+//
+//   set[i0, i1, ..., iX] -> set[o0, o1, ..., oX]
+//     : i0 = o0, i1 = o1, ..., i(X-1) = o(X-1), iX < oX
+//
+static isl_map *getEqualAndLarger(isl_dim *setDomain) {
+  isl_dim *mapDomain = isl_dim_map(setDomain);
+  isl_basic_map *bmap = isl_basic_map_universe(mapDomain);
 
-  scattering = isl_map_reverse(scattering);
-  int difference = isl_map_n_in(scattering) - isl_set_n_dim(scatteringDomain);
-  scattering = isl_map_project_out(scattering, isl_dim_in,
-                                   isl_set_n_dim(scatteringDomain), difference);
-  scatteringDomain = isl_set_set_tuple_name(scatteringDomain, "scattering");
-  scattering = isl_map_set_tuple_name(scattering, isl_dim_in, "scattering");
-  isl_set *subDomain = isl_set_apply(scatteringDomain, scattering);
+  // Set all but the last dimension to be equal for the input and output
+  //
+  //   input[i0, i1, ..., iX] -> output[o0, o1, ..., oX]
+  //     : i0 = o0, i1 = o1, ..., i(X-1) = o(X-1)
+  for (unsigned i = 0; i < isl_basic_map_n_in(bmap) - 1; ++i) {
+    isl_int v;
+    isl_int_init(v);
+    isl_constraint *c = isl_equality_alloc(isl_basic_map_get_dim(bmap));
 
-  // Get the set of accessed memory locations. If the minimal and the maximal
-  // element in this set is the same, the set contains just one element and
-  // this is a memory access, that always accesses the same element.
-  isl_set *accessDomain = isl_set_apply(subDomain, accessRelation);
-
-  isl_set *lexMin = isl_set_lexmin(isl_set_copy(accessDomain));
-  isl_set *lexMax = isl_set_lexmax(accessDomain);
-
-  return isl_set_is_equal(lexMin, lexMax);
-}
-
-bool MemoryAccess::isStrideOne(const isl_set *domainSubset) const {
-  isl_map *accessRelation = isl_map_copy(getAccessFunction());
-  isl_set *scatteringDomain = isl_set_copy(const_cast<isl_set*>(domainSubset));
-  isl_map *scattering = isl_map_copy(getStatement()->getScattering());
-
-  scattering = isl_map_reverse(scattering);
-  int difference = isl_map_n_in(scattering) - isl_set_n_dim(scatteringDomain);
-  scattering = isl_map_project_out(scattering, isl_dim_in,
-                                   isl_set_n_dim(scatteringDomain), difference);
-  scatteringDomain = isl_set_set_tuple_name(scatteringDomain, "scattering");
-  scattering = isl_map_set_tuple_name(scattering, isl_dim_in, "scattering");
-  isl_set *subDomain = isl_set_apply(isl_set_copy(scatteringDomain),
-                                     isl_map_copy(scattering));
-
-  // Get the set of accessed memory locations. If the minimal and the maximal
-  // element in this set is the same, the set contains just one element and
-  // this is a memory access, that always accesses the same element.
-  isl_set *accessDomain = isl_set_apply(subDomain,
-                                        isl_map_copy(accessRelation));
-
-  isl_dim *dim = isl_dim_alloc(getStatement()->getIslContext(),
-                               isl_set_n_param(accessDomain),
-                               isl_set_n_dim(accessDomain),
-                               isl_set_n_dim(accessDomain));
-
-  dim = isl_dim_set_tuple_name(dim, isl_dim_in,
-                               isl_set_get_tuple_name(accessDomain));
-  dim = isl_dim_set_tuple_name(dim, isl_dim_out,
-                               isl_set_get_tuple_name(accessDomain));
-
-  isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
-  isl_int v;
-  isl_int_init(v);
-
-  // Only allow stride one access
-  for (unsigned i = 0; i < isl_set_n_dim(accessDomain); ++i) {
-    isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int_set_si(v, 1);
     isl_constraint_set_coefficient(c, isl_dim_in, i, v);
     isl_int_set_si(v, -1);
     isl_constraint_set_coefficient(c, isl_dim_out, i, v);
 
-    if (i + 1 == isl_set_n_dim(accessDomain)) {
-      isl_int_set_si(v, -1);
-      isl_constraint_set_constant(c, v);
-    }
-
     bmap = isl_basic_map_add_constraint(bmap, c);
+
+    isl_int_clear(v);
   }
 
+  // Set the last dimension of the input to be strict smaller than the
+  // last dimension of the output.
+  //
+  //   input[?,?,?,...,iX] -> output[?,?,?,...,oX] : iX < oX
+  //
+  unsigned lastDimension = isl_basic_map_n_in(bmap) - 1;
+  isl_int v;
+  isl_int_init(v);
+  isl_constraint *c = isl_inequality_alloc(isl_basic_map_get_dim(bmap));
+  isl_int_set_si(v, -1);
+  isl_constraint_set_coefficient(c, isl_dim_in, lastDimension, v);
+  isl_int_set_si(v, 1);
+  isl_constraint_set_coefficient(c, isl_dim_out, lastDimension, v);
+  isl_int_set_si(v, -1);
+  isl_constraint_set_constant(c, v);
   isl_int_clear(v);
 
-  isl_map *map = isl_map_from_basic_map(bmap);
+  bmap = isl_basic_map_add_constraint(bmap, c);
 
-  map = isl_map_intersect_range(map, isl_set_copy(accessDomain));
-  map = isl_map_intersect_domain(map, accessDomain);
+  return isl_map_from_basic_map(bmap);
+}
 
-  // Get the next iteration
-  isl_map *nextScatt = isl_map_lex_gt(isl_set_get_dim(scatteringDomain));
-  nextScatt = isl_map_intersect_domain(nextScatt,
-                                       isl_set_copy(scatteringDomain));
-  nextScatt = isl_map_intersect_range(nextScatt,
-                                      isl_set_copy(scatteringDomain));
+isl_set *MemoryAccess::getStride(const isl_set *domainSubset) const {
+  isl_map *accessRelation = isl_map_copy(getAccessFunction());
+  isl_set *scatteringDomain = isl_set_copy(const_cast<isl_set*>(domainSubset));
+  isl_map *scattering = isl_map_copy(getStatement()->getScattering());
+
+  scattering = isl_map_reverse(scattering);
+  int difference = isl_map_n_in(scattering) - isl_set_n_dim(scatteringDomain);
+  scattering = isl_map_project_out(scattering, isl_dim_in,
+                                   isl_set_n_dim(scatteringDomain),
+                                   difference);
+
+  isl_map *nextScatt = getEqualAndLarger(isl_set_get_dim(scatteringDomain));
   nextScatt = isl_map_lexmin(nextScatt);
+
+  scattering = isl_map_intersect_domain(scattering, scatteringDomain);
 
   nextScatt = isl_map_apply_range(nextScatt, isl_map_copy(scattering));
   nextScatt = isl_map_apply_range(nextScatt, isl_map_copy(accessRelation));
   nextScatt = isl_map_apply_domain(nextScatt, scattering);
   nextScatt = isl_map_apply_domain(nextScatt, accessRelation);
 
-  map = isl_map_intersect(map, nextScatt);
+  return isl_map_deltas(nextScatt);
+}
 
-  return !isl_map_is_empty(map);
+bool MemoryAccess::isStrideZero(const isl_set *domainSubset) const {
+  isl_set *stride = getStride(domainSubset);
+  isl_constraint *c = isl_equality_alloc(isl_set_get_dim(stride));
+
+  isl_int v;
+  isl_int_init(v);
+  isl_int_set_si(v, 1);
+  isl_constraint_set_coefficient(c, isl_dim_set, 0, v);
+  isl_int_set_si(v, 0);
+  isl_constraint_set_constant(c, v);
+  isl_int_clear(v);
+
+  isl_basic_set *bset = isl_basic_set_universe(isl_set_get_dim(stride));
+
+  bset = isl_basic_set_add_constraint(bset, c);
+  isl_set *strideZero = isl_set_from_basic_set(bset);
+
+  return isl_set_is_equal(stride, strideZero);
+}
+
+bool MemoryAccess::isStrideOne(const isl_set *domainSubset) const {
+  isl_set *stride = getStride(domainSubset);
+  isl_constraint *c = isl_equality_alloc(isl_set_get_dim(stride));
+
+  isl_int v;
+  isl_int_init(v);
+  isl_int_set_si(v, 1);
+  isl_constraint_set_coefficient(c, isl_dim_set, 0, v);
+  isl_int_set_si(v, -1);
+  isl_constraint_set_constant(c, v);
+  isl_int_clear(v);
+
+  isl_basic_set *bset = isl_basic_set_universe(isl_set_get_dim(stride));
+
+  bset = isl_basic_set_add_constraint(bset, c);
+  isl_set *strideZero = isl_set_from_basic_set(bset);
+
+  return isl_set_is_equal(stride, strideZero);
 }
 
 

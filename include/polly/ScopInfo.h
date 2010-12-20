@@ -126,6 +126,10 @@ public:
     return &BaseName;
   }
 
+  /// @brief Get the stride of this memory access in the specified domain
+  ///        subset.
+  isl_set *getStride(const isl_set *domainSubset) const;
+
   /// @brief Is consecutive memory accessed for a given
   ///        statement instance set?
   bool isStrideOne(const isl_set *domainSubset) const;
