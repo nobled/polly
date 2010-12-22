@@ -828,7 +828,7 @@ public:
 
       // Create body for the parallel loop.
       codegenForSequential(f, lowerBound, upperBound);
-      Builder->CreateBr(ExitBB);
+      Builder->CreateBr(BB1);
 
       // Fill up basic block ExitBB.
       Builder->SetInsertPoint(ExitBB);
