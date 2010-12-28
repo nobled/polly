@@ -190,8 +190,16 @@ bool ScopDetection::isValidCFG(BasicBlock &BB, Region &RefRegion,
   // Allow perfectly nested conditions.
   assert(Br->getNumSuccessors() == 2 && "Unexpected number of successors");
 
-  // We need to check if both operands of the ICmp are affine.
   if (ICmpInst *ICmp = dyn_cast<ICmpInst>(Condition)) {
+    // Unsigned comaprisons are not allowed. They trigger overflow problems
+    // in the code generation.
+    //
+    // TODO: This is not sufficient and just hides bugs. However it does pretty
+    // well.
+    if(ICmp->isUnsigned())
+      return false;
+
+    // Are both operands of the ICmp affine?
     if (isa<UndefValue>(ICmp->getOperand(0))
         || isa<UndefValue>(ICmp->getOperand(1))) {
       DEBUG(dbgs() << "Undefined operand in branch instruction of BB: ";
