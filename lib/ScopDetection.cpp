@@ -92,15 +92,19 @@ bool ScopDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
   bool PointerExists = false;
   assert(S && "S must not be null!");
 
-  if (isa<SCEVCouldNotCompute>(S))
+  if (isa<SCEVCouldNotCompute>(S)) {
+    DEBUG(dbgs() << "Non Affine: SCEV could not be computed\n");
     return false;
+  }
 
   for (AffineSCEVIterator I = affine_begin(S, SE), E = affine_end(); I != E;
        ++I) {
     // The constant part must be a SCEVConstant.
     // TODO: support sizeof in coefficient.
-    if (!isa<SCEVConstant>(I->second))
+    if (!isa<SCEVConstant>(I->second)) {
+      DEBUG(dbgs() << "Non Affine: Right hand side is not constant\n");
       return false;
+    }
 
     const SCEV *Var = I->first;
 
@@ -110,17 +114,23 @@ bool ScopDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
 
     // Memory accesses are allowed to have a base pointer.
     if (Var->getType()->isPointerTy()) {
-      if (!isMemoryAccess) return false;
+      if (!isMemoryAccess) {
+        DEBUG(dbgs() << "Non Affine: Pointer in non memory access\n");
+        return false;
+      }
 
-      assert(I->second->isOne() && "Only one as pointer coefficient allowed.");
+      assert(I->second->isOne() && "Only one as pointer coefficient allowed.\n");
       const SCEVUnknown *BaseAddr = dyn_cast<SCEVUnknown>(Var);
 
       if (!BaseAddr || isa<UndefValue>(BaseAddr->getValue())) return false;
 
       // BaseAddr must be invariant in Scop.
-      if (!isParameter(BaseAddr, RefRegion, *LI, *SE)) return false;
+      if (!isParameter(BaseAddr, RefRegion, *LI, *SE)) {
+        DEBUG(dbgs() << "Non Affine: Base address not invariant in SCoP\n");
+        return false;
+      }
 
-      assert(!PointerExists && "Found second base pointer.");
+      assert(!PointerExists && "Found second base pointer.\n");
       PointerExists = true;
       continue;
     }
@@ -129,6 +139,9 @@ bool ScopDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
         || isIndVar(Var, RefRegion, *LI, *SE))
       continue;
 
+    DEBUG(dbgs() << "Non Affine: " ;
+          Var->print(dbgs());
+          dbgs() << " is neither parameter nor induction variable\n");
     return false;
   }
   return !isMemoryAccess || PointerExists;
