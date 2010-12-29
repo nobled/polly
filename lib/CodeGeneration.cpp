@@ -75,6 +75,12 @@ CodegenOnly("polly-codegen-only",
             cl::value_desc("The function name to codegen"),
             cl::ValueRequired, cl::init(""));
 
+static cl::opt<bool>
+OpenMP32Bit("set-polly-openmp32",
+       cl::desc("Set 32 bit OpenMP code generation"), cl::Hidden,
+       cl::value_desc("Set 32 bit OpenMP code generation if true"),
+       cl::init(false));
+
 typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
 typedef std::vector<ValueMapT> VectorValueMapT;
@@ -133,6 +139,14 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   DT->addNewBlock(AfterBB, HeaderBB);
 
   Builder->SetInsertPoint(BodyBB);
+}
+
+const llvm::IntegerType *getOpenMPLongTy(IRBuilder<> *Builder)
+{
+  if(OpenMP32Bit)
+    return Builder->getInt32Ty();
+  else
+    return Builder->getInt64Ty();
 }
 
 class BlockGenerator {
@@ -611,7 +625,7 @@ public:
   }
 
   Value *codegen(const clast_expr *e) {
-    return codegen(e, Builder->getInt64Ty());
+    return codegen(e, getOpenMPLongTy(Builder));
   }
 };
 
@@ -803,9 +817,9 @@ public:
 
       // Fill up basic block HeaderBB.
       Builder->SetInsertPoint(HeaderBB);
-      Value *memTmp = Builder->CreateAlloca(Builder->getInt64Ty(),
+      Value *memTmp = Builder->CreateAlloca(getOpenMPLongTy(Builder),
                                  0, "memtmp");
-      Value *memTmp1 = Builder->CreateAlloca(Builder->getInt64Ty(),
+      Value *memTmp1 = Builder->CreateAlloca(getOpenMPLongTy(Builder),
                                  0, "memtmp1");
       Builder->CreateBr(BB1);
 
@@ -858,7 +872,7 @@ public:
     Value *lowerBound = ExpGen.codegen(f->LB);
     Value *upperBound = ExpGen.codegen(f->UB);
     APInt APStride = APInt_from_MPZ(f->stride);
-    const IntegerType *strideType = Builder->getInt64Ty();
+    const IntegerType *strideType = getOpenMPLongTy(Builder);
     Value *stride = ConstantInt::get(strideType,
                                      APStride.zext(strideType->getBitWidth()));
 
@@ -1073,9 +1087,9 @@ class CodeGeneration : public ScopPass {
       PsArguments.push_back(FnPtrTy);
       PsArguments.push_back(Builder->getInt8PtrTy());
       PsArguments.push_back(Builder->getInt32Ty());
-      PsArguments.push_back(Builder->getInt64Ty());
-      PsArguments.push_back(Builder->getInt64Ty());
-      PsArguments.push_back(Builder->getInt64Ty());
+      PsArguments.push_back(getOpenMPLongTy(Builder));
+      PsArguments.push_back(getOpenMPLongTy(Builder));
+      PsArguments.push_back(getOpenMPLongTy(Builder));
       FunctionType *PsFT = FunctionType::get(Builder->getVoidTy(),
                                              PsArguments, false);
       Function::Create(PsFT, Function::ExternalLinkage,
@@ -1086,9 +1100,9 @@ class CodeGeneration : public ScopPass {
     if (!M->getFunction("GOMP_loop_runtime_next")) {
       // Prototype for GOMP_parallel_loop_runtime_start.
       std::vector<const Type*> runtimeNextArguments;
-      PointerType *int64PtrTy = PointerType::getUnqual(Builder->getInt64Ty());
-      runtimeNextArguments.push_back(int64PtrTy);
-      runtimeNextArguments.push_back(int64PtrTy);
+      PointerType *intLongPtrTy = PointerType::getUnqual(getOpenMPLongTy(Builder));
+      runtimeNextArguments.push_back(intLongPtrTy);
+      runtimeNextArguments.push_back(intLongPtrTy);
       FunctionType *runtimeNextFT = FunctionType::get(Builder->getInt8Ty(),
                                              runtimeNextArguments, false);
       Function::Create(runtimeNextFT, Function::ExternalLinkage,
