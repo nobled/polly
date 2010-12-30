@@ -840,6 +840,10 @@ public:
       Value *ret6 = Builder->CreateLoad(memTmp1);
       Value *upperBound = Builder->CreateTrunc(ret6, Builder->getInt32Ty());
 
+      // Subtract one as the upper bound provided by openmp is a < comparison
+      // whereas the codegenForSequential function creates a <= comparison.
+      upperBound = Builder->CreateSub(upperBound, Builder->getInt32(1));
+
       // Create body for the parallel loop.
       codegenForSequential(f, lowerBound, upperBound);
       Builder->CreateBr(BB1);
@@ -871,6 +875,10 @@ public:
     Value *numberOfThreads = Builder->getInt32(0);
     Value *lowerBound = ExpGen.codegen(f->LB);
     Value *upperBound = ExpGen.codegen(f->UB);
+    // Add one as the upper bound provided by openmp is a < comparison
+    // whereas the codegenForSequential function creates a <= comparison.
+    upperBound = Builder->CreateAdd(upperBound, ConstantInt::get(
+                                      getOpenMPLongTy(Builder), 1));
     APInt APStride = APInt_from_MPZ(f->stride);
     const IntegerType *strideType = getOpenMPLongTy(Builder);
     Value *stride = ConstantInt::get(strideType,
