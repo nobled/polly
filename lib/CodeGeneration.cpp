@@ -167,6 +167,24 @@ public:
     return S.getRegion();
   }
 
+  Value* makeVectorOperand(Value *operand, int vectorSize) {
+    if (operand->getType()->isVectorTy())
+      return operand;
+
+    VectorType *vectorType = VectorType::get(operand->getType(), vectorSize);
+    Value *vector = UndefValue::get(vectorType);
+    vector = Builder.CreateInsertElement(vector, operand, Builder.getInt32(0));
+
+    std::vector<Constant*> splat;
+
+    for (int i = 0; i < vectorSize; i++)
+      splat.push_back (Builder.getInt32(0));
+
+    Constant *splatVector = ConstantVector::get(splat);
+
+    return Builder.CreateShuffleVector(vector, vector, splatVector);
+  }
+
   Value* getOperand(const Value *OldOperand, ValueMapT &BBMap,
                     ValueMapT *VectorMap = 0) {
     const Instruction *OpInst = dyn_cast<Instruction>(OldOperand);
@@ -355,14 +373,30 @@ public:
     }
 
     if (const BinaryOperator *binaryInst = dyn_cast<BinaryOperator>(Inst)) {
-      Value *VectorLHS = getOperand(Inst->getOperand(0), BBMap, &vectorMap);
-      Value *VectorRHS = getOperand(Inst->getOperand(1), BBMap, &vectorMap);
+      Value *opZero = Inst->getOperand(0);
+      Value *opOne = Inst->getOperand(1);
 
-      std::string newInstructionName =  Inst->getNameStr() + "_vector";
-      Value *newInst = Builder.CreateBinOp(binaryInst->getOpcode(), VectorLHS,
-                                        VectorRHS, newInstructionName);
-      if (vectorMap.count(Inst->getOperand(0))
-          || vectorMap.count(Inst->getOperand(1)))
+      bool isVectorOp = vectorMap.count(opZero) || vectorMap.count(opOne);
+
+      if (isVectorOp && vectorDimension > 0)
+        return;
+
+      Value *newOpZero, *newOpOne;
+      newOpZero = getOperand(opZero, BBMap, &vectorMap);
+      newOpOne = getOperand(opOne, BBMap, &vectorMap);
+
+
+      std::string name;
+      if (isVectorOp) {
+        newOpZero = makeVectorOperand(newOpZero, VECTORSIZE);
+        newOpOne = makeVectorOperand(newOpOne, VECTORSIZE);
+        name =  Inst->getNameStr() + "p_vec";
+      } else
+        name = Inst->getNameStr() + "p_sca";
+
+      Value *newInst = Builder.CreateBinOp(binaryInst->getOpcode(), newOpZero,
+                                           newOpOne, name);
+      if (isVectorOp)
         vectorMap[Inst] = newInst;
       else
         BBMap[Inst] = newInst;
