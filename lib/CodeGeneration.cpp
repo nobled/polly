@@ -835,15 +835,13 @@ public:
 
       // Fill up basic block BB2.
       Builder->SetInsertPoint(BB2);
-      Value *ret4 = Builder->CreateLoad(memTmp);
-      Value *lowerBound = Builder->CreateTrunc(ret4, Builder->getInt32Ty());
-      Value *ret6 = Builder->CreateLoad(memTmp1);
-      Value *upperBound = Builder->CreateTrunc(ret6, Builder->getInt32Ty());
+      Value *lowerBound = Builder->CreateLoad(memTmp);
+      Value *upperBound = Builder->CreateLoad(memTmp1);
 
       // Subtract one as the upper bound provided by openmp is a < comparison
       // whereas the codegenForSequential function creates a <= comparison.
-      upperBound = Builder->CreateSub(upperBound, Builder->getInt32(1));
-
+      upperBound = Builder->CreateSub(upperBound, ConstantInt::get(
+                                        getOpenMPLongTy(Builder), 1));
       // Create body for the parallel loop.
       codegenForSequential(f, lowerBound, upperBound);
       Builder->CreateBr(BB1);
