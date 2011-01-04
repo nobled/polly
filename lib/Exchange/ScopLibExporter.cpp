@@ -20,6 +20,7 @@
 #include "polly/ScopLib.h"
 
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Assembly/Writer.h"
 
 #include "stdio.h"
 #include "isl/set.h"

@@ -20,6 +20,7 @@
 #include "polly/ScopLib.h"
 #include "polly/Dependences.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Assembly/Writer.h"
 
 #define SCOPLIB_INT_T_IS_MP
 #include "scoplib/scop.h"

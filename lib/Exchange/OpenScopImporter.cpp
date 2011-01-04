@@ -19,6 +19,7 @@
 #include "polly/ScopPass.h"
 
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Assembly/Writer.h"
 
 #ifdef OPENSCOP_FOUND
 

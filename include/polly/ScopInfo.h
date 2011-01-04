@@ -32,6 +32,7 @@ namespace llvm {
   class Loop;
   class LoopInfo;
   class Type;
+  class PHINode;
 }
 
 struct isl_map;

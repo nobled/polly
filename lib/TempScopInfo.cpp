@@ -21,6 +21,7 @@
 #include "polly/Support/ScopHelper.h"
 
 #include "llvm/Analysis/RegionIterator.h"
+#include "llvm/Assembly/Writer.h"
 
 #define DEBUG_TYPE "polly-analyze-ir"
 #include "llvm/Support/Debug.h"

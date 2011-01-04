@@ -19,6 +19,7 @@
 #include "polly/ScopDetection.h"
 
 #include "llvm/Analysis/RegionPass.h"
+#include "llvm/Instructions.h"
 
 using namespace llvm;
 

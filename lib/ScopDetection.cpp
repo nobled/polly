@@ -53,6 +53,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Assembly/Writer.h"
 
 #define DEBUG_TYPE "polly-detect"
 #include "llvm/Support/Debug.h"

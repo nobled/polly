@@ -26,6 +26,8 @@
 #include "polly/LinkAllPasses.h"
 #include "polly/ScopInfo.h"
 
+#include "llvm/Assembly/Writer.h"
+
 #include "cloog/isl/domain.h"
 
 using namespace llvm;

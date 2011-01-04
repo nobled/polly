@@ -24,6 +24,7 @@
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/ADT/OwningPtr.h"
+#include "llvm/Assembly/Writer.h"
 
 #define DEBUG_TYPE "polly-independent"
 #include "llvm/Support/Debug.h"
