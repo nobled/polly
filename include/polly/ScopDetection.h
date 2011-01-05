@@ -85,6 +85,14 @@ class ScopDetection : public FunctionPass {
   RegionInfo *RI;
   //@}
 
+  /// @brief Context variables for SCoP detection.
+  struct DetectionContext {
+    Region &CurRegion; // The region to check.
+    bool Verifying;    // If we are in the verification phase?
+    DetectionContext(Region &R, bool Verify) : CurRegion(R), Verifying(Verify)
+      {}
+  };
+
   // Remember the valid regions
   typedef std::set<const Region*> RegionSet;
   RegionSet ValidRegions;
@@ -98,27 +106,24 @@ class ScopDetection : public FunctionPass {
 
   /// @brief Check if all basic block in the region are valid.
   ///
-  /// @param R The region to check.
-  /// @param verifying Should the Scop be verified? In this case we error,
-  ///                  if this is no Scop.
+  /// @param Context The context of scop detection.
+  ///
   /// @return True if all blocks in R are valid, false otherwise.
-  bool allBlocksValid(Region &R, bool verifying) const;
+  bool allBlocksValid(DetectionContext &Context) const;
 
   /// @brief Check the exit block of a region is valid.
   ///
-  /// @param R The region to check.
-  /// @param verifying Should the Scop be verified? In this case we error,
-  ///                  if this is no Scop.
+  /// @param Context The context of scop detection.
+  ///
   /// @return True if the exit of R is valid, false otherwise.
-  bool isValidExit(Region &R, bool verifying) const;
+  bool isValidExit(DetectionContext &Context) const;
 
   /// @brief Check if a region is a Scop.
   ///
-  /// @param R The region to check.
-  /// @param verifying Should the Scop be verified? In this case we error,
-  ///                  if this is no Scop.
+  /// @param Context The context of scop detection.
+  ///
   /// @return True if R is a Scop, false otherwise.
-  bool isValidRegion(Region &R, bool verifying) const;
+  bool isValidRegion(DetectionContext &Context) const;
 
   /// @brief Check if a call instruction can be part of a Scop.
   ///
@@ -129,13 +134,10 @@ class ScopDetection : public FunctionPass {
   /// @brief Check if a memory access can be part of a Scop.
   ///
   /// @param Inst The instruction accessing the memory.
-  /// @param RefRegion The region in respect to which we check the access
-  ///                  function.
-  /// @param verifying Should the Scop be verified? In this case we error,
-  ///                  if this is no Scop.
+  /// @param Context The context of scop detection.
+  ///
   /// @return True if the memory access is valid, false otherwise.
-  bool isValidMemoryAccess(Instruction &Inst, Region &RefRegion,
-                           bool verifying) const;
+  bool isValidMemoryAccess(Instruction &Inst, DetectionContext &Context) const;
 
   /// @brief Check if an instruction has any non trivial scalar dependencies
   ///        as part of a Scop.
@@ -143,39 +145,33 @@ class ScopDetection : public FunctionPass {
   /// @param Inst The instruction to check.
   /// @param RefRegion The region in respect to which we check the access
   ///                  function.
+  ///
   /// @return True if the instruction has scalar dependences, false otherwise.
   bool hasScalarDependency(Instruction &Inst, Region &RefRegion) const;
 
   /// @brief Check if an instruction can be part of a Scop.
   ///
   /// @param Inst The instruction to check.
-  /// @param RefRegion The region in respect to which we check the instruction.
-  /// @param verifying Should the Scop be verified? In this case we error,
-  ///                  if this is no Scop.
+  /// @param Context The context of scop detection.
+  ///
   /// @return True if the instruction is valid, false otherwise.
-  bool isValidInstruction(Instruction &I, Region &RefRegion,
-                          bool verifying) const;
+  bool isValidInstruction(Instruction &I, DetectionContext &Context) const;
 
   /// @brief Check if the BB can be part of a Scop.
   ///
   /// @param BB The basic block to check.
-  /// @param verifying Should the Scop be verified? In this case we error,
-  ///                  if this is no Scop.
+  /// @param Context The context of scop detection.
+  ///
   /// @return True if the basic block is valid, false otherwise.
-  bool isValidBasicBlock(BasicBlock &BB, Region &RefRegion,
-                         bool verifying) const;
+  bool isValidBasicBlock(BasicBlock &BB, DetectionContext &Context) const;
 
   /// @brief Check if the control flow in a basic block is valid.
   ///
   /// @param BB The BB to check the control flow.
-  /// @param RefRegion The region in respect to which we check the control
-  ///                  flow.
-  /// @param verifying Should the Scop be verified? In this case we error,
-  ///                  if this is no Scop.
+  /// @param Context The context of scop detection.
   ///
   /// @return True if the BB contains only valid control flow.
-  bool isValidCFG(BasicBlock &BB, Region &RefRegion,
-                  bool verifying) const;
+  bool isValidCFG(BasicBlock &BB, DetectionContext &Context) const;
 
   /// @brief Check if the SCEV expression is a valid affine function
   ///
@@ -193,13 +189,10 @@ class ScopDetection : public FunctionPass {
   /// @brief Is a loop valid with respect to a given region.
   ///
   /// @param L The loop to check.
-  /// @param RefRegion The region we analyse the loop in.
-  /// @param verifying Should the Scop be verified? In this case we error,
-  ///                  if this is no Scop.
+  /// @param Context The context of scop detection.
   ///
   /// @return True if the loop is valid in the region.
-  bool isValidLoop(Loop *L, Region &RefRegion,
-                   bool verifying) const;
+  bool isValidLoop(Loop *L, DetectionContext &Context) const;
 
 public:
   static char ID;

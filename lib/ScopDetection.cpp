@@ -70,7 +70,7 @@ STATISTIC(ValidRegion, "Number of regions that a valid part of Scop");
                                            "Number of bad regions for Scop: "\
                                            DESC)
 
-#define STATSCOP(NAME); assert(!verifying && #NAME); ++Bad##NAME##ForScop;
+#define STATSCOP(NAME); assert(!Context.Verifying && #NAME); ++Bad##NAME##ForScop;
 
 BADSCOP_STAT(CFG,         "CFG too complex");
 BADSCOP_STAT(IndVar,      "Non canonical induction variable in loop");
@@ -148,8 +148,9 @@ bool ScopDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
   return !isMemoryAccess || PointerExists;
 }
 
-bool ScopDetection::isValidCFG(BasicBlock &BB, Region &RefRegion,
-                               bool verifying) const {
+bool ScopDetection::isValidCFG(BasicBlock &BB, DetectionContext &Context) const
+{
+  Region &RefRegion = Context.CurRegion;
   TerminatorInst *TI = BB.getTerminator();
 
   // Return instructions are only valid if the region is the top level region.
@@ -261,12 +262,11 @@ bool ScopDetection::isValidCallInst(CallInst &CI) {
 }
 
 bool ScopDetection::isValidMemoryAccess(Instruction &Inst,
-                                        Region &RefRegion,
-                                        bool verifying) const {
+                                        DetectionContext &Context) const {
   Value *Ptr = getPointerOperand(Inst);
   const SCEV *AccessFunction = SE->getSCEV(Ptr);
 
-  if (!isValidAffineFunction(AccessFunction, RefRegion, true)) {
+  if (!isValidAffineFunction(AccessFunction, Context.CurRegion, true)) {
     DEBUG(dbgs() << "Bad memory addr " << *AccessFunction << "\n");
     STATSCOP(AffFunc);
     return false;
@@ -301,8 +301,7 @@ bool ScopDetection::hasScalarDependency(Instruction &Inst,
 }
 
 bool ScopDetection::isValidInstruction(Instruction &Inst,
-                                       Region &RefRegion,
-                                       bool verifying) const {
+                                       DetectionContext &Context) const {
   // Only canonical IVs are allowed.
   if (PHINode *PN = dyn_cast<PHINode>(&Inst))
     if (!isIndVar(PN, LI)) {
@@ -313,7 +312,7 @@ bool ScopDetection::isValidInstruction(Instruction &Inst,
     }
 
   // Scalar dependencies are not allowed.
-  if (hasScalarDependency(Inst, RefRegion)) {
+  if (hasScalarDependency(Inst, Context.CurRegion)) {
     DEBUG(dbgs() << "Scalar dependency found: ";
     WriteAsOperand(dbgs(), &Inst, false);
     dbgs() << "\n");
@@ -352,7 +351,7 @@ bool ScopDetection::isValidInstruction(Instruction &Inst,
 
   // Check the access function.
   if (isa<LoadInst>(Inst) || isa<StoreInst>(Inst))
-    return isValidMemoryAccess(Inst, RefRegion, verifying);
+    return isValidMemoryAccess(Inst, Context);
 
   // We do not know this instruction, therefore we assume it is invalid.
   DEBUG(dbgs() << "Bad instruction found: ";
@@ -363,25 +362,23 @@ bool ScopDetection::isValidInstruction(Instruction &Inst,
 }
 
 bool ScopDetection::isValidBasicBlock(BasicBlock &BB,
-                                      Region &RefRegion,
-                                      bool verifying) const {
-  if (!isValidCFG(BB, RefRegion, verifying))
+                                      DetectionContext &Context) const {
+  if (!isValidCFG(BB, Context))
     return false;
 
   // Check all instructions, except the terminator instruction.
   for (BasicBlock::iterator I = BB.begin(), E = --BB.end(); I != E; ++I)
-    if (!isValidInstruction(*I, RefRegion, verifying))
+    if (!isValidInstruction(*I, Context))
       return false;
 
   Loop *L = LI->getLoopFor(&BB);
-  if (L && L->getHeader() == &BB && !isValidLoop(L, RefRegion, verifying))
+  if (L && L->getHeader() == &BB && !isValidLoop(L, Context))
     return false;
 
   return true;
 }
 
-bool ScopDetection::isValidLoop(Loop *L, Region &RefRegion,
-                                bool verifying) const {
+bool ScopDetection::isValidLoop(Loop *L, DetectionContext &Context) const {
   PHINode *IndVar = L->getCanonicalInductionVariable();
   // No canonical induction variable.
   if (!IndVar) {
@@ -394,7 +391,7 @@ bool ScopDetection::isValidLoop(Loop *L, Region &RefRegion,
 
   // Is the loop count affine?
   const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
-  if (!isValidAffineFunction(LoopCount, RefRegion, false)) {
+  if (!isValidAffineFunction(LoopCount, Context.CurRegion)) {
     DEBUG(dbgs() << "Non affine loop bound for loop: ";
           WriteAsOperand(dbgs(), L->getHeader(), false);
           dbgs() << "\n");
@@ -412,12 +409,13 @@ Region *ScopDetection::expandRegion(Region &R) {
   DEBUG(dbgs() << "\tExpanding " << R.getNameStr() << "\n");
 
   while (TmpRegion) {
+    DetectionContext Context(*TmpRegion, false /*verifying*/);
     DEBUG(dbgs() << "\t\tTrying " << TmpRegion->getNameStr() << "\n");
 
-    if (!allBlocksValid(*TmpRegion, false /*verifying*/))
+    if (!allBlocksValid(Context))
       break;
 
-    if (isValidExit(*TmpRegion, false /*verifying*/)) {
+    if (isValidExit(Context)) {
       if (CurrentRegion != &R)
         delete CurrentRegion;
 
@@ -442,8 +440,9 @@ Region *ScopDetection::expandRegion(Region &R) {
 
 
 void ScopDetection::findScops(Region &R) {
+  DetectionContext Context(R, false /*verifying*/);
 
-  if (isValidRegion(R, false /*verifying*/)) {
+  if (isValidRegion(Context)) {
     ++ValidRegion;
     ValidRegions.insert(&R);
     return;
@@ -487,16 +486,20 @@ void ScopDetection::findScops(Region &R) {
   }
 }
 
-bool ScopDetection::allBlocksValid(Region &R, bool verifying) const {
+bool ScopDetection::allBlocksValid(DetectionContext &Context) const {
+  Region &R = Context.CurRegion;
+
   for (Region::block_iterator I = R.block_begin(), E = R.block_end(); I != E;
        ++I)
-    if (!isValidBasicBlock(*(I->getNodeAs<BasicBlock>()), R, verifying))
+    if (!isValidBasicBlock(*(I->getNodeAs<BasicBlock>()), Context))
       return false;
 
   return true;
 }
 
-bool ScopDetection::isValidExit(Region &R, bool verifying) const {
+bool ScopDetection::isValidExit(DetectionContext &Context) const {
+  Region &R = Context.CurRegion;
+
   // PHI nodes are not allowed in the exit basic block.
   if (BasicBlock *Exit = R.getExit()) {
     BasicBlock::iterator I = Exit->begin();
@@ -511,7 +514,9 @@ bool ScopDetection::isValidExit(Region &R, bool verifying) const {
   return true;
 }
 
-bool ScopDetection::isValidRegion(Region &R, bool verifying) const {
+bool ScopDetection::isValidRegion(DetectionContext &Context) const {
+  Region &R = Context.CurRegion;
+
   DEBUG(dbgs() << "Checking region: " << R.getNameStr() << "\n\t");
 
   // The toplevel region is no valid region.
@@ -521,10 +526,10 @@ bool ScopDetection::isValidRegion(Region &R, bool verifying) const {
     return false;
   }
 
-  if (!allBlocksValid(R, verifying))
+  if (!allBlocksValid(Context))
     return false;
 
-  if (!isValidExit(R, verifying))
+  if (!isValidExit(Context))
     return false;
 
   DEBUG(dbgs() << "OK\n");
@@ -544,7 +549,8 @@ bool ScopDetection::runOnFunction(llvm::Function &F) {
 
 void polly::ScopDetection::verifyRegion(const Region &R) const {
   assert(isMaxRegionInScop(R) && "Expect R is a valid region.");
-  isValidRegion(const_cast<Region&>(R), true /*verifying*/);
+  DetectionContext Context(const_cast<Region&>(R), true /*verifying*/);
+  isValidRegion(Context);
 }
 
 void polly::ScopDetection::verifyAnalysis() const {
