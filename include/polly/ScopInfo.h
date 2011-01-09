@@ -477,6 +477,8 @@ public:
     return maxScatterDim;
   }
 
+  /// @brief Get the name of this Scop.
+  std::string getNameStr() const;
 
   /// @brief Get the constraint on parameter of this Scop.
   ///

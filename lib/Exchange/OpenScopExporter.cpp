@@ -42,7 +42,7 @@ struct ScopExporter : public ScopPass {
   Scop *S;
   explicit ScopExporter() : ScopPass(ID) {}
 
-  std::string getFileName(Region *R) const;
+  std::string getFileName(Scop *S) const;
 
   virtual bool runOnScop(Scop &S);
   void printScop(raw_ostream &OS) const;
@@ -531,25 +531,10 @@ OpenScop::~OpenScop() {
   openscop_scop_free(openscop);
 }
 
-std::string ScopExporter::getFileName(Region *R) const {
-  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-  std::string ExitName, EntryName;
-
-  raw_string_ostream ExitStr(ExitName);
-  raw_string_ostream EntryStr(EntryName);
-
-  WriteAsOperand(EntryStr, R->getEntry(), false);
-  EntryStr.str();
-
-  if (R->getExit()) {
-    WriteAsOperand(ExitStr, R->getExit(), false);
-    ExitStr.str();
-  } else
-    ExitName = "FunctionExit";
-
-  std::string RegionName = EntryName + "---" + ExitName;
-  std::string FileName = FunctionName + "___" + RegionName + ".scop";
-
+std::string ScopExporter::getFileName(Scop *S) const {
+  std::string FunctionName =
+    S->getRegion().getEntry()->getParent()->getNameStr();
+  std::string FileName = FunctionName + "___" + S->getNameStr() + ".scop";
   return FileName;
 }
 
@@ -561,7 +546,7 @@ bool ScopExporter::runOnScop(Scop &scop) {
   S = &scop;
   Region &R = S->getRegion();
 
-  std::string FileName = ExportDir + "/" + getFileName(&R);
+  std::string FileName = ExportDir + "/" + getFileName(S);
   FILE *F = fopen(FileName.c_str(), "w");
 
   if (!F) {

@@ -785,6 +785,23 @@ std::string Scop::getContextStr() const {
     return stringFromIslSet(getContext());
 }
 
+std::string Scop::getNameStr() const {
+  std::string ExitName, EntryName;
+  raw_string_ostream ExitStr(ExitName);
+  raw_string_ostream EntryStr(EntryName);
+
+  WriteAsOperand(EntryStr, R.getEntry(), false);
+  EntryStr.str();
+
+  if (R.getExit()) {
+    WriteAsOperand(ExitStr, R.getExit(), false);
+    ExitStr.str();
+  } else
+    ExitName = "FunctionExit";
+
+  return EntryName + "---" + ExitName;
+}
+
 void Scop::printContext(raw_ostream &OS) const {
   OS << "Context:\n";
 

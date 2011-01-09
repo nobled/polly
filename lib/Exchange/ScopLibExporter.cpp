@@ -39,7 +39,7 @@ namespace {
   class ScopLibExporter : public ScopPass {
     Scop *S;
 
-    std::string getFileName(Region *R) const;
+    std::string getFileName(Scop *S) const;
   public:
     static char ID;
     explicit ScopLibExporter() : ScopPass(ID) {}
@@ -52,25 +52,10 @@ namespace {
 
 char ScopLibExporter::ID = 0;
 
-std::string ScopLibExporter::getFileName(Region *R) const {
-  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-  std::string ExitName, EntryName;
-
-  raw_string_ostream ExitStr(ExitName);
-  raw_string_ostream EntryStr(EntryName);
-
-  WriteAsOperand(EntryStr, R->getEntry(), false);
-  EntryStr.str();
-
-  if (R->getExit()) {
-    WriteAsOperand(ExitStr, R->getExit(), false);
-    ExitStr.str();
-  } else
-    ExitName = "FunctionExit";
-
-  std::string RegionName = EntryName + "---" + ExitName;
-  std::string FileName = FunctionName + "___" + RegionName + ".scoplib";
-
+std::string ScopLibExporter::getFileName(Scop *S) const {
+  std::string FunctionName =
+    S->getRegion().getEntry()->getParent()->getNameStr();
+  std::string FileName = FunctionName + "___" + S->getNameStr() + ".scoplib";
   return FileName;
 }
 
@@ -78,7 +63,7 @@ bool ScopLibExporter::runOnScop(Scop &scop) {
   S = &scop;
   Region *R = &S->getRegion();
 
-  std::string FileName = ExportDir + "/" + getFileName(R);
+  std::string FileName = ExportDir + "/" + getFileName(S);
   FILE *F = fopen(FileName.c_str(), "w");
 
   if (!F) {

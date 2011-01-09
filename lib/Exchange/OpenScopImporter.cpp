@@ -51,7 +51,7 @@ namespace {
     explicit ScopImporter() : ScopPass(ID) {}
     bool updateScattering(Scop *S, openscop_scop_p OScop);
 
-    std::string getFileName(Region *R) const;
+    std::string getFileName(Scop *S) const;
     virtual bool runOnScop(Scop &S);
     virtual void printScop(raw_ostream &OS) const;
     void getAnalysisUsage(AnalysisUsage &AU) const;
@@ -197,27 +197,11 @@ bool ScopImporter::updateScattering(Scop *S, openscop_scop_p OScop) {
 
   return true;
 }
-
-std::string ScopImporter::getFileName(Region *R) const {
-  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-  std::string ExitName, EntryName;
-
-  raw_string_ostream ExitStr(ExitName);
-  raw_string_ostream EntryStr(EntryName);
-
-  WriteAsOperand(EntryStr, R->getEntry(), false);
-  EntryStr.str();
-
-  if (R->getExit()) {
-    WriteAsOperand(ExitStr, R->getExit(), false);
-    ExitStr.str();
-  } else
-    ExitName = "FunctionExit";
-
-  std::string RegionName = EntryName + "---" + ExitName;
-  std::string FileName = FunctionName + "___" + RegionName + ".scop";
-
-  return FileName + ImportPostfix;
+std::string ScopImporter::getFileName(Scop *S) const {
+  std::string FunctionName =
+    S->getRegion().getEntry()->getParent()->getNameStr();
+  std::string FileName = FunctionName + "___" + S->getNameStr() + ".scop";
+  return FileName;
 }
 
 void ScopImporter::printScop(raw_ostream &OS) const {
@@ -229,7 +213,7 @@ bool ScopImporter::runOnScop(Scop &scop) {
   Region &R = scop.getRegion();
   D = &getAnalysis<Dependences>();
 
-  std::string FileName = ImportDir + "/" + getFileName(&R);
+  std::string FileName = ImportDir + "/" + getFileName(S) + ImportPostfix;
   FILE *F = fopen(FileName.c_str(), "r");
 
   if (!F) {

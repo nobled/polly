@@ -50,35 +50,20 @@ namespace {
     explicit ScopLibImporter() : RegionPass(ID) {}
 
     bool updateScattering(Scop *S, scoplib_scop_p OScop);
-      std::string getFileName(Region *R) const;
-      virtual bool runOnRegion(Region *R, RGPassManager &RGM);
-      virtual void print(raw_ostream &OS, const Module *) const;
-      void getAnalysisUsage(AnalysisUsage &AU) const;
+    std::string getFileName(Scop *S) const;
+    virtual bool runOnRegion(Region *R, RGPassManager &RGM);
+    virtual void print(raw_ostream &OS, const Module *) const;
+    void getAnalysisUsage(AnalysisUsage &AU) const;
     };
 }
 
 char ScopLibImporter::ID = 0;
 
 namespace {
-std::string ScopLibImporter::getFileName(Region *R) const {
-  std::string FunctionName = R->getEntry()->getParent()->getNameStr();
-  std::string ExitName, EntryName;
-
-  raw_string_ostream ExitStr(ExitName);
-  raw_string_ostream EntryStr(EntryName);
-
-  WriteAsOperand(EntryStr, R->getEntry(), false);
-  EntryStr.str();
-
-  if (R->getExit()) {
-    WriteAsOperand(ExitStr, R->getExit(), false);
-    ExitStr.str();
-  } else
-    ExitName = "FunctionExit";
-
-  std::string RegionName = EntryName + "---" + ExitName;
-  std::string FileName = FunctionName + "___" + RegionName + ".scoplib";
-
+std::string ScopLibImporter::getFileName(Scop *S) const {
+  std::string FunctionName =
+    S->getRegion().getEntry()->getParent()->getNameStr();
+  std::string FileName = FunctionName + "___" + S->getNameStr() + ".scoplib";
   return FileName;
 }
 
@@ -91,7 +76,7 @@ bool ScopLibImporter::runOnRegion(Region *R, RGPassManager &RGM) {
   if (!S)
     return false;
 
-  std::string FileName = ImportDir + "/" + getFileName(R) + ImportPostfix;
+  std::string FileName = ImportDir + "/" + getFileName(S) + ImportPostfix;
   FILE *F = fopen(FileName.c_str(), "r");
 
   if (!F) {
