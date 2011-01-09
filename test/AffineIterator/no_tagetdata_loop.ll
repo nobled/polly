@@ -8,7 +8,7 @@ bb2:                                              ; preds = %bb3.preheader, %bb2
   %k.09 = phi i64 [ 0, %bb3.preheader ], [ %1, %bb2 ] ; <i64> [#uses=2]
   %tmp19 = add i64 %k.09, %tmp18                  ; <i64> [#uses=1]
   %scevgep = getelementptr [8 x i32]* %x, i64 2, i64 %tmp19 ; <i32*> [#uses=1]
-; CHECK: sizeof(i32) * {0,+,1}<%bb2> + (20 * sizeof(i32)) * {0,+,1}<%bb3.preheader> + (35 * sizeof(i32)) * {0,+,1}<%bb5.preheader> + 1 * %x + (18 * sizeof(i32)) * 1
+; CHECK: sizeof(i32) * {0,+,1}<nuw><nsw><%bb2> + (20 * sizeof(i32)) * {0,+,1}<%bb3.preheader> + (35 * sizeof(i32)) * {0,+,1}<%bb5.preheader> + 1 * %x + (18 * sizeof(i32)) * 1
   %0 = tail call i32 (...)* @rnd() nounwind       ; <i32> [#uses=1]
   store i32 %0, i32* %scevgep, align 4
   %1 = add nsw i64 %k.09, 1                       ; <i64> [#uses=2]

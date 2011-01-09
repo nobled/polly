@@ -35,7 +35,7 @@ return:                                           ; preds = %bb
 ; WITHAF: Scop: bb => return      Parameters: (), Max Loop Depth: 1
 ; WITHAF: Bounds of Loop: bb:   { 127 }
 ; WITHAF:   BB: bb{
-; WITHAF:     Reads %a[8 * {0,+,1}<%bb> + 0]
-; WITHAF:     Reads %a[8 * {0,+,1}<%bb> + 16]
-; WITHAF:     Writes %a[8 * {0,+,1}<%bb> + 0]
+; WITHAF:     Reads %a[8 * {0,+,1}<nuw><nsw><%bb> + 0]
+; WITHAF:     Reads %a[8 * {0,+,1}<nuw><nsw><%bb> + 16]
+; WITHAF:     Writes %a[8 * {0,+,1}<nuw><nsw><%bb> + 0]
 ; WITHAF:   }

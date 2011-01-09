@@ -47,5 +47,5 @@ return:                                           ; preds = %bb3, %entry
 ; WITHAF: Bounds of Loop: bb2.preheader:        { 1 * %M + -1 }
 ; WITHAF:   Bounds of Loop: bb1:        { 1 * %N + -1 }
 ; WITHAF:     BB: bb1{
-; WITHAF:       Writes %a[1024 * {0,+,1}<%bb1> + 8 * {0,+,1}<%bb2.preheader> + 0]
+; WITHAF:       Writes %a[1024 * {0,+,1}<nuw><nsw><%bb1> + 8 * {0,+,1}<%bb2.preheader> + 0]
 ; WITHAF:     }
