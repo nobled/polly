@@ -88,5 +88,5 @@ bb2:                                              ; preds = %bb, %entry
 ; CHECK:                 [p0] -> { FinalRead[i0] -> MemRef_a[o0] };
 ; CHECK:             ReadAccess :=
 ; CHECK:                 [p0] -> { FinalRead[i0] -> MemRef_k.05.reg2mem[o0] };
-; CHECK:             ReadAccess := 
-; CHECK:                 [p0] -> { FinalRead[i0] -> MemRef_.reg2mem[o0] };
+; CHECK:             ReadAccess :=
+; CHECK:                 -> { FinalRead[i0] -> MemRef_.reg2mem[o0] };
