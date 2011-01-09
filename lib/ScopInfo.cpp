@@ -124,6 +124,39 @@ void MemoryAccess::setBaseName() {
   BaseName = "MemRef_" + BaseName;
 }
 
+static void replace(std::string& str, const std::string& find,
+                             const std::string& replace)
+{
+  size_t pos = 0;
+  while((pos = str.find(find, pos)) != std::string::npos)
+  {
+    str.replace(pos, find.length(), replace);
+    pos += replace.length();
+  }
+}
+
+static std::string stringFromIslMap(isl_map *map) {
+  isl_printer *p = isl_printer_to_str(isl_map_get_ctx(map));
+  isl_printer_print_map(p, map);
+  std::string string(isl_printer_get_str(p));
+  replace(string, ".", "_");
+  isl_printer_free(p);
+  return string;
+}
+
+static std::string stringFromIslSet(isl_set *set) {
+  isl_printer *p = isl_printer_to_str(isl_set_get_ctx(set));
+  isl_printer_print_set(p, set);
+  std::string string(isl_printer_get_str(p));
+  replace(string, ".", "_");
+  isl_printer_free(p);
+  return string;
+}
+
+std::string MemoryAccess::getAccessFunctionStr() const {
+  return stringFromIslMap(getAccessFunction());
+}
+
 isl_basic_map *MemoryAccess::createBasicAccessMap(ScopStmt *Statement) {
   isl_dim *dim = isl_dim_alloc(Statement->getIslContext(),
                                Statement->getNumParams(),
@@ -183,10 +216,7 @@ MemoryAccess::MemoryAccess(const Value *BaseAddress, ScopStmt *Statement) {
 
 void MemoryAccess::print(raw_ostream &OS) const {
   OS.indent(12) << (isRead() ? "Read" : "Write") << "Access := \n";
-  isl_printer *p = isl_printer_to_str(isl_map_get_ctx(getAccessFunction()));
-  isl_printer_print_map(p, getAccessFunction());
-  OS.indent(16) << isl_printer_get_str(p) << ";\n";
-  isl_printer_free(p);
+  OS.indent(16) << getAccessFunctionStr() << ";\n";
 }
 
 void MemoryAccess::dump() const {
@@ -635,6 +665,14 @@ ScopStmt::ScopStmt(Scop &parent, SmallVectorImpl<unsigned> &Scatter)
   IsReduction = false;
 }
 
+std::string ScopStmt::getDomainStr() const {
+  return stringFromIslSet(getDomain());
+}
+
+std::string ScopStmt::getScatteringStr() const {
+  return stringFromIslMap(getScattering());
+}
+
 unsigned ScopStmt::getNumParams() const {
   return Parent.getNumParams();
 }
@@ -680,31 +718,24 @@ ScopStmt::~ScopStmt() {
 
 void ScopStmt::print(raw_ostream &OS) const {
   OS << "\t" << getBaseName() << "\n";
-  isl_printer *p = isl_printer_to_str(Parent.getCtx());
 
   OS.indent(12) << "Domain :=\n";
 
   if (Domain) {
-    isl_printer_print_set(p, Domain);
-    OS.indent(16) << isl_printer_get_str(p) << ";\n";
+    OS.indent(16) << getDomainStr() << ";\n";
   } else
     OS.indent(16) << "n/a\n";
 
   OS.indent(12) << "Scattering :=\n";
 
-  isl_printer_flush(p);
-
   if (Domain) {
-    isl_printer_print_map(p, Scattering);
-    OS.indent(16) << isl_printer_get_str(p) << ";\n";
+    OS.indent(16) << getScatteringStr() << ";\n";
   } else
     OS.indent(16) << "n/a\n";
 
   for (MemoryAccessVec::const_iterator I = MemAccs.begin(), E = MemAccs.end();
       I != E; ++I)
     (*I)->print(OS);
-
-  isl_printer_free(p);
 }
 
 void ScopStmt::dump() const { print(dbgs()); }
@@ -750,6 +781,10 @@ Scop::~Scop() {
   //isl_ctx_free(ctx);
 }
 
+std::string Scop::getContextStr() const {
+    return stringFromIslSet(getContext());
+}
+
 void Scop::printContext(raw_ostream &OS) const {
   OS << "Context:\n";
 
@@ -758,10 +793,7 @@ void Scop::printContext(raw_ostream &OS) const {
     return;
   }
 
-  isl_printer *p = isl_printer_to_str(getCtx());
-  isl_printer_print_set(p, Context);
-  OS.indent(4) << isl_printer_get_str(p) << "\n";
-  isl_printer_free(p);
+  OS.indent(4) << getContextStr() << "\n";
 }
 
 void Scop::printStatements(raw_ostream &OS) const {

@@ -119,6 +119,9 @@ public:
   isl_map *getAccessFunction() { return AccessRelation; }
   isl_map *getAccessFunction() const { return AccessRelation; }
 
+  /// @brief Get an isl string representing this access function.
+  std::string getAccessFunctionStr() const;
+
   const Value *getBaseAddr() const {
     return BaseAddr;
   }
@@ -280,11 +283,17 @@ public:
   /// @return The iteration domain of this ScopStmt.
   isl_set *getDomain() const { return Domain; }
 
+  /// @brief Get an isl string representing this domain.
+  std::string getDomainStr() const;
+
   /// @brief Get the scattering function of this ScopStmt.
   ///
   /// @return The scattering function of this ScopStmt.
   isl_map *getScattering() const { return Scattering; }
   void setScattering(isl_map *scattering) { Scattering = scattering; }
+
+  /// @brief Get an isl string representing this scattering.
+  std::string getScatteringStr() const;
 
   /// @brief Get the BasicBlock represented by this ScopStmt.
   ///
@@ -473,6 +482,9 @@ public:
   ///
   /// @return The constraint on parameter of this Scop.
   inline isl_set *getContext() const { return Context; }
+
+  /// @brief Get an isl string representing the context.
+  std::string getContextStr() const;
 
   /// @name Statements Iterators
   ///
