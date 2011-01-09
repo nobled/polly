@@ -39,6 +39,8 @@ namespace polly {
   Pass *createDOTViewerPass();
   Pass *createIndependentBlocksPass();
   Pass *createInterchangePass();
+  Pass *createJSONExporterPass();
+  Pass *createJSONImporterPass();
   Pass *createScopInfoPass();
 
 #ifdef OPENSCOP_FOUND
@@ -80,6 +82,8 @@ namespace {
        createDOTViewerPass();
        createIndependentBlocksPass();
        createInterchangePass();
+       createJSONExporterPass();
+       createJSONImporterPass();
        createScopInfoPass();
 
 #ifdef OPENSCOP_FOUND

@@ -31,6 +31,7 @@ add_polly_library(LLVMPolly
   Support/ScopHelper.cpp
   json.c
   json_helper.c
+  Exchange/JSONExporter.cpp
   ${POLLY_EXCHANGE_FILES}
   ${POLLY_SCOPLIB_FILES}
   )
