@@ -29,6 +29,8 @@ add_polly_library(LLVMPolly
   Support/GmpConv.cpp
   Support/AffSCEVItTester.cpp
   Support/ScopHelper.cpp
+  json.c
+  json_helper.c
   ${POLLY_EXCHANGE_FILES}
   ${POLLY_SCOPLIB_FILES}
   )
