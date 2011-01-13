@@ -114,19 +114,8 @@ MemoryAccess::~MemoryAccess() {
   isl_map_free(getAccessFunction());
 }
 
-void MemoryAccess::setBaseName() {
-  raw_string_ostream OS(BaseName);
-  WriteAsOperand(OS, getBaseAddr(), false);
-  BaseName = OS.str();
-
-  // Remove the % in the name. This is not supported by isl.
-  BaseName.erase(0,1);
-  BaseName = "MemRef_" + BaseName;
-}
-
 static void replace(std::string& str, const std::string& find,
-                             const std::string& replace)
-{
+                             const std::string& replace) {
   size_t pos = 0;
   while((pos = str.find(find, pos)) != std::string::npos)
   {
@@ -135,11 +124,25 @@ static void replace(std::string& str, const std::string& find,
   }
 }
 
+static void makeIslCompatible(std::string& str) {
+  replace(str, ".", "_");
+}
+
+void MemoryAccess::setBaseName() {
+  raw_string_ostream OS(BaseName);
+  WriteAsOperand(OS, getBaseAddr(), false);
+  BaseName = OS.str();
+
+  // Remove the % in the name. This is not supported by isl.
+  BaseName.erase(0,1);
+  makeIslCompatible(BaseName);
+  BaseName = "MemRef_" + BaseName;
+}
+
 static std::string stringFromIslMap(isl_map *map) {
   isl_printer *p = isl_printer_to_str(isl_map_get_ctx(map));
   isl_printer_print_map(p, map);
   std::string string(isl_printer_get_str(p));
-  replace(string, ".", "_");
   isl_printer_free(p);
   return string;
 }
@@ -148,7 +151,6 @@ static std::string stringFromIslSet(isl_set *set) {
   isl_printer *p = isl_printer_to_str(isl_set_get_ctx(set));
   isl_printer_print_set(p, set);
   std::string string(isl_printer_get_str(p));
-  replace(string, ".", "_");
   isl_printer_free(p);
   return string;
 }
@@ -602,6 +604,7 @@ ScopStmt::ScopStmt(Scop &parent, TempScop &tempScop,
 
   // Remove the % in the name. This is not supported by isl.
   BaseName.erase(0, 1);
+  makeIslCompatible(BaseName);
   BaseName = "Stmt_" + BaseName;
 
   buildIterationDomain(tempScop, CurRegion);
