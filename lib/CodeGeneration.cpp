@@ -661,6 +661,14 @@ public:
   Value *codegen(const clast_expr *e) {
     return codegen(e, getOpenMPLongTy(Builder));
   }
+  // @brief Reset the CharMap.
+  //
+  // This function is called to reset the CharMap to new one, while generating
+  // OpenMP code.
+  void setIVS(CharMapT *IVSNew) {
+    IVS = IVSNew;
+  }
+
 };
 
 class ClastStmtCodeGen {
@@ -689,6 +697,8 @@ public:
   // appearance of such a string in the clast to the value created
   // because of a loop iv or an assignment.
   CharMapT CharMap;
+  // Use this while generating OpenMP code.
+  CharMapT OMPCharMap;
 
   protected:
   void codegen(const clast_assignment *a) {
@@ -782,6 +792,9 @@ public:
     createLoop(Builder, lowerBound, upperBound, Stride, IV, AfterBB,
                IncrementedIV, DT);
     CharMap[f->iterator] = IV;
+    // Update the CharMap used for generating OpenMP code.
+    if (parallelCodeGeneration)
+      OMPCharMap[f->iterator] = IV;
 
     if (f->body)
       codegen(f->body);
@@ -825,14 +838,57 @@ public:
       FunctionType *FT = FunctionType::get(Type::getVoidTy(Context),
                            Arguments, false);
       // Get unique name for the subfunction.
-      Function *FN = Function::Create(FT, Function::ExternalLinkage,
-                               Name, M);
+      Function *FN = Function::Create(FT, Function::InternalLinkage,
+                                      Name, M);
+
+      // Set name for the argument
+      Function::arg_iterator AI = FN->arg_begin();
+      AI->setName("omp_data");
 
       return FN;
   }
 
+  /// @brief Create and fill subfunction parameters.
+  ///
+  /// Create and fill the structure to store the parameters
+  /// of the OpenMP subfunction.
+  Value *addOpenMPSubfunctionParms() {
+    Module *M = Builder->GetInsertBlock()->getParent()->getParent();
+    std::vector<const Type*> structMembers;
+
+    // All the parameters required are available in the array CharMap. Store
+    // those into the structure.
+    for (CharMapT::iterator I = CharMap.begin(), E = CharMap.end();
+         I != E; I++) {
+      Value *Param = I->second;
+      structMembers.push_back(Param->getType());
+    }
+
+    Function *F = Builder->GetInsertBlock()->getParent();
+    const std::string &Name = F->getNameStr() + ".omp_struct";
+    StructType *structTy = StructType::get(Builder->getContext(),
+                           structMembers);
+    M->addTypeName(Name, structTy);
+
+    // Store the parameters into the structure.
+    Value *structData = Builder->CreateAlloca(structTy, 0,
+                             "omp_struct_data");
+    CharMapT::iterator V = CharMap.begin();
+    unsigned i = 0;
+    for (std::vector<const Type*>::iterator I = structMembers.begin(),
+         E = structMembers.end(); I != E; I++) {
+      Value *Param = V->second;
+      Value *storeAddr = Builder->CreateStructGEP(structData, i);
+      Builder->CreateStore(Param, storeAddr);
+      V++;
+      i++;
+    }
+    return structData;
+  }
+
   /// @brief Add body to the subfunction.
-  void addOpenMPSubfunctionBody(Function *FN, const clast_for *f) {
+  void addOpenMPSubfunctionBody(Function *FN, const clast_for *f,
+               Value *structData) {
       Module *M = Builder->GetInsertBlock()->getParent()->getParent();
       LLVMContext &Context = FN->getContext();
 
@@ -855,6 +911,17 @@ public:
                                  0, "memtmp");
       Value *memTmp1 = Builder->CreateAlloca(getOpenMPLongTy(Builder),
                                  0, "memtmp1");
+      // Extract values from the subfunction parameter and load those into
+      // the new CharMap.
+      Value *structVal = Builder->CreateBitCast(FN->arg_begin(),
+                           structData->getType());
+      unsigned i = 0;
+      for (CharMapT::iterator I = CharMap.begin(), E = CharMap.end();
+           I != E; I++) {
+        Value *loadAddr = Builder->CreateStructGEP(structVal, i);
+        OMPCharMap[I->first] = Builder->CreateLoad(loadAddr);
+        i++;
+      }
       Builder->CreateBr(BB1);
 
       // Fill up basic block BB1.
@@ -876,8 +943,14 @@ public:
       // whereas the codegenForSequential function creates a <= comparison.
       upperBound = Builder->CreateSub(upperBound, ConstantInt::get(
                                         getOpenMPLongTy(Builder), 1));
+      // Set CharMap to OMPCharMap.
+      ExpGen.setIVS(&OMPCharMap);
       // Create body for the parallel loop.
       codegenForSequential(f, lowerBound, upperBound);
+      // Reset CharMaps.
+      OMPCharMap.clear();
+      CharMap.clear();
+      ExpGen.setIVS(&CharMap);
       Builder->CreateBr(BB1);
 
       // Fill up basic block ExitBB.
@@ -899,11 +972,15 @@ public:
     Module *M = Builder->GetInsertBlock()->getParent()->getParent();
 
     Function *SubFunction = addOpenMPSubfunction(M);
+    Value *structData = addOpenMPSubfunctionParms();
 
-    addOpenMPSubfunctionBody(SubFunction, f);
+    addOpenMPSubfunctionBody(SubFunction, f, structData);
 
     // Create call for GOMP_parallel_loop_runtime_start.
-    Value *nullArgument = ConstantPointerNull::get(Builder->getInt8PtrTy());
+    Value *subfunctionParam =
+      Builder->CreateBitCast(structData, Builder->getInt8PtrTy(),
+                   "omp_data");
+
     Value *numberOfThreads = Builder->getInt32(0);
     Value *lowerBound = ExpGen.codegen(f->LB);
     Value *upperBound = ExpGen.codegen(f->UB);
@@ -918,7 +995,7 @@ public:
 
     SmallVector<Value *, 6> Arguments;
     Arguments.push_back(SubFunction);
-    Arguments.push_back(nullArgument);
+    Arguments.push_back(subfunctionParam);
     Arguments.push_back(numberOfThreads);
     Arguments.push_back(lowerBound);
     Arguments.push_back(upperBound);
@@ -930,7 +1007,7 @@ public:
                         Arguments.end());
 
     // Create call to the subfunction.
-    Builder->CreateCall(SubFunction, nullArgument);
+    Builder->CreateCall(SubFunction, subfunctionParam);
 
     // Create call for GOMP_parallel_end.
     Function *FN = M->getFunction("GOMP_parallel_end");
