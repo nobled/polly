@@ -49,7 +49,7 @@ bb2:                                              ; preds = %bb, %entry
 ; CHECK: Context:
 ; CHECK: [p0] -> { [] }
 ; CHECK:     Statements {
-; CHECK:     	Stmt_bb.nph
+; CHECK:     	Stmt_bb_nph
 ; CHECK:             Domain :=
 ; CHECK:                 [p0] -> { Stmt_bb_nph[] : p0 >= 2 };
 ; CHECK:             Scattering :=

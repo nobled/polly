@@ -47,4 +47,4 @@ return:                                           ; preds = %if.else, %if.then
 
 declare void @llvm.memory.barrier(i1, i1, i1, i1, i1) nounwind
 ; CHECK: for region: 'for.cond => for.end.region' in function 'main':
-; CHECK-NEXT:   Stmt_for.body(0);
+; CHECK-NEXT:   Stmt_for_body(0);

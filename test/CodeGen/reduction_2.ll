@@ -67,5 +67,5 @@ if.end:                                           ; preds = %if.then, %for.end
 declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i32, i1) nounwind
 
 ; CHECK: for (c2=0;c2<=1018;c2++) {
-; CHECK:     Stmt_for.body(c2);
+; CHECK:     Stmt_for_body(c2);
 ; CHECK: }
