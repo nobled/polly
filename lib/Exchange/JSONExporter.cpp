@@ -39,6 +39,11 @@ static cl::opt<std::string>
 ExportDir("polly-export-jscop-dir",
           cl::desc("The directory to export the .jscop files to."), cl::Hidden,
           cl::value_desc("Directory path"), cl::ValueRequired, cl::init("."));
+static cl::opt<std::string>
+ImportPostfix("polly-import-jscop-postfix",
+              cl::desc("Postfix to append to the import .jsop files."),
+              cl::Hidden, cl::value_desc("File postfix"), cl::ValueRequired,
+              cl::init(""));
 
 struct JSONExporter : public ScopPass {
   static char ID;
@@ -215,6 +220,10 @@ std::string JSONImporter::getFileName(Scop *S) const {
   std::string FunctionName =
     S->getRegion().getEntry()->getParent()->getNameStr();
   std::string FileName = FunctionName + "___" + S->getNameStr() + ".jscop";
+
+  if (ImportPostfix != "")
+    FileName += "." + ImportPostfix;
+
   return FileName;
 }
 void JSONImporter::printScop(raw_ostream &OS) const {
@@ -231,7 +240,12 @@ bool JSONImporter::runOnScop(Scop &scop) {
   errs() << "Reading JScop '" << R.getNameStr() << "' in function '"
     << FunctionName << "' from '" << FileName << "'.\n";
   OwningPtr<MemoryBuffer> result;
-  MemoryBuffer::getFile(FileName, result);
+  error_code ec = MemoryBuffer::getFile(FileName, result);
+
+  if (ec) {
+    errs() << "File could not be read: " << ec.message() << "\n";
+    return false;
+  }
 
   json_t *root = NULL;
   json_parse_document(&root, const_cast<char*>(result->getBufferStart()));
