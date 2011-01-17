@@ -17,8 +17,8 @@ except KeyError,e:
     key, = e.args
     lit.fatal("unable to find %r parameter, use '--param=%s=VALUE'" % (key,key))
 
-config.substitutions.append(('%opt', 'opt -load ' + config.llvm_libs_dir +
-                             '/LLVMPolly.so '))
+config.substitutions.append(('%opt', 'opt -basicaa  -scev-aa -load '
+                             + config.llvm_libs_dir + '/LLVMPolly.so '))
 
 # Let the main config do the real work.
 lit.load_config(config, "@POLLY_SOURCE_DIR@/test/lit.cfg")
