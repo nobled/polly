@@ -48,6 +48,7 @@
 #define POLLY_SCOP_DETECTION_H
 
 #include "llvm/Pass.h"
+#include "llvm/Analysis/AliasSetTracker.h"
 
 #include <set>
 
@@ -63,6 +64,8 @@ namespace llvm {
   class SCEVAddRecExpr;
   class CallInst;
   class Instruction;
+  class AliasAnalysis;
+  class Value;
 }
 
 namespace polly {
@@ -83,14 +86,16 @@ class ScopDetection : public FunctionPass {
   ScalarEvolution* SE;
   LoopInfo *LI;
   RegionInfo *RI;
+  AliasAnalysis *AA;
   //@}
 
   /// @brief Context variables for SCoP detection.
   struct DetectionContext {
-    Region &CurRegion; // The region to check.
-    bool Verifying;    // If we are in the verification phase?
-    DetectionContext(Region &R, bool Verify) : CurRegion(R), Verifying(Verify)
-      {}
+    Region &CurRegion;    // The region to check.
+    AliasSetTracker AST;  // The AliasSetTracker to hold the alias information.
+    bool Verifying;       // If we are in the verification phase?
+    DetectionContext(Region &R, AliasAnalysis &AA, bool Verify)
+      : CurRegion(R), AST(AA), Verifying(Verify) {}
   };
 
   // Remember the valid regions
@@ -178,13 +183,14 @@ class ScopDetection : public FunctionPass {
   /// @param S          The SCEV expression to be checked
   /// @param RefRegion  The reference scope to check SCEV, it help to find out
   ///                   induction variables and parameters
-  /// @param isMemoryAccess Does S represent a memory access. In this case one
-  ///                       base pointer is allowed.
+  /// @param BasePtr    If S represents a memory access, BasePtr should contain
+  ///                   a valid memory location to which the base address of the
+  ///                   memory access will be stored.
   ///
   /// @return True if the SCEV expression is affine, false otherwise
   ///
   bool isValidAffineFunction(const SCEV *S, Region &RefRegion,
-                             bool isMemoryAccess = false) const;
+                             Value **BasePtr = 0) const;
 
   /// @brief Is a loop valid with respect to a given region.
   ///

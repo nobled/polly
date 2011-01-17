@@ -50,7 +50,9 @@
 #include "polly/Support/ScopHelper.h"
 #include "polly/Support/AffineSCEVIterator.h"
 
+#include "llvm/LLVMContext.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Assembly/Writer.h"
@@ -78,6 +80,7 @@ BADSCOP_STAT(LoopBound,   "Loop bounds can not be computed");
 BADSCOP_STAT(FuncCall,    "Function call with side effects appeared");
 BADSCOP_STAT(AffFunc,     "Expression not affine");
 BADSCOP_STAT(Scalar,      "Found scalar dependency");
+BADSCOP_STAT(Alias,       "Found base address alias");
 BADSCOP_STAT(Other,       "Others");
 
 //===----------------------------------------------------------------------===//
@@ -89,9 +92,10 @@ bool ScopDetection::isMaxRegionInScop(const Region &R) const {
 }
 
 bool ScopDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
-                                          bool isMemoryAccess) const {
-  bool PointerExists = false;
+                                          Value **BasePtr) const {
   assert(S && "S must not be null!");
+  bool isMemoryAccess = (BasePtr != 0);
+  if (isMemoryAccess) *BasePtr = 0;
 
   if (isa<SCEVCouldNotCompute>(S)) {
     DEBUG(dbgs() << "Non Affine: SCEV could not be computed\n");
@@ -131,8 +135,8 @@ bool ScopDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
         return false;
       }
 
-      assert(!PointerExists && "Found second base pointer.\n");
-      PointerExists = true;
+      assert(*BasePtr == 0 && "Found second base pointer.\n");
+      *BasePtr = BaseAddr->getValue();
       continue;
     }
 
@@ -145,7 +149,8 @@ bool ScopDetection::isValidAffineFunction(const SCEV *S, Region &RefRegion,
           dbgs() << " is neither parameter nor induction variable\n");
     return false;
   }
-  return !isMemoryAccess || PointerExists;
+
+  return !isMemoryAccess || (*BasePtr != 0);
 }
 
 bool ScopDetection::isValidCFG(BasicBlock &BB, DetectionContext &Context) const
@@ -263,12 +268,31 @@ bool ScopDetection::isValidCallInst(CallInst &CI) {
 
 bool ScopDetection::isValidMemoryAccess(Instruction &Inst,
                                         DetectionContext &Context) const {
-  Value *Ptr = getPointerOperand(Inst);
+  Value *Ptr = getPointerOperand(Inst), *BasePtr;
   const SCEV *AccessFunction = SE->getSCEV(Ptr);
 
-  if (!isValidAffineFunction(AccessFunction, Context.CurRegion, true)) {
+  if (!isValidAffineFunction(AccessFunction, Context.CurRegion, &BasePtr)) {
     DEBUG(dbgs() << "Bad memory addr " << *AccessFunction << "\n");
     STATSCOP(AffFunc);
+    return false;
+  }
+
+  // FIXME: Alias Analysis thinks IntToPtrInst aliases with alloca instructions
+  // created by IndependentBlocks Pass.
+  if (isa<IntToPtrInst>(BasePtr)) {
+    DEBUG(dbgs() << "Find bad intoptr prt: " << *BasePtr << '\n');
+    STATSCOP(Other);
+    return false;
+  }
+
+  // Check if the base pointer of the memory access does alias with
+  // any other pointer. This cannot be handled at the moment.
+  AliasSet &AS =
+    Context.AST.getAliasSetForPointer(BasePtr, AliasAnalysis::UnknownSize,
+                                      Inst.getMetadata(LLVMContext::MD_tbaa));
+  if (!AS.isMustAlias()) {
+    DEBUG(dbgs() << "Bad pointer alias found:" << *BasePtr << "\nAS:\n" << AS);
+    STATSCOP(Alias);
     return false;
   }
 
@@ -409,7 +433,7 @@ Region *ScopDetection::expandRegion(Region &R) {
   DEBUG(dbgs() << "\tExpanding " << R.getNameStr() << "\n");
 
   while (TmpRegion) {
-    DetectionContext Context(*TmpRegion, false /*verifying*/);
+    DetectionContext Context(*TmpRegion, *AA, false /*verifying*/);
     DEBUG(dbgs() << "\t\tTrying " << TmpRegion->getNameStr() << "\n");
 
     if (!allBlocksValid(Context))
@@ -440,7 +464,7 @@ Region *ScopDetection::expandRegion(Region &R) {
 
 
 void ScopDetection::findScops(Region &R) {
-  DetectionContext Context(R, false /*verifying*/);
+  DetectionContext Context(R, *AA, false /*verifying*/);
 
   if (isValidRegion(Context)) {
     ++ValidRegion;
@@ -537,6 +561,7 @@ bool ScopDetection::isValidRegion(DetectionContext &Context) const {
 }
 
 bool ScopDetection::runOnFunction(llvm::Function &F) {
+  AA = &getAnalysis<AliasAnalysis>();
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   RI = &getAnalysis<RegionInfo>();
@@ -549,7 +574,7 @@ bool ScopDetection::runOnFunction(llvm::Function &F) {
 
 void polly::ScopDetection::verifyRegion(const Region &R) const {
   assert(isMaxRegionInScop(R) && "Expect R is a valid region.");
-  DetectionContext Context(const_cast<Region&>(R), true /*verifying*/);
+  DetectionContext Context(const_cast<Region&>(R), *AA, true /*verifying*/);
   isValidRegion(Context);
 }
 
@@ -564,6 +589,8 @@ void ScopDetection::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<PostDominatorTree>();
   AU.addRequired<LoopInfo>();
   AU.addRequired<ScalarEvolution>();
+  // We also need AA and RegionInfo when we are verifying analysis.
+  AU.addRequiredTransitive<AliasAnalysis>();
   AU.addRequiredTransitive<RegionInfo>();
   AU.setPreservesAll();
 }
