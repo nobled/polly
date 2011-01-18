@@ -24,12 +24,13 @@
 #include "polly/Support/GmpConv.h"
 #include "polly/Support/ScopHelper.h"
 
-#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Assembly/Writer.h"
 #include "llvm/Target/TargetData.h"
+#include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/Support/CommandLine.h"
 
 #define DEBUG_TYPE "polly-scops"
@@ -649,8 +650,9 @@ ScopStmt::ScopStmt(Scop &parent, SmallVectorImpl<unsigned> &Scatter)
   isl_int_clear(v);
   Scattering = isl_map_from_basic_map(bmap);
 
-  // Build memory accesses.
-  std::set<const Value*> BaseAddressSet;
+  // Build memory accesses, use SetVector to keep the order of memory accesses
+  // and prevent the same memory access inserted more than once.
+  SetVector<const Value*> BaseAddressSet;
 
   for (Scop::const_iterator SI = Parent.begin(), SE = Parent.end(); SI != SE;
        ++SI) {
@@ -661,7 +663,7 @@ ScopStmt::ScopStmt(Scop &parent, SmallVectorImpl<unsigned> &Scatter)
       BaseAddressSet.insert((*I)->getBaseAddr());
   }
 
-  for (std::set<const Value*>::iterator BI = BaseAddressSet.begin(),
+  for (SetVector<const Value*>::iterator BI = BaseAddressSet.begin(),
        BE = BaseAddressSet.end(); BI != BE; ++BI)
     MemAccs.push_back(new MemoryAccess(*BI, this));
 
