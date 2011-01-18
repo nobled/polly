@@ -239,8 +239,7 @@ bool ScopImporter::runOnScop(Scop &scop) {
 }
 
 void ScopImporter::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.setPreservesAll();
-  AU.addRequired<ScopInfo>();
+  ScopPass::getAnalysisUsage(AU);
   AU.addRequired<Dependences>();
 }
 

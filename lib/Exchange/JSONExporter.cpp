@@ -268,8 +268,7 @@ bool JSONImporter::runOnScop(Scop &scop) {
 }
 
 void JSONImporter::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.setPreservesAll();
-  AU.addRequired<ScopInfo>();
+  ScopPass::getAnalysisUsage(AU);
 }
 
 static RegisterPass<JSONImporter> B("polly-import-jscop",

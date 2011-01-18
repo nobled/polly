@@ -154,7 +154,6 @@ void Pocc::printScop(raw_ostream &OS) const {
 
 void Pocc::getAnalysisUsage(AnalysisUsage &AU) const {
   ScopPass::getAnalysisUsage(AU);
-  AU.addRequired<ScopInfo>();
   AU.addRequired<Dependences>();
 }
 

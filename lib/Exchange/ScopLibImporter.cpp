@@ -101,8 +101,7 @@ bool ScopLibImporter::runOnRegion(Region *R, RGPassManager &RGM) {
 }
 
 void ScopLibImporter::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.setPreservesAll();
-  AU.addRequired<ScopInfo>();
+  ScopPass::getAnalysisUsage(AU);
   AU.addRequired<Dependences>();
 }
 

@@ -72,7 +72,6 @@ bool Interchange::runOnScop(Scop &S) {
 
 void Interchange::getAnalysisUsage(AnalysisUsage &AU) const {
   ScopPass::getAnalysisUsage(AU);
-  AU.addRequired<ScopInfo>();
   AU.addRequired<Dependences>();
 }
 

@@ -567,8 +567,7 @@ bool ScopExporter::runOnScop(Scop &scop) {
 }
 
 void ScopExporter::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.setPreservesAll();
-  AU.addRequired<ScopInfo>();
+  ScopPass::getAnalysisUsage(AU);
 }
 
 static RegisterPass<ScopExporter> A("polly-export",
