@@ -36,211 +36,210 @@
 using namespace polly;
 using namespace llvm;
 
-namespace polly {
 static cl::opt<bool>
   LegalityCheckDisabled("disable-polly-legality",
        cl::desc("Disable polly legality check"), cl::Hidden,
        cl::init(false));
 
-  Dependences::Dependences() : RegionPass(ID), S(0) {
-    must_dep = may_dep = NULL;
-    must_no_source = may_no_source = NULL;
-    sink = must_source = may_source = NULL;
+Dependences::Dependences() : RegionPass(ID), S(0) {
+  must_dep = may_dep = NULL;
+  must_no_source = may_no_source = NULL;
+  sink = must_source = may_source = NULL;
+}
+
+bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
+  S = getAnalysis<ScopInfo>().getScop();
+
+  if (!S)
+    return false;
+
+  isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
+
+  if (sink)
+    isl_union_map_free(sink);
+
+  if (must_source)
+    isl_union_map_free(must_source);
+
+  if (may_source)
+    isl_union_map_free(may_source);
+
+  sink = isl_union_map_empty(isl_dim_copy(dim));
+  must_source = isl_union_map_empty(isl_dim_copy(dim));
+  may_source = isl_union_map_empty(isl_dim_copy(dim));
+  isl_union_map *schedule = isl_union_map_empty(dim);
+
+  if (must_dep)
+    isl_union_map_free(must_dep);
+
+  if (may_dep)
+    isl_union_map_free(may_dep);
+
+  if (must_no_source)
+    isl_union_set_free(must_no_source);
+
+  if (may_no_source)
+    isl_union_set_free(may_no_source);
+
+  must_dep = may_dep = NULL;
+  must_no_source = may_no_source = NULL;
+
+  for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+    ScopStmt *Stmt = *SI;
+
+    for (ScopStmt::memacc_iterator MI = Stmt->memacc_begin(),
+          ME = Stmt->memacc_end(); MI != ME; ++MI) {
+      isl_set *domcp = isl_set_copy(Stmt->getDomain());
+      isl_map *accdom = isl_map_copy((*MI)->getAccessFunction());
+
+      accdom = isl_map_intersect_domain(accdom, domcp);
+
+      if ((*MI)->isRead())
+        isl_union_map_add_map(sink, accdom);
+      else
+        isl_union_map_add_map(must_source, accdom);
+    }
+    isl_map *scattering = isl_map_copy(Stmt->getScattering());
+    isl_union_map_add_map(schedule, scattering);
   }
 
-  bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
-    S = getAnalysis<ScopInfo>().getScop();
+  DEBUG(
+    isl_printer *p = isl_printer_to_str(S->getCtx());
 
-    if (!S)
-      return false;
+    errs().indent(4) << "Sink:\n";
+    isl_printer_print_union_map(p, sink);
+    errs().indent(8) << isl_printer_get_str(p) << "\n";
+    isl_printer_flush(p);
 
-    isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
+    errs().indent(4) << "MustSource:\n";
+    isl_printer_print_union_map(p, must_source);
+    errs().indent(8) << isl_printer_get_str(p) << "\n";
+    isl_printer_flush(p);
 
-    if (sink)
-      isl_union_map_free(sink);
+    errs().indent(4) << "MaySource:\n";
+    isl_printer_print_union_map(p, may_source);
+    errs().indent(8) << isl_printer_get_str(p) << "\n";
+    isl_printer_flush(p);
 
-    if (must_source)
-      isl_union_map_free(must_source);
+    errs().indent(4) << "Schedule:\n";
+    isl_printer_print_union_map(p, schedule);
+    errs().indent(8) << isl_printer_get_str(p) << "\n";
+    isl_printer_flush(p);
 
-    if (may_source)
-      isl_union_map_free(may_source);
+    isl_printer_free(p));
 
-    sink = isl_union_map_empty(isl_dim_copy(dim));
-    must_source = isl_union_map_empty(isl_dim_copy(dim));
-    may_source = isl_union_map_empty(isl_dim_copy(dim));
-    isl_union_map *schedule = isl_union_map_empty(dim);
+  isl_union_map_compute_flow(isl_union_map_copy(sink),
+                              isl_union_map_copy(must_source),
+                              isl_union_map_copy(may_source), schedule,
+                              &must_dep, &may_dep, &must_no_source,
+                              &may_no_source);
 
-    if (must_dep)
-      isl_union_map_free(must_dep);
+  // Remove redundant statements.
+  must_dep = isl_union_map_coalesce(must_dep);
+  may_dep = isl_union_map_coalesce(may_dep);
+  must_no_source = isl_union_set_coalesce(must_no_source);
+  may_no_source = isl_union_set_coalesce(may_no_source);
 
-    if (may_dep)
-      isl_union_map_free(may_dep);
+  return false;
+}
 
-    if (must_no_source)
-      isl_union_set_free(must_no_source);
+bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
 
-    if (may_no_source)
-      isl_union_set_free(may_no_source);
+  if (LegalityCheckDisabled)
+    return true;
 
-    must_dep = may_dep = NULL;
-    must_no_source = may_no_source = NULL;
+  isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
 
-    for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-      ScopStmt *Stmt = *SI;
+  isl_union_map *schedule = isl_union_map_empty(dim);
 
-      for (ScopStmt::memacc_iterator MI = Stmt->memacc_begin(),
-           ME = Stmt->memacc_end(); MI != ME; ++MI) {
-        isl_set *domcp = isl_set_copy(Stmt->getDomain());
-        isl_map *accdom = isl_map_copy((*MI)->getAccessFunction());
+  for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+    ScopStmt *Stmt = *SI;
 
-        accdom = isl_map_intersect_domain(accdom, domcp);
+    isl_map *scattering;
 
-        if ((*MI)->isRead())
-          isl_union_map_add_map(sink, accdom);
-        else
-          isl_union_map_add_map(must_source, accdom);
-      }
-      isl_map *scattering = isl_map_copy(Stmt->getScattering());
-      isl_union_map_add_map(schedule, scattering);
-    }
+    if (NewScattering->find(*SI) == NewScattering->end())
+      scattering = isl_map_copy(Stmt->getScattering());
+    else
+      scattering = isl_map_copy((*NewScattering)[Stmt]);
 
-    DEBUG(
-      isl_printer *p = isl_printer_to_str(S->getCtx());
+    isl_union_map_add_map(schedule, scattering);
+  }
 
-      errs().indent(4) << "Sink:\n";
-      isl_printer_print_union_map(p, sink);
-      errs().indent(8) << isl_printer_get_str(p) << "\n";
-      isl_printer_flush(p);
+  isl_union_map *temp_must_dep, *temp_may_dep;
+  isl_union_set *temp_must_no_source, *temp_may_no_source;
 
-      errs().indent(4) << "MustSource:\n";
-      isl_printer_print_union_map(p, must_source);
-      errs().indent(8) << isl_printer_get_str(p) << "\n";
-      isl_printer_flush(p);
+  DEBUG(
+    isl_printer *p = isl_printer_to_str(S->getCtx());
 
-      errs().indent(4) << "MaySource:\n";
-      isl_printer_print_union_map(p, may_source);
-      errs().indent(8) << isl_printer_get_str(p) << "\n";
-      isl_printer_flush(p);
+    errs().indent(4) << "Sink :=\n";
+    isl_printer_print_union_map(p, sink);
+    errs().indent(8) << isl_printer_get_str(p) << ";\n";
+    isl_printer_flush(p);
 
-      errs().indent(4) << "Schedule:\n";
-      isl_printer_print_union_map(p, schedule);
-      errs().indent(8) << isl_printer_get_str(p) << "\n";
-      isl_printer_flush(p);
+    errs().indent(4) << "MustSource :=\n";
+    isl_printer_print_union_map(p, must_source);
+    errs().indent(8) << isl_printer_get_str(p) << ";\n";
+    isl_printer_flush(p);
 
-      isl_printer_free(p));
+    errs().indent(4) << "MaySource :=\n";
+    isl_printer_print_union_map(p, may_source);
+    errs().indent(8) << isl_printer_get_str(p) << ";\n";
+    isl_printer_flush(p);
 
-    isl_union_map_compute_flow(isl_union_map_copy(sink),
-                               isl_union_map_copy(must_source),
-                               isl_union_map_copy(may_source), schedule,
-                               &must_dep, &may_dep, &must_no_source,
-                               &may_no_source);
+    errs().indent(4) << "Schedule :=\n";
+    isl_printer_print_union_map(p, schedule);
+    errs().indent(8) << isl_printer_get_str(p) << ";\n";
+    isl_printer_flush(p);
 
-    // Remove redundant statements.
-    must_dep = isl_union_map_coalesce(must_dep);
-    may_dep = isl_union_map_coalesce(may_dep);
-    must_no_source = isl_union_set_coalesce(must_no_source);
-    may_no_source = isl_union_set_coalesce(may_no_source);
+    isl_printer_free(p));
 
+  isl_union_map_compute_flow(isl_union_map_copy(sink),
+                              isl_union_map_copy(must_source),
+                              isl_union_map_copy(may_source), schedule,
+                              &temp_must_dep, &temp_may_dep,
+                              &temp_must_no_source, &temp_may_no_source);
+
+  DEBUG(errs().indent(4) << "\nDependences calculated\n");
+  DEBUG(
+    isl_printer *p = isl_printer_to_str(S->getCtx());
+
+    errs().indent(4) << "TempMustDep:=\n";
+    isl_printer_print_union_map(p, temp_must_dep);
+    errs().indent(8) << isl_printer_get_str(p) << ";\n";
+    isl_printer_flush(p);
+
+    errs().indent(4) << "MustDep:=\n";
+    isl_printer_print_union_map(p, must_dep);
+    errs().indent(8) << isl_printer_get_str(p) << ";\n";
+    isl_printer_flush(p);
+    isl_printer_free(p));
+
+  // Remove redundant statements.
+  temp_must_dep = isl_union_map_coalesce(temp_must_dep);
+  temp_may_dep = isl_union_map_coalesce(temp_may_dep);
+  temp_must_no_source = isl_union_set_coalesce(temp_must_no_source);
+  temp_may_no_source = isl_union_set_coalesce(temp_may_no_source);
+
+  if (!isl_union_map_is_equal(temp_must_dep, must_dep)) {
+    DEBUG(errs().indent(4) << "\nEqual 1 calculated\n");
     return false;
   }
 
-  bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
+  DEBUG(errs().indent(4) << "\nEqual 1 calculated\n");
 
-    if (LegalityCheckDisabled)
-      return true;
+  if (!isl_union_map_is_equal(temp_may_dep, may_dep))
+    return false;
 
-    isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
+  DEBUG(errs().indent(4) << "\nEqual 2 calculated\n");
 
-    isl_union_map *schedule = isl_union_map_empty(dim);
+  if (!isl_union_set_is_equal(temp_must_no_source, must_no_source))
+    return false;
 
-    for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-      ScopStmt *Stmt = *SI;
+  if (!isl_union_set_is_equal(temp_may_no_source, may_no_source))
+    return false;
 
-      isl_map *scattering;
-
-      if (NewScattering->find(*SI) == NewScattering->end())
-        scattering = isl_map_copy(Stmt->getScattering());
-      else
-        scattering = isl_map_copy((*NewScattering)[Stmt]);
-
-      isl_union_map_add_map(schedule, scattering);
-    }
-
-    isl_union_map *temp_must_dep, *temp_may_dep;
-    isl_union_set *temp_must_no_source, *temp_may_no_source;
-
-    DEBUG(
-      isl_printer *p = isl_printer_to_str(S->getCtx());
-
-      errs().indent(4) << "Sink :=\n";
-      isl_printer_print_union_map(p, sink);
-      errs().indent(8) << isl_printer_get_str(p) << ";\n";
-      isl_printer_flush(p);
-
-      errs().indent(4) << "MustSource :=\n";
-      isl_printer_print_union_map(p, must_source);
-      errs().indent(8) << isl_printer_get_str(p) << ";\n";
-      isl_printer_flush(p);
-
-      errs().indent(4) << "MaySource :=\n";
-      isl_printer_print_union_map(p, may_source);
-      errs().indent(8) << isl_printer_get_str(p) << ";\n";
-      isl_printer_flush(p);
-
-      errs().indent(4) << "Schedule :=\n";
-      isl_printer_print_union_map(p, schedule);
-      errs().indent(8) << isl_printer_get_str(p) << ";\n";
-      isl_printer_flush(p);
-
-      isl_printer_free(p));
-
-    isl_union_map_compute_flow(isl_union_map_copy(sink),
-                               isl_union_map_copy(must_source),
-                               isl_union_map_copy(may_source), schedule,
-                               &temp_must_dep, &temp_may_dep,
-                               &temp_must_no_source, &temp_may_no_source);
-
-    DEBUG(errs().indent(4) << "\nDependences calculated\n");
-    DEBUG(
-      isl_printer *p = isl_printer_to_str(S->getCtx());
-
-      errs().indent(4) << "TempMustDep:=\n";
-      isl_printer_print_union_map(p, temp_must_dep);
-      errs().indent(8) << isl_printer_get_str(p) << ";\n";
-      isl_printer_flush(p);
-
-      errs().indent(4) << "MustDep:=\n";
-      isl_printer_print_union_map(p, must_dep);
-      errs().indent(8) << isl_printer_get_str(p) << ";\n";
-      isl_printer_flush(p);
-      isl_printer_free(p));
-
-    // Remove redundant statements.
-    temp_must_dep = isl_union_map_coalesce(temp_must_dep);
-    temp_may_dep = isl_union_map_coalesce(temp_may_dep);
-    temp_must_no_source = isl_union_set_coalesce(temp_must_no_source);
-    temp_may_no_source = isl_union_set_coalesce(temp_may_no_source);
-
-    if (!isl_union_map_is_equal(temp_must_dep, must_dep)) {
-      DEBUG(errs().indent(4) << "\nEqual 1 calculated\n");
-      return false;
-    }
-
-    DEBUG(errs().indent(4) << "\nEqual 1 calculated\n");
-
-    if (!isl_union_map_is_equal(temp_may_dep, may_dep))
-      return false;
-
-    DEBUG(errs().indent(4) << "\nEqual 2 calculated\n");
-
-    if (!isl_union_set_is_equal(temp_must_no_source, must_no_source))
-      return false;
-
-    if (!isl_union_set_is_equal(temp_may_no_source, may_no_source))
-      return false;
-
-    return true;
-  }
+  return true;
+}
 
 static isl_map *getReverseMap(isl_ctx *context, int parameterDimension,
                               int scatteringDimensions,
@@ -376,70 +375,69 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
   return true;
 }
 
-  void Dependences::print(raw_ostream &OS, const Module *) const {
-    if (!S)
-      return;
+void Dependences::print(raw_ostream &OS, const Module *) const {
+  if (!S)
+    return;
 
-    isl_printer *p = isl_printer_to_str(S->getCtx());
+  isl_printer *p = isl_printer_to_str(S->getCtx());
 
-    OS.indent(4) << "Must dependences:\n";
-    isl_printer_print_union_map(p, must_dep);
-    OS.indent(8) << isl_printer_get_str(p) << "\n";
-    isl_printer_flush(p);
+  OS.indent(4) << "Must dependences:\n";
+  isl_printer_print_union_map(p, must_dep);
+  OS.indent(8) << isl_printer_get_str(p) << "\n";
+  isl_printer_flush(p);
 
-    OS.indent(4) << "May dependences:\n";
-    isl_printer_print_union_map(p, may_dep);
-    OS.indent(8) << isl_printer_get_str(p) << "\n";
-    isl_printer_flush(p);
+  OS.indent(4) << "May dependences:\n";
+  isl_printer_print_union_map(p, may_dep);
+  OS.indent(8) << isl_printer_get_str(p) << "\n";
+  isl_printer_flush(p);
 
-    OS.indent(4) << "Must no source:\n";
-    isl_printer_print_union_set(p, must_no_source);
-    OS.indent(8) << isl_printer_get_str(p) << "\n";
-    isl_printer_flush(p);
+  OS.indent(4) << "Must no source:\n";
+  isl_printer_print_union_set(p, must_no_source);
+  OS.indent(8) << isl_printer_get_str(p) << "\n";
+  isl_printer_flush(p);
 
-    OS.indent(4) << "May no source:\n";
-    isl_printer_print_union_set(p, may_no_source);
-    OS.indent(8) << isl_printer_get_str(p) << "\n";
-    isl_printer_flush(p);
+  OS.indent(4) << "May no source:\n";
+  isl_printer_print_union_set(p, may_no_source);
+  OS.indent(8) << isl_printer_get_str(p) << "\n";
+  isl_printer_flush(p);
 
-    isl_printer_free(p);
-  }
+  isl_printer_free(p);
+}
 
-  void Dependences::releaseMemory() {
-    S = 0;
+void Dependences::releaseMemory() {
+  S = 0;
 
-    if (must_dep)
-      isl_union_map_free(must_dep);
+  if (must_dep)
+    isl_union_map_free(must_dep);
 
-    if (may_dep)
-      isl_union_map_free(may_dep);
+  if (may_dep)
+    isl_union_map_free(may_dep);
 
-    if (must_no_source)
-      isl_union_set_free(must_no_source);
+  if (must_no_source)
+    isl_union_set_free(must_no_source);
 
-    if (may_no_source)
-      isl_union_set_free(may_no_source);
+  if (may_no_source)
+    isl_union_set_free(may_no_source);
 
-    must_dep = may_dep = NULL;
-    must_no_source = may_no_source = NULL;
+  must_dep = may_dep = NULL;
+  must_no_source = may_no_source = NULL;
 
-    if (sink)
-      isl_union_map_free(sink);
+  if (sink)
+    isl_union_map_free(sink);
 
-    if (must_source)
-      isl_union_map_free(must_source);
+  if (must_source)
+    isl_union_map_free(must_source);
 
-    if (may_source)
-      isl_union_map_free(may_source);
+  if (may_source)
+    isl_union_map_free(may_source);
 
-    sink = must_source = may_source = NULL;
-  }
+  sink = must_source = may_source = NULL;
+}
 
-  void Dependences::getAnalysisUsage(AnalysisUsage &AU) const {
-    AU.addRequired<ScopInfo>();
-    AU.setPreservesAll();
-  }
-} //end anonymous namespace
+void Dependences::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<ScopInfo>();
+  AU.setPreservesAll();
+}
 
 char Dependences::ID = 0;
 
