@@ -13,7 +13,9 @@
 #include "polly/Support/GICHelper.h"
 
 #include "isl/set.h"
+#include "isl/union_set.h"
 #include "isl/map.h"
+#include "isl/union_map.h"
 
 using namespace llvm;
 
@@ -67,6 +69,22 @@ std::string polly::stringFromIslObj(/*__isl_keep*/ isl_map *map) {
 std::string polly::stringFromIslObj(/*__isl_keep*/ isl_set *set) {
   isl_printer *p = isl_printer_to_str(isl_set_get_ctx(set));
   isl_printer_print_set(p, set);
+  std::string string(isl_printer_get_str(p));
+  isl_printer_free(p);
+  return string;
+}
+
+std::string polly::stringFromIslObj(/*__isl_keep*/ isl_union_map *umap) {
+  isl_printer *p = isl_printer_to_str(isl_union_map_get_ctx(umap));
+  isl_printer_print_union_map(p, umap);
+  std::string string(isl_printer_get_str(p));
+  isl_printer_free(p);
+  return string;
+}
+
+std::string polly::stringFromIslObj(/*__isl_keep*/ isl_union_set *uset) {
+  isl_printer *p = isl_printer_to_str(isl_union_set_get_ctx(uset));
+  isl_printer_print_union_set(p, uset);
   std::string string(isl_printer_get_str(p));
   isl_printer_free(p);
   return string;

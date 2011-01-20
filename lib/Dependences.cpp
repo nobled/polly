@@ -24,6 +24,7 @@
 
 #include "polly/LinkAllPasses.h"
 #include "polly/ScopInfo.h"
+#include "polly/Support/GICHelper.h"
 
 #define DEBUG_TYPE "polly-dependences"
 #include "llvm/Support/Debug.h"
@@ -104,29 +105,18 @@ bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
   }
 
   DEBUG(
-    isl_printer *p = isl_printer_to_str(S->getCtx());
-
     errs().indent(4) << "Sink:\n";
-    isl_printer_print_union_map(p, sink);
-    errs().indent(8) << isl_printer_get_str(p) << "\n";
-    isl_printer_flush(p);
+    errs().indent(8) << stringFromIslObj(sink) << "\n";
 
     errs().indent(4) << "MustSource:\n";
-    isl_printer_print_union_map(p, must_source);
-    errs().indent(8) << isl_printer_get_str(p) << "\n";
-    isl_printer_flush(p);
+    errs().indent(8) << stringFromIslObj(must_source) << "\n";
 
     errs().indent(4) << "MaySource:\n";
-    isl_printer_print_union_map(p, may_source);
-    errs().indent(8) << isl_printer_get_str(p) << "\n";
-    isl_printer_flush(p);
+    errs().indent(8) << stringFromIslObj(may_source) << "\n";
 
     errs().indent(4) << "Schedule:\n";
-    isl_printer_print_union_map(p, schedule);
-    errs().indent(8) << isl_printer_get_str(p) << "\n";
-    isl_printer_flush(p);
-
-    isl_printer_free(p));
+    errs().indent(8) << stringFromIslObj(schedule) << "\n";
+  );
 
   isl_union_map_compute_flow(isl_union_map_copy(sink),
                               isl_union_map_copy(must_source),
@@ -379,29 +369,17 @@ void Dependences::print(raw_ostream &OS, const Module *) const {
   if (!S)
     return;
 
-  isl_printer *p = isl_printer_to_str(S->getCtx());
-
   OS.indent(4) << "Must dependences:\n";
-  isl_printer_print_union_map(p, must_dep);
-  OS.indent(8) << isl_printer_get_str(p) << "\n";
-  isl_printer_flush(p);
+  OS.indent(8) << stringFromIslObj(must_dep) << "\n";
 
   OS.indent(4) << "May dependences:\n";
-  isl_printer_print_union_map(p, may_dep);
-  OS.indent(8) << isl_printer_get_str(p) << "\n";
-  isl_printer_flush(p);
+  OS.indent(8) << stringFromIslObj(may_dep) << "\n";
 
   OS.indent(4) << "Must no source:\n";
-  isl_printer_print_union_set(p, must_no_source);
-  OS.indent(8) << isl_printer_get_str(p) << "\n";
-  isl_printer_flush(p);
+  OS.indent(8) << stringFromIslObj(must_no_source) << "\n";
 
   OS.indent(4) << "May no source:\n";
-  isl_printer_print_union_set(p, may_no_source);
-  OS.indent(8) << isl_printer_get_str(p) << "\n";
-  isl_printer_flush(p);
-
-  isl_printer_free(p);
+  OS.indent(8) << stringFromIslObj(may_no_source) << "\n";
 }
 
 void Dependences::releaseMemory() {

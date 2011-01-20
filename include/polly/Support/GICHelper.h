@@ -18,7 +18,9 @@
 #include <gmp.h>
 
 struct isl_map;
+struct isl_union_map;
 struct isl_set;
+struct isl_union_set;
 
 namespace polly {
 
@@ -37,6 +39,8 @@ llvm::APInt APInt_from_MPZ (const mpz_t mpz);
 //@{
 std::string stringFromIslObj(/*__isl_keep*/ isl_map *map);
 std::string stringFromIslObj(/*__isl_keep*/ isl_union_map *umap);
+std::string stringFromIslObj(/*__isl_keep*/ isl_set *set);
+std::string stringFromIslObj(/*__isl_keep*/ isl_union_set *uset);
 //@}
 } //end namespace polly
 
