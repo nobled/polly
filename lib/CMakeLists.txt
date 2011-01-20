@@ -26,7 +26,7 @@ add_polly_library(LLVMPolly
   ScopGraphPrinter.cpp
   ScopInfo.cpp
   TempScopInfo.cpp
-  Support/GmpConv.cpp
+  Support/GICHelper.cpp
   Support/AffSCEVItTester.cpp
   Support/ScopHelper.cpp
   json.c

@@ -23,7 +23,7 @@
 #define DEBUG_TYPE "polly-codegen"
 
 #include "polly/LinkAllPasses.h"
-#include "polly/Support/GmpConv.h"
+#include "polly/Support/GICHelper.h"
 #include "polly/Support/ScopHelper.h"
 #include "polly/Cloog.h"
 #include "polly/Dependences.h"

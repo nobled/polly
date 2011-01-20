@@ -21,7 +21,7 @@
 
 #include "polly/TempScopInfo.h"
 #include "polly/LinkAllPasses.h"
-#include "polly/Support/GmpConv.h"
+#include "polly/Support/GICHelper.h"
 #include "polly/Support/ScopHelper.h"
 
 #include "llvm/Analysis/LoopInfo.h"
@@ -115,7 +115,7 @@ MemoryAccess::~MemoryAccess() {
 }
 
 static void replace(std::string& str, const std::string& find,
-                             const std::string& replace) {
+                    const std::string& replace) {
   size_t pos = 0;
   while((pos = str.find(find, pos)) != std::string::npos)
   {
@@ -139,24 +139,8 @@ void MemoryAccess::setBaseName() {
   BaseName = "MemRef_" + BaseName;
 }
 
-static std::string stringFromIslMap(isl_map *map) {
-  isl_printer *p = isl_printer_to_str(isl_map_get_ctx(map));
-  isl_printer_print_map(p, map);
-  std::string string(isl_printer_get_str(p));
-  isl_printer_free(p);
-  return string;
-}
-
-static std::string stringFromIslSet(isl_set *set) {
-  isl_printer *p = isl_printer_to_str(isl_set_get_ctx(set));
-  isl_printer_print_set(p, set);
-  std::string string(isl_printer_get_str(p));
-  isl_printer_free(p);
-  return string;
-}
-
 std::string MemoryAccess::getAccessFunctionStr() const {
-  return stringFromIslMap(getAccessFunction());
+  return stringFromIslObj(getAccessFunction());
 }
 
 isl_basic_map *MemoryAccess::createBasicAccessMap(ScopStmt *Statement) {
@@ -661,11 +645,11 @@ ScopStmt::ScopStmt(Scop &parent, SmallVectorImpl<unsigned> &Scatter)
 }
 
 std::string ScopStmt::getDomainStr() const {
-  return stringFromIslSet(getDomain());
+  return stringFromIslObj(getDomain());
 }
 
 std::string ScopStmt::getScatteringStr() const {
-  return stringFromIslMap(getScattering());
+  return stringFromIslObj(getScattering());
 }
 
 unsigned ScopStmt::getNumParams() const {
@@ -776,7 +760,7 @@ Scop::~Scop() {
 }
 
 std::string Scop::getContextStr() const {
-    return stringFromIslSet(getContext());
+    return stringFromIslObj(getContext());
 }
 
 std::string Scop::getNameStr() const {

@@ -1,4 +1,4 @@
-//===- Support/GmpConv.h --------- APInt <=> GMP objects --------------------===//
+//===- Support/GICHelper.h -- Helper functions for GMP, ISL, and Cloog -----===/
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,15 +7,18 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Functions for converting between gmp objects and apint.
+// Helper functions for gmp, isl and Cloog objects.
 //
 //===----------------------------------------------------------------------===//
 //
-#ifndef POLLY_SUPPORT_GMP_CONV_H
-#define POLLY_SUPPORT_GMP_CONV_H
+#ifndef POLLY_SUPPORT_GIC_HELPER_H
+#define POLLY_SUPPORT_GIC_HELPER_H
 
 #include "llvm/ADT/APInt.h"
 #include <gmp.h>
+
+struct isl_map;
+struct isl_set;
 
 namespace polly {
 
@@ -29,6 +32,12 @@ void MPZ_from_APInt (mpz_t v, const llvm::APInt apint, bool is_signed = true);
 ///
 /// @param mpz    The mpz_t you want to convert.
 llvm::APInt APInt_from_MPZ (const mpz_t mpz);
+
+/// @brief Get c++ string from Isl objects.
+//@{
+std::string stringFromIslObj(/*__isl_keep*/ isl_map *map);
+std::string stringFromIslObj(/*__isl_keep*/ isl_union_map *umap);
+//@}
 } //end namespace polly
 
 #endif

@@ -10,7 +10,10 @@
 // Functions for converting between gmp objects and apint.
 //
 //===----------------------------------------------------------------------===//
-#include "polly/Support/GmpConv.h"
+#include "polly/Support/GICHelper.h"
+
+#include "isl/set.h"
+#include "isl/map.h"
 
 using namespace llvm;
 
@@ -51,4 +54,20 @@ APInt polly::APInt_from_MPZ (const mpz_t mpz) {
     uint64_t val = 0;
     return APInt(1, 1, &val);
   }
+}
+
+std::string polly::stringFromIslObj(/*__isl_keep*/ isl_map *map) {
+  isl_printer *p = isl_printer_to_str(isl_map_get_ctx(map));
+  isl_printer_print_map(p, map);
+  std::string string(isl_printer_get_str(p));
+  isl_printer_free(p);
+  return string;
+}
+
+std::string polly::stringFromIslObj(/*__isl_keep*/ isl_set *set) {
+  isl_printer *p = isl_printer_to_str(isl_set_get_ctx(set));
+  isl_printer_print_set(p, set);
+  std::string string(isl_printer_get_str(p));
+  isl_printer_free(p);
+  return string;
 }
