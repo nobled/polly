@@ -21,6 +21,7 @@
 #include "polly/Support/ScopHelper.h"
 
 #include "llvm/Analysis/RegionIterator.h"
+#include "llvm/Target/TargetData.h"
 #include "llvm/Assembly/Writer.h"
 
 #define DEBUG_TYPE "polly-analyze-ir"
@@ -35,7 +36,7 @@ using namespace polly;
 SCEVAffFunc::SCEVAffFunc(const SCEV *S, SCEVAffFuncType Type, Region &R,
                          ParamSetType &Params, LoopInfo *LI,
                          ScalarEvolution *SE)
-    : has_sign(true), FuncType(Type) {
+    : ElemBytes(0), FuncType(Type), has_sign(true) {
   assert(S && "S can not be null!");
   assert(!isa<SCEVCouldNotCompute>(S) && "Non affine function in Scop");
 
@@ -284,12 +285,16 @@ void TempScopInfo::buildAccessFunctions(Region &R, ParamSetType &Params,
     Instruction &Inst = *I;
     if (isa<LoadInst>(&Inst) || isa<StoreInst>(&Inst)) {
       // Create the SCEVAffFunc.
-      if (isa<LoadInst>(Inst))
-        Functions.push_back(std::make_pair(SCEVAffFunc(SCEVAffFunc::ReadMem),
-                                           &Inst));
-      else //Else it must be a StoreInst.
-        Functions.push_back(std::make_pair(SCEVAffFunc(SCEVAffFunc::WriteMem),
-                                           &Inst));
+      if (LoadInst *ld = dyn_cast<LoadInst>(&Inst)) {
+        unsigned size = TD->getTypeStoreSize(ld->getType());
+        Functions.push_back(
+          std::make_pair(SCEVAffFunc(SCEVAffFunc::ReadMem, size), &Inst));
+      } else {//Else it must be a StoreInst.
+        StoreInst *st = cast<StoreInst>(&Inst);
+        unsigned size = TD->getTypeStoreSize(st->getValueOperand()->getType());
+        Functions.push_back(
+          std::make_pair(SCEVAffFunc(SCEVAffFunc::WriteMem, size), &Inst));
+      }
 
       Value *Ptr = getPointerOperand(Inst);
       buildAffineFunction(SE->getSCEV(Ptr), Functions.back().first, R, Params);
@@ -453,6 +458,7 @@ bool TempScopInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   SD = &getAnalysis<ScopDetection>();
+  TD = &getAnalysis<TargetData>();
 
   TScop = NULL;
 
@@ -465,6 +471,7 @@ bool TempScopInfo::runOnRegion(Region *R, RGPassManager &RGM) {
 }
 
 void TempScopInfo::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<TargetData>();
   AU.addRequiredTransitive<DominatorTree>();
   AU.addRequiredTransitive<PostDominatorTree>();
   AU.addRequiredTransitive<LoopInfo>();

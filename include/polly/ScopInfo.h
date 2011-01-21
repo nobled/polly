@@ -28,7 +28,6 @@ namespace llvm {
   class SCEV;
   class ScalarEvolution;
   class SCEVAddRecExpr;
-  class TargetData;
   class Loop;
   class LoopInfo;
   class Type;
@@ -102,8 +101,7 @@ public:
   // @param AffFunc    The access function.
   // @param Statement  The Statement that contains this access.
   // @param SE         The ScalarEvolution analysis.
-  MemoryAccess(const SCEVAffFunc &AffFunc, ScopStmt *Statement,
-               int elementSize);
+  MemoryAccess(const SCEVAffFunc &AffFunc, ScopStmt *Statement);
 
   // @brief Create a read all access.
   //
@@ -258,14 +256,13 @@ class ScopStmt {
   void buildIterationDomainFromLoops(TempScop &tempScop);
   void buildIterationDomain(TempScop &tempScop, const Region &CurRegion);
   void buildScattering(SmallVectorImpl<unsigned> &Scatter);
-  void buildAccesses(TempScop &tempScop, const Region &CurRegion,
-                     TargetData &TD);
+  void buildAccesses(TempScop &tempScop, const Region &CurRegion);
   //@}
 
   /// Create the ScopStmt from a BasicBlock.
   ScopStmt(Scop &parent, TempScop &tempScop, const Region &CurRegion,
            BasicBlock &bb, SmallVectorImpl<Loop*> &NestLoops,
-           SmallVectorImpl<unsigned> &Scatter, TargetData &TD);
+           SmallVectorImpl<unsigned> &Scatter);
 
   /// Create the finalization statement.
   ScopStmt(Scop &parent, SmallVectorImpl<unsigned> &Scatter);
@@ -396,8 +393,7 @@ class Scop {
 
   /// Create the static control part with a region, max loop depth of this
   /// region and parameters used in this region.
-  explicit Scop(TempScop &TempScop, LoopInfo &LI, ScalarEvolution &SE,
-                TargetData &TD);
+  Scop(TempScop &TempScop, LoopInfo &LI, ScalarEvolution &SE);
 
   /// @brief Check if a basic block is trivial.
   ///
@@ -416,7 +412,7 @@ class Scop {
                   SmallVectorImpl<Loop*> &NestLoops,
                   // The scattering numbers
                   SmallVectorImpl<unsigned> &Scatter,
-                  LoopInfo &LI, TargetData &TD);
+                  LoopInfo &LI);
 
   /// Helper function for printing the Scop.
   void printContext(raw_ostream &OS) const;

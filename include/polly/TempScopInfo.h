@@ -21,6 +21,10 @@
 #include "llvm/Analysis/RegionPass.h"
 #include "llvm/Instructions.h"
 
+namespace llvm {
+  class TargetData;
+}
+
 using namespace llvm;
 
 namespace polly {
@@ -37,7 +41,6 @@ class SCEVAffFunc {
   // { Variable, Coefficient }
   typedef std::map<const SCEV*, const SCEV*> LnrTransSet;
   LnrTransSet LnrTrans;
-  bool has_sign;
 
 public:
   // The type of the scev affine function
@@ -49,26 +52,28 @@ public:
     Ne,       // != 0
     GE        // >= 0
   };
-  // Pair of {address, read/write}
-  typedef std::pair<Value*, SCEVAffFuncType> MemAccTy;
 
 private:
   // The base address of the address SCEV, if the Value is a pointer, this is
   // an array access, otherwise, this is a value access.
   // And the Write/Read modifier
   Value *BaseAddr;
-  SCEVAffFuncType FuncType;
+  unsigned ElemBytes        : 28;
+  SCEVAffFuncType FuncType  : 3;
+  bool has_sign             : 1;
 
 public:
   /// @brief Create a new SCEV affine function.
-  explicit SCEVAffFunc() : TransComp(0), has_sign(true), BaseAddr(0),
-    FuncType(None) {}
+  SCEVAffFunc() : TransComp(0), BaseAddr(0), ElemBytes(0), FuncType(None),
+                  has_sign(true) {}
 
   /// @brief Create a new SCEV affine function with memory access type or
   ///        condition type
 
-  explicit SCEVAffFunc(SCEVAffFuncType Type, Value* baseAddr = 0)
-    : TransComp(0), has_sign(true), BaseAddr(baseAddr), FuncType(Type) {}
+  explicit SCEVAffFunc(SCEVAffFuncType Type, unsigned elemBytes = 0,
+                       Value* baseAddr = 0)
+    : TransComp(0), BaseAddr(baseAddr), ElemBytes(elemBytes),
+      FuncType(Type), has_sign(true) {}
 
   /// @brief Construct a new SCEVAffFunc from a SCEV
   ///
@@ -96,11 +101,16 @@ public:
 
   bool isSigned() const { return has_sign; }
 
+  enum SCEVAffFuncType getType() const { return FuncType; }
+
   bool isDataRef() const {
-    return FuncType == ReadMem || FuncType == WriteMem;
+    return getType() == ReadMem || getType() == WriteMem;
   }
 
-  enum SCEVAffFuncType getType() const { return FuncType; }
+  unsigned getElemSizeInBytes() const {
+    assert(isDataRef() && "getElemSizeInBytes on the wrong type!");
+    return ElemBytes;
+  }
 
   bool isRead() const { return FuncType == ReadMem; }
 
@@ -273,15 +283,15 @@ class TempScopInfo : public RegionPass {
   // LoopInfo for information about loops
   LoopInfo *LI;
 
-  // Current region
-  Region *CurR;
-
   // Valid Regions for Scop
   ScopDetection *SD;
 
   // For condition extraction support.
   DominatorTree *DT;
   PostDominatorTree *PDT;
+
+  // Target data for element size computing.
+  TargetData *TD;
 
   // Remember the bounds of loops, to help us build iteration domain of BBs.
   LoopBoundMapType LoopBounds;
