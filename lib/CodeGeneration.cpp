@@ -1482,6 +1482,7 @@ class CodeGeneration : public ScopPass {
     AU.addPreserved<ScopDetection>();
     AU.addPreserved<ScalarEvolution>();
     AU.addPreserved<RegionInfo>();
+    AU.addPreserved<TempScopInfo>();
     AU.addPreserved<ScopInfo>();
     AU.addPreservedID(IndependentBlocksID);
   }

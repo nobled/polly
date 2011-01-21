@@ -878,7 +878,7 @@ bool ScopInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   LoopInfo &LI = getAnalysis<LoopInfo>();
   ScalarEvolution &SE = getAnalysis<ScalarEvolution>();
 
-  TempScop *tempScop = getAnalysis<TempScopInfo>().getTempScop();
+  TempScop *tempScop = getAnalysis<TempScopInfo>().getTempScop(R);
 
   // This region is no Scop.
   if (!tempScop) {

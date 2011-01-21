@@ -23,6 +23,7 @@
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Assembly/Writer.h"
+#include "llvm/ADT/STLExtras.h"
 
 #define DEBUG_TYPE "polly-analyze-ir"
 #include "llvm/Support/Debug.h"
@@ -443,16 +444,18 @@ TempScop *TempScopInfo::buildTempScop(Region &R) {
   return TScop;
 }
 
-TempScop *TempScopInfo::getTempScop() const {
-  return TScop;
+TempScop *TempScopInfo::getTempScop(const Region *R) const {
+  TempScopMapType::const_iterator at = TempScops.find(R);
+  return at == TempScops.end() ? 0 : at->second;
 }
 
 void TempScopInfo::print(raw_ostream &OS, const Module *) const {
-  if (TScop)
-    TScop->print(OS, SE, LI);
+  for (TempScopMapType::const_iterator I = TempScops.begin(),
+       E = TempScops.end(); I != E; ++I)
+    I->second->print(OS, SE, LI);
 }
 
-bool TempScopInfo::runOnRegion(Region *R, RGPassManager &RGM) {
+bool TempScopInfo::runOnFunction(Function &F) {
   DT = &getAnalysis<DominatorTree>();
   PDT = &getAnalysis<PostDominatorTree>();
   SE = &getAnalysis<ScalarEvolution>();
@@ -460,12 +463,10 @@ bool TempScopInfo::runOnRegion(Region *R, RGPassManager &RGM) {
   SD = &getAnalysis<ScopDetection>();
   TD = &getAnalysis<TargetData>();
 
-  TScop = NULL;
-
-  // Only analyse maximal Scops.
-  if (!SD->isMaxRegionInScop(*R)) return false;
-
-  TScop = buildTempScop(*R);
+  for (ScopDetection::iterator I = SD->begin(), E = SD->end(); I != E; ++I) {
+    Region *R = const_cast<Region*>(*I);
+    TempScops.insert(std::make_pair(R, buildTempScop(*R)));
+  }
 
   return false;
 }
@@ -489,9 +490,8 @@ void TempScopInfo::clear() {
   BBConds.clear();
   LoopBounds.clear();
   AccFuncMap.clear();
-  if (TScop)
-    delete TScop;
-  TScop = 0;
+  DeleteContainerSeconds(TempScops);
+  TempScops.clear();
 }
 
 //===----------------------------------------------------------------------===//
