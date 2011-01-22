@@ -105,17 +105,17 @@ bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
   }
 
   DEBUG(
-    errs().indent(4) << "Sink:\n";
-    errs().indent(8) << stringFromIslObj(sink) << "\n";
+    dbgs().indent(4) << "Sink:\n";
+    dbgs().indent(8) << stringFromIslObj(sink) << "\n";
 
-    errs().indent(4) << "MustSource:\n";
-    errs().indent(8) << stringFromIslObj(must_source) << "\n";
+    dbgs().indent(4) << "MustSource:\n";
+    dbgs().indent(8) << stringFromIslObj(must_source) << "\n";
 
-    errs().indent(4) << "MaySource:\n";
-    errs().indent(8) << stringFromIslObj(may_source) << "\n";
+    dbgs().indent(4) << "MaySource:\n";
+    dbgs().indent(8) << stringFromIslObj(may_source) << "\n";
 
-    errs().indent(4) << "Schedule:\n";
-    errs().indent(8) << stringFromIslObj(schedule) << "\n";
+    dbgs().indent(4) << "Schedule:\n";
+    dbgs().indent(8) << stringFromIslObj(schedule) << "\n";
   );
 
   isl_union_map_compute_flow(isl_union_map_copy(sink),
@@ -159,17 +159,17 @@ bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
   isl_union_map *temp_must_no_source, *temp_may_no_source;
 
   DEBUG(
-    errs().indent(4) << "Sink :=\n";
-    errs().indent(8) << stringFromIslObj(sink) << ";\n";
+    dbgs().indent(4) << "Sink :=\n";
+    dbgs().indent(8) << stringFromIslObj(sink) << ";\n";
 
-    errs().indent(4) << "MustSource :=\n";
-    errs().indent(8) << stringFromIslObj(must_source) << ";\n";
+    dbgs().indent(4) << "MustSource :=\n";
+    dbgs().indent(8) << stringFromIslObj(must_source) << ";\n";
 
-    errs().indent(4) << "MaySource :=\n";
-    errs().indent(8) << stringFromIslObj(may_source) << ";\n";
+    dbgs().indent(4) << "MaySource :=\n";
+    dbgs().indent(8) << stringFromIslObj(may_source) << ";\n";
 
-    errs().indent(4) << "Schedule :=\n";
-    errs().indent(8) << stringFromIslObj(schedule) << ";\n";
+    dbgs().indent(4) << "Schedule :=\n";
+    dbgs().indent(8) << stringFromIslObj(schedule) << ";\n";
   );
 
   isl_union_map_compute_flow(isl_union_map_copy(sink),
@@ -178,13 +178,13 @@ bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
                               &temp_must_dep, &temp_may_dep,
                               &temp_must_no_source, &temp_may_no_source);
 
-  DEBUG(errs().indent(4) << "\nDependences calculated\n");
+  DEBUG(dbgs().indent(4) << "\nDependences calculated\n");
   DEBUG(
-    errs().indent(4) << "TempMustDep:=\n";
-    errs().indent(8) << stringFromIslObj(temp_must_dep) << ";\n";
+    dbgs().indent(4) << "TempMustDep:=\n";
+    dbgs().indent(8) << stringFromIslObj(temp_must_dep) << ";\n";
 
-    errs().indent(4) << "MustDep:=\n";
-    errs().indent(8) << stringFromIslObj(must_dep) << ";\n";
+    dbgs().indent(4) << "MustDep:=\n";
+    dbgs().indent(8) << stringFromIslObj(must_dep) << ";\n";
   );
 
   // Remove redundant statements.
@@ -194,16 +194,16 @@ bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
   temp_may_no_source = isl_union_map_coalesce(temp_may_no_source);
 
   if (!isl_union_map_is_equal(temp_must_dep, must_dep)) {
-    DEBUG(errs().indent(4) << "\nEqual 1 calculated\n");
+    DEBUG(dbgs().indent(4) << "\nEqual 1 calculated\n");
     return false;
   }
 
-  DEBUG(errs().indent(4) << "\nEqual 1 calculated\n");
+  DEBUG(dbgs().indent(4) << "\nEqual 1 calculated\n");
 
   if (!isl_union_map_is_equal(temp_may_dep, may_dep))
     return false;
 
-  DEBUG(errs().indent(4) << "\nEqual 2 calculated\n");
+  DEBUG(dbgs().indent(4) << "\nEqual 2 calculated\n");
 
   if (!isl_union_map_is_equal(temp_must_no_source, must_no_source))
     return false;
