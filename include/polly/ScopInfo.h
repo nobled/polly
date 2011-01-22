@@ -124,8 +124,8 @@ public:
     return BaseAddr;
   }
 
-  const std::string *getBaseName() const {
-    return &BaseName;
+  const std::string &getBaseName() const {
+    return BaseName;
   }
 
   /// @brief Get the stride of this memory access in the specified domain

@@ -149,7 +149,7 @@ isl_basic_map *MemoryAccess::createBasicAccessMap(ScopStmt *Statement) {
                                Statement->getNumIterators(), 1);
   setBaseName();
 
-  dim = isl_dim_set_tuple_name(dim, isl_dim_out, getBaseName()->c_str());
+  dim = isl_dim_set_tuple_name(dim, isl_dim_out, getBaseName().c_str());
   dim = isl_dim_set_tuple_name(dim, isl_dim_in, Statement->getBaseName());
 
   return isl_basic_map_universe(dim);
@@ -187,7 +187,7 @@ MemoryAccess::MemoryAccess(const SCEVAffFunc &AffFunc, ScopStmt *Statement) {
   AccessRelation = isl_map_apply_range(AccessRelation, dataSizeMap);
 
   AccessRelation = isl_map_set_tuple_name(AccessRelation, isl_dim_out,
-                                          getBaseName()->c_str());
+                                          getBaseName().c_str());
 }
 
 MemoryAccess::MemoryAccess(const Value *BaseAddress, ScopStmt *Statement) {
