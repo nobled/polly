@@ -84,7 +84,8 @@ bool ScopLibExporter::runOnScop(Scop &scop) {
 }
 
 void ScopLibExporter::getAnalysisUsage(AnalysisUsage &AU) const {
-  ScopPass::getAnalysisUsage(AU);
+  AU.setPreservesAll();
+  AU.addRequired<ScopInfo>();
 }
 
 static RegisterPass<ScopLibExporter> A("polly-export-scoplib",
