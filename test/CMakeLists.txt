@@ -35,7 +35,7 @@ if(PYTHONINTERP_FOUND)
                   --param build_config=${CMAKE_CFG_INTDIR}
                   -sv ${POLLY_TEST_EXTRA_ARGS}
                   ${CMAKE_CURRENT_BINARY_DIR}/${testdir}
-                  DEPENDS opt
+                  DEPENDS opt LLVMPolly
                   COMMENT "Running Polly regression tests in ${testdir}")
   endforeach()
 
@@ -46,6 +46,6 @@ if(PYTHONINTERP_FOUND)
                 --param build_config=${CMAKE_CFG_INTDIR}
                 -sv ${POLLY_TEST_EXTRA_ARGS}
                 ${CMAKE_CURRENT_BINARY_DIR}
-                DEPENDS opt
+                DEPENDS opt LLVMPolly
                 COMMENT "Running Polly regression tests")
 endif()
