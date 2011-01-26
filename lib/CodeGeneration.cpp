@@ -34,7 +34,6 @@
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
-#include "llvm/Target/TargetData.h"
 #include "llvm/Module.h"
 
 #define CLOOG_INT_GMP 1
@@ -75,6 +74,12 @@ CodegenOnly("polly-codegen-only",
             cl::desc("Codegen only this function"), cl::Hidden,
             cl::value_desc("The function name to codegen"),
             cl::ValueRequired, cl::init(""));
+
+static cl::opt<bool>
+OpenMP32Bit("set-polly-openmp32",
+       cl::desc("Set 32 bit OpenMP code generation"), cl::Hidden,
+       cl::value_desc("Set 32 bit OpenMP code generation if true"),
+       cl::init(false));
 
 typedef DenseMap<const Value*, Value*> ValueMapT;
 typedef DenseMap<const char*, Value*> CharMapT;
@@ -134,6 +139,14 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   DT->addNewBlock(AfterBB, HeaderBB);
 
   Builder->SetInsertPoint(BodyBB);
+}
+
+const llvm::IntegerType *getOpenMPLongTy(IRBuilder<> *Builder)
+{
+  if(OpenMP32Bit)
+    return Builder->getInt32Ty();
+  else
+    return Builder->getInt64Ty();
 }
 
 class BlockGenerator {
@@ -645,6 +658,9 @@ public:
     }
   }
 
+  Value *codegen(const clast_expr *e) {
+    return codegen(e, getOpenMPLongTy(Builder));
+  }
   // @brief Reset the CharMap.
   //
   // This function is called to reset the CharMap to new one, while generating
@@ -661,7 +677,6 @@ class ClastStmtCodeGen {
 
   DominatorTree *DT;
   Dependences *DP;
-  TargetData *TD;
 
   // The Builder specifies the current location to code generate at.
   IRBuilder<> *Builder;
@@ -694,8 +709,7 @@ public:
   void codegen(const clast_assignment *a, ScopStmt *Statement,
                unsigned Dimension, int vectorDim,
                std::vector<ValueMapT> *VectorVMap = 0) {
-    Value *RHS = ExpGen.codegen(a->RHS,
-      TD->getIntPtrType(Builder->getContext()));
+    Value *RHS = ExpGen.codegen(a->RHS);
 
     assert(!a->LHS && "Statement assignments do not have left hand side");
     const PHINode *PN;
@@ -772,10 +786,8 @@ public:
     assert(((lowerBound && upperBound) || (!lowerBound && !upperBound))
                                 && "Either give both bounds or none");
     if (lowerBound == 0 || upperBound == 0) {
-        lowerBound = ExpGen.codegen(f->LB,
-                                    TD->getIntPtrType(Builder->getContext()));
-        upperBound = ExpGen.codegen(f->UB,
-                                    TD->getIntPtrType(Builder->getContext()));
+        lowerBound = ExpGen.codegen(f->LB);
+        upperBound = ExpGen.codegen(f->UB);
     }
     createLoop(Builder, lowerBound, upperBound, Stride, IV, AfterBB,
                IncrementedIV, DT);
@@ -895,9 +907,9 @@ public:
 
       // Fill up basic block HeaderBB.
       Builder->SetInsertPoint(HeaderBB);
-      Value *memTmp = Builder->CreateAlloca(TD->getIntPtrType(Context),
+      Value *memTmp = Builder->CreateAlloca(getOpenMPLongTy(Builder),
                                  0, "memtmp");
-      Value *memTmp1 = Builder->CreateAlloca(TD->getIntPtrType(Context),
+      Value *memTmp1 = Builder->CreateAlloca(getOpenMPLongTy(Builder),
                                  0, "memtmp1");
       // Extract values from the subfunction parameter and load those into
       // the new CharMap.
@@ -929,8 +941,8 @@ public:
 
       // Subtract one as the upper bound provided by openmp is a < comparison
       // whereas the codegenForSequential function creates a <= comparison.
-      upperBound = Builder->CreateSub(upperBound,
-        ConstantInt::get(TD->getIntPtrType(Context), 1));
+      upperBound = Builder->CreateSub(upperBound, ConstantInt::get(
+                                        getOpenMPLongTy(Builder), 1));
       // Set CharMap to OMPCharMap.
       ExpGen.setIVS(&OMPCharMap);
       // Create body for the parallel loop.
@@ -970,16 +982,14 @@ public:
                    "omp_data");
 
     Value *numberOfThreads = Builder->getInt32(0);
-    Value *lowerBound = ExpGen.codegen(f->LB,
-      TD->getIntPtrType(Builder->getContext()));
-    Value *upperBound = ExpGen.codegen(f->UB,
-      TD->getIntPtrType(Builder->getContext()));
+    Value *lowerBound = ExpGen.codegen(f->LB);
+    Value *upperBound = ExpGen.codegen(f->UB);
     // Add one as the upper bound provided by openmp is a < comparison
     // whereas the codegenForSequential function creates a <= comparison.
-    upperBound = Builder->CreateAdd(upperBound,
-      ConstantInt::get(TD->getIntPtrType(Builder->getContext()), 1));
+    upperBound = Builder->CreateAdd(upperBound, ConstantInt::get(
+                                      getOpenMPLongTy(Builder), 1));
     APInt APStride = APInt_from_MPZ(f->stride);
-    const IntegerType *strideType = TD->getIntPtrType(Builder->getContext());
+    const IntegerType *strideType = getOpenMPLongTy(Builder);
     Value *stride = ConstantInt::get(strideType,
                                      APStride.zext(strideType->getBitWidth()));
 
@@ -1012,9 +1022,7 @@ public:
   void codegenForVector(const clast_for *f) {
     DEBUG(dbgs() << "Vectorizing loop '" << f->iterator << "'\n";);
 
-    Value *LB = ExpGen.codegen(f->LB,
-      TD->getIntPtrType(Builder->getContext()));
-
+    Value *LB = ExpGen.codegen(f->LB);
     APInt Stride = APInt_from_MPZ(f->stride);
     const IntegerType *LoopIVType = dyn_cast<IntegerType>(LB->getType());
      Stride =Stride.zext(LoopIVType->getBitWidth());
@@ -1047,10 +1055,8 @@ public:
   }
 
   Value *codegen(const clast_equation *eq) {
-    Value *LHS = ExpGen.codegen(eq->LHS,
-      TD->getIntPtrType(Builder->getContext()));
-    Value *RHS = ExpGen.codegen(eq->RHS,
-      TD->getIntPtrType(Builder->getContext()));
+    Value *LHS = ExpGen.codegen(eq->LHS);
+    Value *RHS = ExpGen.codegen(eq->RHS);
     CmpInst::Predicate P;
 
     if (eq->sign == 0)
@@ -1112,8 +1118,8 @@ public:
 
   public:
   ClastStmtCodeGen(Scop *scop, DominatorTree *dt, Dependences *dp,
-                   TargetData *td, IRBuilder<> *B) :
-    S(scop), DT(dt), DP(dp), TD(td), Builder(B), ExpGen(Builder, &CharMap) {}
+                   IRBuilder<> *B) :
+    S(scop), DT(dt), DP(dp), Builder(B), ExpGen(Builder, &CharMap) {}
 
 };
 }
@@ -1127,7 +1133,6 @@ class CodeGeneration : public ScopPass {
   ScopDetection *SD;
   CloogInfo *C;
   LoopInfo *LI;
-  TargetData *TD;
 
   public:
   static char ID;
@@ -1199,9 +1204,9 @@ class CodeGeneration : public ScopPass {
       PsArguments.push_back(FnPtrTy);
       PsArguments.push_back(Builder->getInt8PtrTy());
       PsArguments.push_back(Builder->getInt32Ty());
-      PsArguments.push_back(TD->getIntPtrType(Context));
-      PsArguments.push_back(TD->getIntPtrType(Context));
-      PsArguments.push_back(TD->getIntPtrType(Context));
+      PsArguments.push_back(getOpenMPLongTy(Builder));
+      PsArguments.push_back(getOpenMPLongTy(Builder));
+      PsArguments.push_back(getOpenMPLongTy(Builder));
       FunctionType *PsFT = FunctionType::get(Builder->getVoidTy(),
                                              PsArguments, false);
       Function::Create(PsFT, Function::ExternalLinkage,
@@ -1212,13 +1217,11 @@ class CodeGeneration : public ScopPass {
     if (!M->getFunction("GOMP_loop_runtime_next")) {
       // Prototype for GOMP_parallel_loop_runtime_start.
       std::vector<const Type*> runtimeNextArguments;
-      PointerType *intLongPtrTy =
-        PointerType::getUnqual(TD->getIntPtrType(Context));
+      PointerType *intLongPtrTy = PointerType::getUnqual(getOpenMPLongTy(Builder));
       runtimeNextArguments.push_back(intLongPtrTy);
       runtimeNextArguments.push_back(intLongPtrTy);
       FunctionType *runtimeNextFT = FunctionType::get(Builder->getInt8Ty(),
-                                                      runtimeNextArguments,
-                                                      false);
+                                             runtimeNextArguments, false);
       Function::Create(runtimeNextFT, Function::ExternalLinkage,
                        "GOMP_loop_runtime_next", M);
 	}
@@ -1243,7 +1246,6 @@ class CodeGeneration : public ScopPass {
     LI = &getAnalysis<LoopInfo>();
     C = &getAnalysis<CloogInfo>();
     SD = &getAnalysis<ScopDetection>();
-    TD = &getAnalysis<TargetData>();
 
     Function *F = R->getEntry()->getParent();
 
@@ -1260,7 +1262,7 @@ class CodeGeneration : public ScopPass {
     IRBuilder<> Builder(PollyBB);
     DT->addNewBlock(PollyBB, R->getEntry());
 
-    ClastStmtCodeGen CodeGen(S, DT, DP, TD, &Builder);
+    ClastStmtCodeGen CodeGen(S, DT, DP, &Builder);
 
     const clast_stmt *clast = C->getClast();
 
@@ -1331,7 +1333,6 @@ class CodeGeneration : public ScopPass {
     AU.addRequired<RegionInfo>();
     AU.addRequired<ScopDetection>();
     AU.addRequired<ScopInfo>();
-    AU.addRequired<TargetData>();
 
     AU.addPreserved<CloogInfo>();
     AU.addPreserved<Dependences>();
