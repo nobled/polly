@@ -1,11 +1,11 @@
 ; RUN: %opt -polly-cloog -analyze < %s | FileCheck %s
 ; RUN: %opt -polly-codegen -disable-output < %s
-; RUN: if `%opt -help | grep -q "OpenScop"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-cloog -analyze  < %s | FileCheck -check-prefix=IMPORT %s ; fi
-; RUN: if `%opt -help | grep -q "OpenScop"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-import-postfix=.valid_reverse -polly-cloog -analyze < %s | FileCheck -check-prefix=REVERSE %s ; fi > /dev/null
-; RUN: if `%opt -help | grep -q "OpenScop"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-import-postfix=.invalid_reverse -polly-cloog -analyze < %s 2>&1  | FileCheck -check-prefix=INVALID %s ; fi > /dev/null
-; RUN: if `%opt -help | grep -q "OpenScop"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-cloog -analyze  < %s | FileCheck -check-prefix=IMPORT %s ; fi
-; RUN: if `%opt -help | grep -q "OpenScop"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-codegen < %s | lli | diff %s.result - ; fi
-; RUN: if `%opt -help | grep -q "OpenScop"` ; then %opt -polly-import -polly-import-dir=`dirname %s` -polly-codegen -S < %s | FileCheck -check-prefix=CODEGEN %s ; fi
+; RUN: %opt -polly-import-jscop -polly-import-jscop-dir=`dirname %s` -polly-cloog -analyze  < %s | FileCheck -check-prefix=IMPORT %s
+; RUN: %opt -polly-import-jscop -polly-import-jscop-dir=`dirname %s` -polly-import-jscop-postfix=valid_reverse -polly-cloog -analyze < %s | FileCheck -check-prefix=REVERSE %s > /dev/null
+; RUN: %opt -polly-import-jscop -polly-import-jscop-dir=`dirname %s` -polly-import-jscop-postfix=invalid_reverse -polly-cloog -analyze < %s 2>&1  | FileCheck -check-prefix=INVALID %s > /dev/null
+; RUN: %opt -polly-import-jscop -polly-import-jscop-dir=`dirname %s` -polly-cloog -analyze  < %s | FileCheck -check-prefix=IMPORT %s 
+; RUN: %opt -polly-import-jscop -polly-import-jscop-dir=`dirname %s` -polly-codegen < %s | lli | diff %s.result -
+; RUN: %opt -polly-import-jscop -polly-import-jscop-dir=`dirname %s` -polly-codegen -S < %s | FileCheck -check-prefix=CODEGEN %s
 
 
 ; ModuleID = 'do_pluto_matmult.s'
@@ -225,7 +225,7 @@ entry:
 ; REVERSE:     }
 ; REVERSE: }
 
-; INVALID: OpenScop file contains a scattering that changes the dependences.
+; INVALID: file contains a scattering that changes the dependences.
 
 
 

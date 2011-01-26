@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/LinkAllPasses.h"
+#include "polly/Dependences.h"
 #include "polly/ScopInfo.h"
 #include "polly/ScopPass.h"
 #include "polly/json.h"
@@ -36,8 +37,8 @@ using namespace polly;
 
 namespace {
 static cl::opt<std::string>
-ExportDir("polly-export-jscop-dir",
-          cl::desc("The directory to export the .jscop files to."), cl::Hidden,
+ImportDir("polly-import-jscop-dir",
+          cl::desc("The directory to import the .jscop files from."), cl::Hidden,
           cl::value_desc("Directory path"), cl::ValueRequired, cl::init("."));
 static cl::opt<std::string>
 ImportPostfix("polly-import-jscop-postfix",
@@ -84,7 +85,7 @@ bool JSONExporter::runOnScop(Scop &scop) {
   S = &scop;
   Region &R = S->getRegion();
 
-  std::string FileName = ExportDir + "/" + getFileName(S);
+  std::string FileName = ImportDir + "/" + getFileName(S);
   char *text;
   json_t *root, *label, *value, *jsonScop, *jsonStmt, *jsonStmts,
          *jsonAccesses;
@@ -230,11 +231,15 @@ void JSONImporter::printScop(raw_ostream &OS) const {
   S->print(OS);
 }
 
+typedef Dependences::StatementToIslMapTy StatementToIslMapTy;
+
 bool JSONImporter::runOnScop(Scop &scop) {
   S = &scop;
   Region &R = S->getRegion();
+  Dependences *D = &getAnalysis<Dependences>();
 
-  std::string FileName = ExportDir + "/" + getFileName(S);
+
+  std::string FileName = ImportDir + "/" + getFileName(S);
 
   std::string FunctionName = R.getEntry()->getParent()->getNameStr();
   errs() << "Reading JScop '" << R.getNameStr() << "' in function '"
@@ -252,6 +257,7 @@ bool JSONImporter::runOnScop(Scop &scop) {
   json_t *statements = json_find_first_label (root, "statements");
 
   json_t *stmt = statements->child->child;
+  StatementToIslMapTy &NewScattering = *(new StatementToIslMapTy());
 
   for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
     ScopStmt *Stmt = *SI;
@@ -261,14 +267,28 @@ bool JSONImporter::runOnScop(Scop &scop) {
 
     json_t *schedule = json_find_first_label (stmt, "schedule");
     isl_map *m = isl_map_read_from_str(S->getCtx(), schedule->child->text, -1);
-    Stmt->setScattering(m);
+    NewScattering[*SI] = m;
     stmt = stmt->next;
   }
+  if (!D->isValidScattering(&NewScattering)) {
+    errs() << "JScop file contains a scattering that changes the "
+           << "dependences. Use -disable-polly-legality to continue anyways\n";
+    return false;
+  }
+
+   for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+     ScopStmt *Stmt = *SI;
+
+     if (NewScattering.find(Stmt) != NewScattering.end())
+       Stmt->setScattering((NewScattering)[Stmt]);
+  }
+
   return false;
 }
 
 void JSONImporter::getAnalysisUsage(AnalysisUsage &AU) const {
   ScopPass::getAnalysisUsage(AU);
+  AU.addRequired<Dependences>();
 }
 
 static RegisterPass<JSONImporter> B("polly-import-jscop",
