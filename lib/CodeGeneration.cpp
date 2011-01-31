@@ -840,7 +840,7 @@ public:
   ///
   /// Create and fill the structure to store the parameters
   /// of the OpenMP subfunction.
-  Value *addOpenMPSubfunctionParms() {
+  Value *addOpenMPSubfunctionParms(Function *SubFunction) {
     Module *M = Builder->GetInsertBlock()->getParent()->getParent();
     std::vector<const Type*> structMembers;
 
@@ -852,8 +852,7 @@ public:
       structMembers.push_back(Param->getType());
     }
 
-    Function *F = Builder->GetInsertBlock()->getParent();
-    const std::string &Name = F->getNameStr() + ".omp_struct";
+    const std::string &Name = SubFunction->getNameStr() + ".omp_struct";
     StructType *structTy = StructType::get(Builder->getContext(),
                            structMembers);
     M->addTypeName(Name, structTy);
@@ -960,7 +959,7 @@ public:
     Module *M = Builder->GetInsertBlock()->getParent()->getParent();
 
     Function *SubFunction = addOpenMPSubfunction(M);
-    Value *structData = addOpenMPSubfunctionParms();
+    Value *structData = addOpenMPSubfunctionParms(SubFunction);
 
     addOpenMPSubfunctionBody(SubFunction, f, structData);
 
