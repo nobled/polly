@@ -2,6 +2,7 @@ set(POLLY_TEST_DIRECTORIES
   "ScopInfo"
   "AffineIterator"
   "CodeGen"
+  "OpenMP"
   "polybench")
 
 set(LLVM_SOURCE_DIR "${LLVM_MAIN_SRC_DIR}")
