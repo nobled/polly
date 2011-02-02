@@ -18,7 +18,11 @@ def createAssemblyFile(tmpDir, file, args, polly):
 
   commandLine = ["clang","-emit-llvm", "-S", file, '-o', llFile] \
                 + includeFlags + preprocessorFlags
-  subprocess.call(commandLine, shell=False)
+  exit = subprocess.call(commandLine, shell=False)
+
+  if exit:
+    return 'Translation from C to LLVM-IR failed. This command did not work:'
+    return commandLine.join(' ')
 
   # Preprocess the programm such that as many optimization opportunities
   # as possible are exposed.
@@ -34,7 +38,11 @@ def createAssemblyFile(tmpDir, file, args, polly):
 
   commandLine = ['opt', '-load', polly] + preoptPasses.split(' ') \
                 + ['-S', llFile, '-o', preoptFile]
-  subprocess.call(commandLine)
+  exit = subprocess.call(commandLine)
+
+  if exit:
+    return 'Preoptimizing failed: This command did not work'
+    return commandLine.join(' ')
 
   # Run the Polly optimizers
   pollyFile = tmpDir + '/output.polly.ll'
@@ -65,7 +73,12 @@ def createAssemblyFile(tmpDir, file, args, polly):
     print ""
 
     commandLine = commandLine + ['-polly-codegen', '-S', '-o', pollyFile]
-    subprocess.call(commandLine)
+    exit = subprocess.call(commandLine)
+
+    if exit:
+      return 'Polly optimizations failed: This command did not work'
+      return commandLine.join(' ')
+
 
   # Run optimizations to clean up the redundant calculations Polly introduced
   # and to take advantage of non polyhedral optimizations.
@@ -80,7 +93,11 @@ def createAssemblyFile(tmpDir, file, args, polly):
   if args.progress:
     print "\tRunning normal LLVM -O3 passes"
 
-  subprocess.call(commandLine)
+  exit = subprocess.call(commandLine)
+
+  if exit:
+    return 'LLVM -O3 optimizations failed: This command did not work'
+    return commandLine.join(' ')
 
   if args.emitllvm:
     return optFile
@@ -93,6 +110,10 @@ def createAssemblyFile(tmpDir, file, args, polly):
     print "\tTranslating LLVM-IR to assembly"
 
   subprocess.call(commandLine)
+
+  if exit:
+    return 'Translating LLVM-IR to assembly failed: This command did not work'
+    return commandLine.join(' ')
 
   return assemblyFile
 
