@@ -7,21 +7,18 @@ import os
 import sys
 
 def createAssemblyFile(tmpDir, file, args, polly):
+  # Create an LLVM-IR .ll file
   llFile = tmpDir + '/output.ll'
-  preoptFile = tmpDir + '/output.preopt.ll'
-  pollyFile = tmpDir + '/output.polly.ll'
-  optFile = tmpDir + '/output.opt.ll'
-  assemblyFile = tmpDir + '/output.opt.s'
-
   includeFlags = ['-I' + x for x in args.includes]
   preprocessorFlags = ['-D' + x for x in args.preprocessor]
 
-  # Create .ll file
   commandLine = ["clang","-emit-llvm", "-S", file, '-o', llFile] \
                 + includeFlags + preprocessorFlags
   subprocess.call(commandLine, shell=False)
 
-  # Preoptimize it for polly
+  # Preprocess the programm such that as many optimization opportunities
+  # as possible are exposed.
+  preoptFile = tmpDir + '/output.preopt.ll'
   preoptPasses = '-basicaa -mem2reg -inline -early-cse -simplify-libcalls ' \
                  '-simplifycfg -instcombine -tailcallelim -loopsimplify ' \
                  '-lcssa -loop-rotate -lcssa -loop-unswitch -instcombine ' \
@@ -32,7 +29,9 @@ def createAssemblyFile(tmpDir, file, args, polly):
                 + ['-S', llFile, '-o', preoptFile]
   subprocess.call(commandLine)
 
-  # Run polly
+  # Run the Polly optimizers
+  pollyFile = tmpDir + '/output.polly.ll'
+
   if args.fpolly:
     optionalArgs = []
 
@@ -54,11 +53,15 @@ def createAssemblyFile(tmpDir, file, args, polly):
     commandLine = ['cp', preoptFile, pollyFile]
     subprocess.call(commandLine)
 
-  # Optimize it
+  # Run optimizations to clean up the redundant calculations Polly introduced
+  # and to take advantage of non polyhedral optimizations.
+  optFile = tmpDir + '/output.opt.ll'
   commandLine = ['opt', '-O3', '-S', pollyFile, '-o', optFile]
   subprocess.call(commandLine)
 
   # Create assembly file
+  assemblyFile = tmpDir + '/output.opt.s'
+
   commandLine = ['llc', optFile, '-o', assemblyFile]
   subprocess.call(commandLine)
 
