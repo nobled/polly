@@ -61,9 +61,11 @@ def createAssemblyFile(tmpDir, file, args, polly):
 
   subprocess.call(commandLine)
 
+  if args.emitllvm:
+    return optFile
+
   # Create assembly file
   assemblyFile = tmpDir + '/output.opt.s'
-
   commandLine = ['llc', optFile, '-o', assemblyFile]
   subprocess.call(commandLine)
 
@@ -88,7 +90,12 @@ def parseArguments():
                       help='Library paths to pass to the linker')
   parser.add_argument('-O', dest='optlevel', choices='0123s',
                       help='Optimization level. (ignored)')
-  parser.add_argument('-c', action='store_true')
+  parser.add_argument('-S', action='store_true',
+                      help='Compile only; do not link or assemble')
+  parser.add_argument('--emit-llvm', action='store_true', dest='emitllvm',
+                      help='Output LLVM-IR instead of assembly if -S is set')
+  parser.add_argument('-c', action='store_true',
+                      help='Compile and assemble, but do not link')
   parser.add_argument('-fpolly', help='Enable polly', action='store_true')
   parser.add_argument('-fpluto', help='Enable pluto', action='store_true')
   parser.add_argument('-ftile', help='Enable pluto tiling', action='store_true')
@@ -127,6 +134,8 @@ def createOutputFiles(assemblyFiles, args):
     outputFile = args.output
   elif len(args.files) == 1 and args.c:
     outputFile = args.files[0].replace('.c', '.o')
+  elif len(args.files) == 1 and args.S:
+    outputFile = args.files[0].replace('.c', '.s')
   else:
     outputFile = 'a.out'
 
@@ -135,8 +144,12 @@ def createOutputFiles(assemblyFiles, args):
 
   commandLine = ['gcc', '-o', outputFile] + assemblyFiles
 
+  if args.S:
+    subprocess.call(['mv', assemblyFiles[0], outputFile])
+    return
+
   if args.c:
-    commandLine = commandLine + ['-c']
+    commandLine.append('-c')
   else:
     commandLine = commandLine + linkerFlags + libraryPath
 
