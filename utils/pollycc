@@ -77,12 +77,17 @@ def parseArguments():
 
   parser = argparse.ArgumentParser(description=description)
   parser.add_argument('files', nargs='+')
-  parser.add_argument('-o', '--output', help='The name of the output file')
-  parser.add_argument('-I', action='append', dest='includes', default=[])
-  parser.add_argument('-D', action='append', dest='preprocessor', default=[])
-  parser.add_argument('-l', action='append', dest='libraries', default=[])
-  parser.add_argument('-L', action='append', dest='librarypath', default=[])
-  parser.add_argument('-O', dest='optlevel', choices='0123s')
+  parser.add_argument('-o', dest='output', help='The name of the output file')
+  parser.add_argument('-I', action='append', dest='includes', default=[],
+                      help='Include path to pass to clang')
+  parser.add_argument('-D', action='append', dest='preprocessor', default=[],
+                      help='Preprocessor directives to pass to clang')
+  parser.add_argument('-l', action='append', dest='libraries', default=[],
+                      help='Library flags to pass to the linker')
+  parser.add_argument('-L', action='append', dest='librarypath', default=[],
+                      help='Library paths to pass to the linker')
+  parser.add_argument('-O', dest='optlevel', choices='0123s',
+                      help='Optimization level. (ignored)')
   parser.add_argument('-c', action='store_true')
   parser.add_argument('-fpolly', help='Enable polly', action='store_true')
   parser.add_argument('-fpluto', help='Enable pluto', action='store_true')
