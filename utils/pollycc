@@ -79,30 +79,30 @@ def parseArguments():
 
   parser = argparse.ArgumentParser(description=description)
   parser.add_argument('files', nargs='+')
-  parser.add_argument('-o', dest='output', help='The name of the output file')
+  parser.add_argument('-o', dest='output', help='the name of the output file')
   parser.add_argument('-I', action='append', dest='includes', default=[],
-                      help='Include path to pass to clang')
+                      help='include path to pass to clang')
   parser.add_argument('-D', action='append', dest='preprocessor', default=[],
-                      help='Preprocessor directives to pass to clang')
+                      help='preprocessor directives to pass to clang')
   parser.add_argument('-l', action='append', dest='libraries', default=[],
-                      help='Library flags to pass to the linker')
+                      help='library flags to pass to the linker')
   parser.add_argument('-L', action='append', dest='librarypath', default=[],
-                      help='Library paths to pass to the linker')
+                      help='library paths to pass to the linker')
   parser.add_argument('-O', dest='optlevel', choices='0123s',
-                      help='Optimization level. (ignored)')
+                      help='optimization level. (ignored)')
   parser.add_argument('-S', action='store_true',
-                      help='Compile only; do not link or assemble')
+                      help='compile only; do not link or assemble')
   parser.add_argument('--emit-llvm', action='store_true', dest='emitllvm',
-                      help='Output LLVM-IR instead of assembly if -S is set')
+                      help='output LLVM-IR instead of assembly if -S is set')
   parser.add_argument('-c', action='store_true',
-                      help='Compile and assemble, but do not link')
-  parser.add_argument('-fpolly', help='Enable polly', action='store_true')
-  parser.add_argument('-fpluto', help='Enable pluto', action='store_true')
-  parser.add_argument('-ftile', help='Enable pluto tiling', action='store_true')
-  parser.add_argument('-d', '--debug', help='Print debugging output',
+                      help='compile and assemble, but do not link')
+  parser.add_argument('-fpolly', help='enable polly', action='store_true')
+  parser.add_argument('-fpluto', help='enable pluto', action='store_true')
+  parser.add_argument('-ftile', help='enable pluto tiling', action='store_true')
+  parser.add_argument('-d', '--debug', help='print debugging output',
                       action='store_true')
   parser.add_argument('-v', '--version', dest='version', action='store_true',
-                      help='Print version info')
+                      help='print version info')
   arguments = parser.parse_args()
 
   if arguments.optlevel:
