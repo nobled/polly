@@ -43,7 +43,7 @@ def createAssemblyFile(tmpDir, file, args, polly):
 
   if exit:
     print 'Preoptimizing failed: This command did not work'
-    print commandLine.join(' ')
+    print ' '.join(commandLine)
     sys.exit(1)
 
   # Run the Polly optimizers
@@ -79,7 +79,7 @@ def createAssemblyFile(tmpDir, file, args, polly):
 
     if exit:
       print 'Polly optimizations failed: This command did not work'
-      print commandLine.join(' ')
+      print ' '.join(commandLine)
       sys.exit(1)
 
 
@@ -100,7 +100,7 @@ def createAssemblyFile(tmpDir, file, args, polly):
 
   if exit:
     print 'LLVM -O3 optimizations failed: This command did not work'
-    print commandLine.join(' ')
+    print ' '.join(commandLine)
     sys.exit(1)
 
   if args.emitllvm:
@@ -116,8 +116,9 @@ def createAssemblyFile(tmpDir, file, args, polly):
   subprocess.call(commandLine)
 
   if exit:
-    return 'Translating LLVM-IR to assembly failed: This command did not work'
-    return commandLine.join(' ')
+    print 'Translating LLVM-IR to assembly failed: This command did not work'
+    print ' '.join(commandLine)
+    sys.exit(1)
 
   return assemblyFile
 
