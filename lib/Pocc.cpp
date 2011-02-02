@@ -96,6 +96,7 @@ bool Pocc::runOnScop(Scop &S) {
   arguments.push_back("--read-scop");
   arguments.push_back(scopFile.c_str());
   arguments.push_back("--pluto-tile-scat");
+  arguments.push_back("--candl-dep-isl-simp");
   arguments.push_back("--cloogify-scheds");
   arguments.push_back("--output-scop");
   arguments.push_back("--pluto");
