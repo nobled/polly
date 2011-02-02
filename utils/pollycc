@@ -32,7 +32,6 @@ def createAssemblyFile(tmpDir, file, args, polly):
                 + ['-S', llFile, '-o', preoptFile]
   subprocess.call(commandLine)
 
-
   # Run polly
   if args.fpolly:
     optionalArgs = []
@@ -87,7 +86,16 @@ def parseArguments():
                       action='store_true')
   parser.add_argument('-v', '--version', dest='version', action='store_true',
                       help='Print version info')
-  return parser.parse_args()
+  arguments = parser.parse_args()
+
+  # Post process arguments
+  if arguments.ftile:
+    arguments.fpluto = True
+
+  if arguments.fpluto:
+    arguments.fpolly = True
+
+  return arguments
 
 def createAssemblyFiles(files, args, pollyLib):
   assemblyFiles = []
