@@ -15,10 +15,8 @@ include $(LEVEL)/Makefile.config
 
 CPP.Flags += $(POLLY_INC)
 
-ifeq ($(OPENSCOP_FOUND),yes)
-  DIRS += Exchange
-  USEDLIBS += pollyexchange.a
-endif
+DIRS += Exchange
+USEDLIBS += pollyexchange.a
 
 # TODO: Export symbols for RTTI or EH?
 
