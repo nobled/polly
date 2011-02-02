@@ -73,7 +73,7 @@ def createAssemblyFile(tmpDir, file, args, polly):
 
 def parseArguments():
   description = 'pollycc is a simple replacement for compiler drivers like ' \
-                'gcc, clang or icc. It uses clang to compile c code and can ' \
+                'gcc, clang or icc. It uses clang to compile C code and can ' \
                 'optimize the code with Polly. It will either produce an ' \
                 'optimized binary or an optimized \'.o\' file.'
 
