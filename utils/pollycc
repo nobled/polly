@@ -33,30 +33,32 @@ def createAssemblyFile(tmpDir, file, args, polly):
   pollyFile = tmpDir + '/output.polly.ll'
 
   if args.fpolly:
-    optionalArgs = []
+    commandLine = ['opt', '-load', polly, '-basicaa'] \
+                  + [preoptFile, '-disable-polly-legality']
 
     if args.fpluto:
-      optionalArgs = ['-polly-optimize']
+      commandLine.append('-polly-optimize')
+
     if args.ftile:
-      optionalArgs.append('-enable-pluto-tile')
+      commandLine.append('-enable-pluto-tile')
 
     if args.debug:
-      commandLine = ['opt', '-load', polly, '-basicaa'] + optionalArgs \
-                    + ['-polly-cloog', '-analyze', preoptFile, '-q', \
-                       '-disable-polly-legality']
-      subprocess.call(commandLine)
-    commandLine = ['opt', '-load', polly, '-basicaa'] + optionalArgs \
-                  + ['-polly-codegen', '-S', preoptFile, '-o', pollyFile, \
-                     '-disable-polly-legality']
-    subprocess.call(commandLine)
-  else:
-    commandLine = ['cp', preoptFile, pollyFile]
+      debugCommandLine = commandLine + ['-polly-cloog', '-analyze', '-q']
+      subprocess.call(debugCommandLine)
+
+    commandLine = commandLine + ['-polly-codegen', '-S', '-o', pollyFile]
     subprocess.call(commandLine)
 
   # Run optimizations to clean up the redundant calculations Polly introduced
   # and to take advantage of non polyhedral optimizations.
   optFile = tmpDir + '/output.opt.ll'
-  commandLine = ['opt', '-O3', '-S', pollyFile, '-o', optFile]
+  commandLine = ['opt', '-O3', '-S', '-o', optFile]
+
+  if args.fpolly:
+    commandLine.append(pollyFile)
+  else:
+    commandLine.append(preoptFile)
+
   subprocess.call(commandLine)
 
   # Create assembly file
