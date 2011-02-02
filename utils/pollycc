@@ -6,7 +6,7 @@ import tempfile
 import os
 import sys
 
-def createObjectFile(tmpDir, file, args, polly):
+def createAssemblyFile(tmpDir, file, args, polly):
   llFile = tmpDir + '/output.ll'
   preoptFile = tmpDir + '/output.preopt.ll'
   pollyFile = tmpDir + '/output.polly.ll'
@@ -65,8 +65,7 @@ def createObjectFile(tmpDir, file, args, polly):
 
   return assemblyFile
 
-if __name__ == '__main__':
-
+def parseArguments():
   description = 'pollycc is a simple replacement for compiler drivers like ' \
                 'gcc, clang or icc. It uses clang to compile c code and can ' \
                 'optimize the code with Polly. It will either produce an ' \
@@ -80,6 +79,7 @@ if __name__ == '__main__':
   parser.add_argument('-l', action='append', dest='libraries', default=[])
   parser.add_argument('-L', action='append', dest='librarypath', default=[])
   parser.add_argument('-O', choices='0123s')
+  parser.add_argument('-c', action='store_true')
   parser.add_argument('-fpolly', help='Enable polly', action='store_true')
   parser.add_argument('-fpluto', help='Enable pluto', action='store_true')
   parser.add_argument('-ftile', help='Enable pluto tiling', action='store_true')
@@ -87,22 +87,19 @@ if __name__ == '__main__':
                       action='store_true')
   parser.add_argument('-v', '--version', dest='version', action='store_true',
                       help='Print version info')
-  args = parser.parse_args()
+  return parser.parse_args()
 
-  objectFiles = []
-  tmpDir = tempfile.mkdtemp(prefix='pollyccTmp');
+def createAssemblyFiles(files, args, pollyLib):
+  assemblyFiles = []
 
-  if not 'LIBPOLLY' in os.environ:
-    sys.exit('Polly library not provided. Please set LIBPOLLY environment ' + \
-             'variable to the LLVMPolly.so file')
-
-  pollyLib = os.environ['LIBPOLLY']
+  tmpDir = tempfile.mkdtemp(prefix='pollycc-');
 
   for file in args.files:
-    objectFiles.append(createObjectFile(tmpDir, file, args, pollyLib))
+    assemblyFiles.append(createAssemblyFile(tmpDir, file, args, pollyLib))
 
-  # Create assembly file
+  return assemblyFiles
 
+def createOutputFiles(assemblyFiles, args):
   if args.output:
     outputFile = args.output
   elif len(args.files) == 1 and args.c:
@@ -113,7 +110,7 @@ if __name__ == '__main__':
   linkerFlags = ['-l' + x for x in args.libraries]
   libraryPath = ['-L' + x for x in args.librarypath]
 
-  commandLine = ['gcc', '-o', outputFile] + objectFiles
+  commandLine = ['gcc', '-o', outputFile] + assemblyFiles
 
   if args.c:
     commandLine = commandLine + ['-c']
@@ -121,3 +118,18 @@ if __name__ == '__main__':
     commandLine = commandLine + linkerFlags + libraryPath
 
   subprocess.call(commandLine)
+
+def main():
+  args = parseArguments()
+
+  if not 'LIBPOLLY' in os.environ:
+    sys.exit('Polly library not provided. Please set LIBPOLLY environment ' + \
+             'variable to the LLVMPolly.so file')
+
+  pollyLib = os.environ['LIBPOLLY']
+
+  assemblyFiles = createAssemblyFiles(args.files, args, pollyLib)
+  createOutputFiles(assemblyFiles, args)
+
+if __name__ == '__main__':
+  main()
