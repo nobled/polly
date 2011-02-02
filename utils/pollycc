@@ -12,6 +12,10 @@ def createAssemblyFile(tmpDir, file, args, polly):
   includeFlags = ['-I' + x for x in args.includes]
   preprocessorFlags = ['-D' + x for x in args.preprocessor]
 
+  if args.progress:
+    print "Optimizing file: " + file
+    print "\tCompiling C to LLVM-IR"
+
   commandLine = ["clang","-emit-llvm", "-S", file, '-o', llFile] \
                 + includeFlags + preprocessorFlags
   subprocess.call(commandLine, shell=False)
@@ -24,6 +28,9 @@ def createAssemblyFile(tmpDir, file, args, polly):
                  '-lcssa -loop-rotate -lcssa -loop-unswitch -instcombine ' \
                  '-loopsimplify -lcssa -indvars -loop-deletion -instcombine ' \
                  '-polly-prepare'
+
+  if args.progress:
+    print "\tPreoptimizing to expose optimization opportunities"
 
   commandLine = ['opt', '-load', polly] + preoptPasses.split(' ') \
                 + ['-S', llFile, '-o', preoptFile]
@@ -46,6 +53,17 @@ def createAssemblyFile(tmpDir, file, args, polly):
       debugCommandLine = commandLine + ['-polly-cloog', '-analyze', '-q']
       subprocess.call(debugCommandLine)
 
+    if args.progress:
+      print "\tRunning polly",
+
+      if args.fpluto:
+        print "with pluto",
+
+      if args.ftile:
+        print "and tiling",
+
+    print ""
+
     commandLine = commandLine + ['-polly-codegen', '-S', '-o', pollyFile]
     subprocess.call(commandLine)
 
@@ -59,6 +77,9 @@ def createAssemblyFile(tmpDir, file, args, polly):
   else:
     commandLine.append(preoptFile)
 
+  if args.progress:
+    print "\tRunning normal LLVM -O3 passes"
+
   subprocess.call(commandLine)
 
   if args.emitllvm:
@@ -67,6 +88,10 @@ def createAssemblyFile(tmpDir, file, args, polly):
   # Create assembly file
   assemblyFile = tmpDir + '/output.opt.s'
   commandLine = ['llc', optFile, '-o', assemblyFile]
+
+  if args.progress:
+    print "\tTranslating LLVM-IR to assembly"
+
   subprocess.call(commandLine)
 
   return assemblyFile
@@ -94,6 +119,8 @@ def parseArguments():
                       help='compile only; do not link or assemble')
   parser.add_argument('--emit-llvm', action='store_true', dest='emitllvm',
                       help='output LLVM-IR instead of assembly if -S is set')
+  parser.add_argument('-p', '--progress', action='store_true',
+                      help='Show the compilation progress')
   parser.add_argument('-c', action='store_true',
                       help='compile and assemble, but do not link')
   parser.add_argument('-fpolly', help='enable polly', action='store_true')
