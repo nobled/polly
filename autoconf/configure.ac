@@ -97,6 +97,14 @@ find_lib_and_headers([scoplib], [scoplib/scop.h], [scoplib])
 AS_IF([test "x$scoplib_found" = "xyes"],
   [AC_DEFINE([SCOPLIB_FOUND],[1],[Define if scoplib found])])
 
+if test "x$scoplib_found" = "xyes"; then :
+  scoplib_rpath="-Wl,-rpath=$given_lib_path"
+else
+  scoplib_rpath=""
+fi
+
+AC_SUBST(scoplib_rpath)
+
 dnl **************************************************************************
 dnl * Create the output files
 dnl **************************************************************************

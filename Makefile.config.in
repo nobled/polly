@@ -34,6 +34,6 @@ SCOPLIB_FOUND := @scoplib_found@
 POLLY_INC :=  @gmp_inc@ @isl_inc@ \
               @cloog_inc@ @openscop_inc@ @scoplib_inc@
 
-POLLY_LD := @gmp_ld@ @isl_ld@ @cloog_ld@ @openscop_ld@ @scoplib_ld@
+POLLY_LD := @gmp_ld@ @isl_ld@ @cloog_ld@ @openscop_ld@ @scoplib_ld@ @scoplib_rpath@
 
 POLLY_LIB := @gmp_lib@ @isl_lib@ @cloog_lib@ @openscop_lib@ @scoplib_lib@

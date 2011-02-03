@@ -559,6 +559,7 @@ PACKAGE_URL=''
 ac_unique_file=""lib/ScopInfo.cpp""
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+scoplib_rpath
 scoplib_ld
 scoplib_lib
 scoplib_inc
@@ -2790,6 +2791,14 @@ if test "x$scoplib_found" = "xyes"; then :
 $as_echo "#define SCOPLIB_FOUND 1" >>confdefs.h
 
 fi
+
+if test "x$scoplib_found" = "xyes"; then :
+  scoplib_rpath="-Wl,-rpath=$given_lib_path"
+else
+  scoplib_rpath=""
+fi
+
+
 
 
 ac_config_headers="$ac_config_headers include/polly/Config/config.h"
