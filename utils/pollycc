@@ -14,7 +14,7 @@ def createAssemblyFile(tmpDir, file, args, polly):
 
   if args.progress:
     print "Optimizing file: " + file
-    print "\tCompiling C to LLVM-IR"
+    print "- Compiling C to LLVM-IR"
 
   commandLine = ["clang","-emit-llvm", "-S", file, '-o', llFile] \
                 + includeFlags + preprocessorFlags
@@ -35,7 +35,7 @@ def createAssemblyFile(tmpDir, file, args, polly):
                  '-polly-prepare'
 
   if args.progress:
-    print "\tPreoptimizing to expose optimization opportunities"
+    print "- Preoptimizing to expose optimization opportunities"
 
   commandLine = ['opt', '-load', polly] + preoptPasses.split(' ') \
                 + ['-S', llFile, '-o', preoptFile]
@@ -64,7 +64,7 @@ def createAssemblyFile(tmpDir, file, args, polly):
       subprocess.call(debugCommandLine)
 
     if args.progress:
-      print "\tRunning polly",
+      print "- Running polly",
 
       if args.fpluto:
         print "with pluto",
@@ -94,7 +94,7 @@ def createAssemblyFile(tmpDir, file, args, polly):
     commandLine.append(preoptFile)
 
   if args.progress:
-    print "\tRunning normal LLVM -O3 passes"
+    print "- Running normal LLVM -O3 passes"
 
   exit = subprocess.call(commandLine)
 
@@ -111,7 +111,7 @@ def createAssemblyFile(tmpDir, file, args, polly):
   commandLine = ['llc', optFile, '-o', assemblyFile]
 
   if args.progress:
-    print "\tTranslating LLVM-IR to assembly"
+    print "- Translating LLVM-IR to assembly"
 
   subprocess.call(commandLine)
 
