@@ -16,13 +16,13 @@ def createAssemblyFile(tmpDir, file, args, polly):
     print "Optimizing file: " + file
     print "- Compiling C to LLVM-IR"
 
-  commandLine = ["clang","-emit-llvm", "-S", file, '-o', llFile] \
-                + includeFlags + preprocessorFlags
+  commandLine = ["clang","-emit-llvm", "-S", file, '-o', llFile,
+                 '-std=' + args.standard] + includeFlags + preprocessorFlags
   exit = subprocess.call(commandLine)
 
   if exit:
-    return 'Translation from C to LLVM-IR failed. This command did not work:'
-    return commandLine.join(' ')
+    print 'Translation from C to LLVM-IR failed. This command did not work:'
+    print ' '.join(commandLine)
     sys.exit(1)
 
   # Preprocess the programm such that as many optimization opportunities
@@ -145,6 +145,8 @@ def parseArguments():
                       help='compile only; do not link or assemble')
   parser.add_argument('--emit-llvm', action='store_true', dest='emitllvm',
                       help='output LLVM-IR instead of assembly if -S is set')
+  parser.add_argument('-std', dest='standard', help='The C standard to use',
+                      default='c99')
   parser.add_argument('-p', '--progress', action='store_true',
                       help='Show the compilation progress')
   parser.add_argument('-c', action='store_true',
