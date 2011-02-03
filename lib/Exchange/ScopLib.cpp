@@ -45,10 +45,10 @@ ScopLib::ScopLib(Scop *S, FILE *F, Dependences *dep) : PollyScop(S), D(dep) {
 
 void ScopLib::initializeParameters() {
   scoplib->nb_parameters = PollyScop->getNumParams();
-  scoplib->parameters = new char*[scoplib->nb_parameters];
+  scoplib->parameters = (char**) malloc(sizeof(char*) * scoplib->nb_parameters);
 
   for (int i = 0; i < scoplib->nb_parameters; ++i) {
-    scoplib->parameters[i] = new char[20];
+    scoplib->parameters[i] = (char *) malloc(sizeof(char*) * 20);
     sprintf(scoplib->parameters[i], "p_%d", i);
   }
 }
@@ -68,7 +68,7 @@ void ScopLib::initializeArrays() {
     }
 
   scoplib->nb_arrays = nb_arrays;
-  scoplib->arrays = new char*[nb_arrays];
+  scoplib->arrays = (char**)malloc(sizeof(char*) * nb_arrays);
 
   for (int i = 0; i < nb_arrays; ++i)
     for (std::map<const Value*, int>::iterator VI = ArrayMap.begin(),
@@ -76,7 +76,7 @@ void ScopLib::initializeArrays() {
       if ((*VI).second == i) {
         const Value *V = (*VI).first;
         std::string name = V->getNameStr();
-        scoplib->arrays[i] = new char[name.size() + 1];
+        scoplib->arrays[i] = (char*) malloc(sizeof(char*) * (name.size() + 1));
         strcpy(scoplib->arrays[i], name.c_str());
       }
 }
@@ -103,10 +103,10 @@ scoplib_statement_p ScopLib::initializeStatement(ScopStmt *stmt) {
 
   // Iterator names
   Stmt->nb_iterators = isl_set_n_dim(stmt->getDomain());
-  Stmt->iterators = new char*[Stmt->nb_iterators];
+  Stmt->iterators = (char**) malloc(sizeof(char*) * Stmt->nb_iterators);
 
   for (int i = 0; i < Stmt->nb_iterators; ++i) {
-    Stmt->iterators[i] = new char[20];
+    Stmt->iterators[i] = (char*) malloc(sizeof(char*) * 20);
     sprintf(Stmt->iterators[i], "i_%d", i);
   }
 
@@ -150,9 +150,9 @@ void ScopLib::freeStatement(scoplib_statement_p stmt) {
   stmt->schedule = NULL;
 
   for (int i = 0; i < stmt->nb_iterators; ++i)
-    delete[](stmt->iterators[i]);
+    free(stmt->iterators[i]);
 
-  delete[](stmt->iterators);
+  free(stmt->iterators);
   stmt->iterators = NULL;
   stmt->nb_iterators = 0;
 
@@ -445,17 +445,17 @@ scoplib_matrix_p ScopLib::createAccessMatrix(ScopStmt *S, bool isRead) {
 ScopLib::~ScopLib() {
   // Free array names.
   for (int i = 0; i < scoplib->nb_arrays; ++i)
-    delete[](scoplib->arrays[i]);
+    free(scoplib->arrays[i]);
 
-  delete[](scoplib->arrays);
+  free(scoplib->arrays);
   scoplib->arrays = NULL;
   scoplib->nb_arrays = 0;
 
   // Free parameters
   for (int i = 0; i < scoplib->nb_parameters; ++i)
-    delete[](scoplib->parameters[i]);
+    free(scoplib->parameters[i]);
 
-  delete[](scoplib->parameters);
+  free(scoplib->parameters);
   scoplib->parameters = NULL;
   scoplib->nb_parameters = 0;
 
