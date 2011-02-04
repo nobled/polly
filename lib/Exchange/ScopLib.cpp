@@ -443,6 +443,9 @@ scoplib_matrix_p ScopLib::createAccessMatrix(ScopStmt *S, bool isRead) {
 }
 
 ScopLib::~ScopLib() {
+  if (!scoplib)
+    return;
+
   // Free array names.
   for (int i = 0; i < scoplib->nb_arrays; ++i)
     free(scoplib->arrays[i]);
@@ -690,6 +693,9 @@ StatementToIslMapTy *readScattering(Scop *S, scoplib_scop_p OScop) {
 /// @brief Update the scattering in a Scop using the scoplib description of
 /// the scattering.
 bool ScopLib::updateScattering() {
+  if (!scoplib)
+    return false;
+
   StatementToIslMapTy *NewScattering = readScattering(PollyScop, scoplib);
 
   if (!NewScattering)
