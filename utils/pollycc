@@ -184,6 +184,9 @@ def createAssemblyFiles(files, args, pollyLib):
   number = 0
   for file in args.files:
     assemblyFiles.append(createAssemblyFile(tmpDir, file, number, args, pollyLib))
+    if args.progress:
+      print ""
+
     number = number + 1
 
   return assemblyFiles
@@ -211,6 +214,9 @@ def createOutputFiles(assemblyFiles, args):
     commandLine.append('-c')
   else:
     commandLine = commandLine + linkerFlags + libraryPath
+
+  if args.progress:
+    print "Final linking"
 
   subprocess.call(commandLine)
 
