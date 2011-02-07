@@ -146,7 +146,7 @@ def parseArguments():
   parser.add_argument('--emit-llvm', action='store_true', dest='emitllvm',
                       help='output LLVM-IR instead of assembly if -S is set')
   parser.add_argument('-std', dest='standard', help='The C standard to use',
-                      default='c99')
+                      default='gnu89')
   parser.add_argument('-p', '--progress', action='store_true',
                       help='Show the compilation progress')
   parser.add_argument('-c', action='store_true',
