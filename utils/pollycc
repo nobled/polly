@@ -6,8 +6,10 @@ import tempfile
 import os
 import sys
 
-def createAssemblyFile(tmpDir, file, args, polly):
+def createAssemblyFile(tmpDir, file, number, args, polly):
   # Create an LLVM-IR .ll file
+  tmpDir = tmpDir +  "/" + str(number)
+  subprocess.call(["mkdir", tmpDir])
   llFile = tmpDir + '/output.ll'
   includeFlags = ['-I' + x for x in args.includes]
   preprocessorFlags = ['-D' + x for x in args.preprocessor]
@@ -179,8 +181,10 @@ def createAssemblyFiles(files, args, pollyLib):
 
   tmpDir = tempfile.mkdtemp(prefix='pollycc-');
 
+  number = 0
   for file in args.files:
-    assemblyFiles.append(createAssemblyFile(tmpDir, file, args, pollyLib))
+    assemblyFiles.append(createAssemblyFile(tmpDir, file, number, args, pollyLib))
+    number = number + 1
 
   return assemblyFiles
 
