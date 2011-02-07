@@ -160,6 +160,13 @@ def parseArguments():
                       action='store_true')
   parser.add_argument('-v', '--version', dest='version', action='store_true',
                       help='print version info')
+
+  # Move all positional arguments at the end of the command line, as argparse
+  # does not support several groups of positional arguments. This fixes:
+  # pollycc fileA -I/.. fileB
+  files = filter(lambda x: x[0] != '-', sys.argv[1:])
+  sys.argv = [sys.argv[0]] + filter(lambda x: x[0] == '-', sys.argv[1:]) + files
+
   arguments = parser.parse_args()
 
   if arguments.optlevel:
