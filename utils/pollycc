@@ -79,7 +79,7 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
       if args.ftile:
         print "and tiling",
 
-    print ""
+      print ""
 
     commandLine = commandLine + ['-polly-codegen', '-S', '-o', pollyFile]
     exit = subprocess.call(commandLine)
