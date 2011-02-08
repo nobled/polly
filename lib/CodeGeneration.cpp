@@ -1273,13 +1273,14 @@ class CodeGeneration : public ScopPass {
     BasicBlock *AfterScop = *pred_begin(R->getExit());
     Builder.CreateBr(AfterScop);
 
+    BasicBlock *successorBlock = *succ_begin(R->getEntry());
+
     // Update old PHI nodes to pass LLVM verification.
-    for (BasicBlock::iterator SI = succ_begin(R->getEntry())->begin(),
-         SE = succ_begin(R->getEntry())->end(); SI != SE; ++SI)
-      if (PHINode::classof(&(*SI))) {
-        PHINode *PN = static_cast<PHINode *>(&*SI);
-        PN->removeIncomingValue(R->getEntry());
-      }
+    for (BasicBlock::iterator SI = successorBlock->begin(),
+         SE = successorBlock->getFirstNonPHI(); SI != SE; ++SI) {
+      PHINode *PN = static_cast<PHINode *>(&*SI);
+      PN->removeIncomingValue(R->getEntry());
+    }
 
     DT->changeImmediateDominator(AfterScop, Builder.GetInsertBlock());
 
