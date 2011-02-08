@@ -184,7 +184,8 @@ def parseArguments():
 
     if arguments.unknown_args:
       print 'warning: The following arguments are unknown and will \n' \
-            '         be passed directly to clang'
+            '         be passed directly to clang: ' + \
+            ' '.join(arguments.unknown_args)
   else:
     arguments.unknown_args = []
 
