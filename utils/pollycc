@@ -67,6 +67,9 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
     if args.ftile:
       commandLine.append('-enable-pluto-tile')
 
+    if args.fparallel:
+      commandLine.append('-enable-polly-openmp')
+
     if args.debug:
       debugCommandLine = commandLine + ['-polly-cloog', '-analyze', '-q']
       subprocess.call(debugCommandLine)
@@ -79,6 +82,9 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
 
       if args.ftile:
         print "and tiling",
+
+      if args.fparallel:
+        print "and parallel",
 
       print ""
 
@@ -162,6 +168,9 @@ def parseArguments():
   parser.add_argument('-fpolly', help='enable polly', action='store_true')
   parser.add_argument('-fpluto', help='enable pluto', action='store_true')
   parser.add_argument('-ftile', help='enable pluto tiling', action='store_true')
+  parser.add_argument('-fparallel',
+                      help='enable openmp code generation (in development',
+		      action='store_true')
   parser.add_argument('-d', '--debug', help='print debugging output',
                       action='store_true')
   parser.add_argument('-v', '--version', dest='version', action='store_true',
@@ -231,6 +240,9 @@ def createOutputFiles(assemblyFiles, args):
     commandLine.append('-c')
   else:
     commandLine = commandLine + linkerFlags + libraryPath
+
+  if args.fparallel:
+    commandLine.append('-lgmp')
 
   if args.progress:
     print "Final linking"
