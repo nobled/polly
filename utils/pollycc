@@ -24,7 +24,8 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
     print "- Compiling C to LLVM-IR"
 
   commandLine = ["clang","-emit-llvm", "-S", file, '-o', llFile,
-                 '-std=' + args.standard] + includeFlags + preprocessorFlags
+                 '-std=' + args.standard] + includeFlags + preprocessorFlags \
+                 + args.unknown_args
   exit = subprocess.call(commandLine)
 
   if exit:
@@ -166,13 +167,17 @@ def parseArguments():
   parser.add_argument('-v', '--version', dest='version', action='store_true',
                       help='print version info')
 
-  # Move all positional arguments at the end of the command line, as argparse
-  # does not support several groups of positional arguments. This fixes:
-  # pollycc fileA -I/.. fileB
-  files = filter(lambda x: x[0] != '-', sys.argv[1:])
-  sys.argv = [sys.argv[0]] + filter(lambda x: x[0] == '-', sys.argv[1:]) + files
+  arguments, argv = parser.parse_known_args()
 
-  arguments = parser.parse_args()
+  if argv:
+    arguments.unknown_args = filter(lambda x: x[0] == '-', argv)
+    arguments.files = arguments.files + filter(lambda x: x[0] != '-', argv)
+
+    if arguments.unknown_args:
+      print 'warning: The following arguments are unknown and will \n' \
+            '         be passed directly to clang'
+  else:
+    arguments.unknown_args = []
 
   if arguments.optlevel:
     print 'info: -O' + arguments.optlevel + ' flag ignored. pollycc always ' \
