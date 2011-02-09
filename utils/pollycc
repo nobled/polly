@@ -36,7 +36,7 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
   # Preprocess the programm such that as many optimization opportunities
   # as possible are exposed.
   preoptFile = tmpDir + '/output.preopt.ll'
-  preoptPasses = '-basicaa -mem2reg -inline -simplify-libcalls ' \
+  preoptPasses = '-basicaa -mem2reg -simplify-libcalls ' \
                  '-simplifycfg -instcombine -tailcallelim -loopsimplify ' \
                  '-lcssa -loop-rotate -lcssa -loop-unswitch -instcombine ' \
                  '-loopsimplify -lcssa -indvars -loop-deletion -instcombine ' \
