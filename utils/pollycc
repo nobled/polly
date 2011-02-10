@@ -243,7 +243,7 @@ def createOutputFiles(assemblyFiles, args):
     commandLine = commandLine + linkerFlags + libraryPath
 
   if args.fparallel:
-    commandLine.append('-lgmp')
+    commandLine.append('-lgomp')
 
   if args.progress:
     print "Final linking"
