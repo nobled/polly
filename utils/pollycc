@@ -40,7 +40,7 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
                  '-simplifycfg -instcombine -tailcallelim -loopsimplify ' \
                  '-lcssa -loop-rotate -lcssa -loop-unswitch -instcombine ' \
                  '-loopsimplify -lcssa -indvars -loop-deletion -instcombine ' \
-                 '-regionsimplify -polly-prepare'
+                 '-polly-prepare'
 
   if args.progress:
     print "- Preoptimizing to expose optimization opportunities"
@@ -243,7 +243,7 @@ def createOutputFiles(assemblyFiles, args):
     commandLine = commandLine + linkerFlags + libraryPath
 
   if args.fparallel:
-    commandLine.append('-lgomp')
+    commandLine.append('-lgmp')
 
   if args.progress:
     print "Final linking"
