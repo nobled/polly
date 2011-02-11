@@ -326,6 +326,7 @@ void TempScopInfo::buildLoopBounds(TempScop &Scop) {
     const SCEV *LoopCount = SE->getBackedgeTakenCount(L);
     buildAffineFunction(LoopCount, LoopBounds[L], Scop.getMaxRegion(),
                         Scop.getParamSet());
+    LoopBounds[L].setUnsigned();
 
     Loop *OL = R.outermostLoopInRegion(L);
     unsigned LoopDepth = L->getLoopDepth() - OL->getLoopDepth() + 1;

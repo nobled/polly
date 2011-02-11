@@ -935,8 +935,6 @@ public:
       // Create body for the parallel loop.
       codegenForSequential(f, lowerBound, upperBound);
       // Reset CharMaps.
-      OMPCharMap.clear();
-      CharMap.clear();
       ExpGen.setIVS(&CharMap);
       Builder->CreateBr(BB1);
 
