@@ -1,6 +1,8 @@
 ; ModuleID = 'parallel_loop.s'
-; RUN: %opt -polly-cloog -analyze  < %s | FileCheck %s
-; RUN: %opt -polly-import-jscop -polly-import-jscop-dir=`dirname %s` -polly-cloog -analyze  < %s | FileCheck -check-prefix=IMPORT %s
+; RUN: %opt -polly-cloog -polly-codegen -enable-polly-openmp -analyze  < %s | FileCheck %s
+; RUN: %opt -polly-import-jscop -polly-import-jscop-dir=`dirname %s` -polly-cloog -polly-codegen -enable-polly-openmp -analyze  < %s | FileCheck -check-prefix=IMPORT %s
+; RUN: %opt -polly-import-jscop -polly-import-jscop-dir=`dirname %s` -polly-cloog -polly-codegen -enable-polly-openmp -analyze  < %s | FileCheck -check-prefix=IMPORT %s
+; RUN: %opt -polly-import-jscop -polly-import-jscop-postfix=tiled -polly-import-jscop-dir=`dirname %s` -polly-cloog -polly-codegen -enable-polly-openmp -analyze -disable-polly-legality < %s | FileCheck -check-prefix=TILED %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-unknown-linux-gnu"
 
@@ -135,6 +137,10 @@ bb50:                                             ; preds = %bb34
 ; CHECK:     }
 ; CHECK:   }
 ; CHECK: }
+; CHECK: Parallel loop with iterator 'c2' generated
+; CHECK: Parallel loop with iterator 'c6' generated
+; CHECK-NOT: Parallel loop
+
 
 ; IMPORT: for (c2=0;c2<=1023;c2++) {
 ; IMPORT:   for (c4=0;c4<=1023;c4++) {
@@ -144,4 +150,32 @@ bb50:                                             ; preds = %bb34
 ; IMPORT:     }
 ; IMPORT:   }
 ; IMPORT: }
+; IMPORT-NOT: Parallel loop
+
+; TILED: for (c2=0;c2<=1023;c2+=4) {
+; TILED:   for (c4=0;c4<=1023;c4+=4) {
+; TILED:     for (c6=0;c6<=1023;c6+=4) {
+; TILED:       for (c8=c2;c8<=c2+3;c8++) {
+; TILED:         for (c9=c4;c9<=c4+3;c9++) {
+; TILED:           for (c10=c6;c10<=c6+3;c10++) {
+; TILED:             Stmt_bb23(c8,c9,c10);
+; TILED:           }
+; TILED:         }
+; TILED:       }
+; TILED:     }
+; TILED:   }
+; TILED: }
+; TILED: for (c2=0;c2<=1023;c2+=4) {
+; TILED:   for (c4=0;c4<=1023;c4+=4) {
+; TILED:     for (c6=0;c6<=1023;c6+=4) {
+; TILED:       for (c8=c2;c8<=c2+3;c8++) {
+; TILED:         for (c9=c4;c9<=c4+3;c9++) {
+; TILED:           for (c10=c6;c10<=c6+3;c10++) {
+; TILED:             Stmt_bb39(c8,c9,c10);
+; TILED:           }
+; TILED:         }
+; TILED:       }
+; TILED:     }
+; TILED:   }
+; TILED: }
 

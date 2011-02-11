@@ -675,6 +675,7 @@ class ClastStmtCodeGen {
   // Do we currently generate parallel code?
   bool parallelCodeGeneration;
 
+  std::vector<std::string> parallelLoops;
 
 public:
   // Map the textual representation of variables in clast to the actual
@@ -684,6 +685,10 @@ public:
   CharMapT CharMap;
   // Use this while generating OpenMP code.
   CharMapT OMPCharMap;
+
+  const std::vector<std::string> &getParallelLoops() {
+    return parallelLoops;
+  }
 
   protected:
   void codegen(const clast_assignment *a) {
@@ -1039,6 +1044,7 @@ public:
       codegenForVector(f);
     } else if (OpenMP && !parallelCodeGeneration && isParallelFor(f)) {
       parallelCodeGeneration = true;
+      parallelLoops.push_back(f->iterator);
       codegenForOpenMP(f);
       parallelCodeGeneration = false;
     } else
@@ -1127,6 +1133,8 @@ class CodeGeneration : public ScopPass {
   CloogInfo *C;
   LoopInfo *LI;
   TargetData *TD;
+
+  std::vector<std::string> parallelLoops;
 
   public:
   static char ID;
@@ -1246,6 +1254,8 @@ class CodeGeneration : public ScopPass {
 
     Function *F = R->getEntry()->getParent();
 
+    parallelLoops.clear();
+
     if (CodegenOnly != "" && CodegenOnly != F->getNameStr()) {
       errs() << "Codegenerating only function '" << CodegenOnly
         << "' skipping '" << F->getNameStr() << "' \n";
@@ -1269,6 +1279,11 @@ class CodeGeneration : public ScopPass {
       addOpenMPDefinitions(&Builder);
 
     CodeGen.codegen(clast);
+
+    // Save the parallel loops generated.
+    parallelLoops.insert(parallelLoops.begin(),
+                         CodeGen.getParallelLoops().begin(),
+                         CodeGen.getParallelLoops().end());
 
     BasicBlock *AfterScop = *pred_begin(R->getExit());
     Builder.CreateBr(AfterScop);
@@ -1320,7 +1335,11 @@ class CodeGeneration : public ScopPass {
     return false;
   }
 
-  void print(raw_ostream &OS, const Module *) const { }
+  virtual void printScop(raw_ostream &OS) const {
+    for (std::vector<std::string>::const_iterator PI = parallelLoops.begin(),
+         PE = parallelLoops.end(); PI != PE; ++PI)
+      OS << "Parallel loop with iterator '" << *PI << "' generated\n";
+  }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<CloogInfo>();
