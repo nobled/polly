@@ -178,4 +178,9 @@ bb50:                                             ; preds = %bb34
 ; TILED:     }
 ; TILED:   }
 ; TILED: }
-
+; I am not sure if we actually may have parallel loops here. The dependency
+; analysis does not detect any. This may however be because we do not
+; correctly update the imported schedule. Add a check that hopefully fails
+; after this is corrected. Or someone proves there are no parallel loops and
+; we can remove this comment.
+; TILDED-NOT: Parallel loop
