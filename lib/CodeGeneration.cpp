@@ -809,7 +809,7 @@ public:
     assert(loopDomain && "Cannot access domain of loop");
 
     bool isParallel = DP->isParallelDimension(loopDomain,
-                                              isl_set_n_dim(loopDomain) - 1);
+                                              isl_set_n_dim(loopDomain));
 
     if (isParallel)
       DEBUG(dbgs() << "Parallel loop with induction variable '" << f->iterator

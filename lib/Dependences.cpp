@@ -231,138 +231,87 @@ bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
   return true;
 }
 
-static isl_map *getReverseMap(isl_ctx *context, int parameterDimension,
-                              int scatteringDimensions,
-                              int dimensionToReverse) {
-  isl_dim *dim = isl_dim_alloc(context, parameterDimension,
-                               scatteringDimensions, scatteringDimensions);
+isl_union_map* getCombinedScheduleForDim(Scop *scop, unsigned dimLevel) {
+  isl_dim *dim = isl_dim_alloc(scop->getCtx(), scop->getNumParams(), 0, 0);
 
-  isl_basic_map *bmap = isl_basic_map_universe(isl_dim_copy(dim));
+  isl_union_map *schedule = isl_union_map_empty(dim);
 
-  isl_int one;
-  isl_int_init(one);
-  isl_int_set_si(one, 1);
-
-  isl_int minusOne;
-  isl_int_init(minusOne);
-  isl_int_set_si(minusOne, -1);
-
-  for (int i = 0; i < scatteringDimensions; i++) {
-    isl_constraint *eq = isl_equality_alloc(isl_dim_copy(dim));
-
-    isl_constraint_set_coefficient(eq, isl_dim_in, i, one);
-
-    if (i == dimensionToReverse)
-      isl_constraint_set_coefficient(eq, isl_dim_out, i, one);
-    else
-      isl_constraint_set_coefficient(eq, isl_dim_out, i, minusOne);
-
-    bmap = isl_basic_map_add_constraint(bmap, eq);
+  for (Scop::iterator SI = scop->begin(), SE = scop->end(); SI != SE; ++SI) {
+    ScopStmt *Stmt = *SI;
+    isl_map *scattering = isl_map_copy(Stmt->getScattering());
+    unsigned remainingDimensions = isl_map_n_out(scattering) - dimLevel;
+    scattering = isl_map_project_out(scattering, isl_dim_out, dimLevel,
+                                     remainingDimensions);
+    isl_union_map_add_map(schedule, scattering);
   }
 
-  isl_int_clear(one);
-  isl_int_clear(minusOne);
-  isl_dim_free(dim);
-  bmap = isl_basic_map_set_tuple_name(bmap, isl_dim_in, "scattering");
-  bmap = isl_basic_map_set_tuple_name(bmap, isl_dim_out, "scattering");
-
-  return isl_map_from_basic_map(bmap);
+  return schedule;
 }
 
 bool Dependences::isParallelDimension(isl_set *loopDomain,
                                       unsigned parallelDimension) {
-  isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
+  isl_union_map *schedule = getCombinedScheduleForDim(S, parallelDimension);
 
-  isl_union_map *schedule = isl_union_map_empty(dim);
+  // Calculate distance vector.
+  isl_union_set *scheduleSubset;
+  isl_union_map *scheduleDeps, *restrictedDeps, *restrictedDeps2;
+  scheduleSubset = isl_union_set_from_set(isl_set_copy(loopDomain));
 
-  for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
-    ScopStmt *Stmt = *SI;
-    isl_map *scattering = isl_map_copy(Stmt->getScattering());
+  scheduleDeps = isl_union_map_apply_range(isl_union_map_copy(must_dep),
+                                           isl_union_map_copy(schedule));
+  scheduleDeps = isl_union_map_apply_domain(scheduleDeps, schedule);
 
-    int missingDimensions = Stmt->getNumScattering()
-      - isl_set_n_dim(loopDomain);
+  restrictedDeps = isl_union_map_intersect_domain(
+    isl_union_map_copy(scheduleDeps), isl_union_set_copy(scheduleSubset));
+  restrictedDeps2 = isl_union_map_intersect_range(scheduleDeps, scheduleSubset);
+  restrictedDeps = isl_union_map_union(restrictedDeps, restrictedDeps2);
 
-    isl_set *scatteringDomain;
+  isl_union_set *distance = isl_union_map_deltas(restrictedDeps);
 
-    if (missingDimensions > 0)
-      scatteringDomain = isl_set_add_dims(isl_set_copy(loopDomain),
-                                          isl_dim_set, missingDimensions);
-    else if (missingDimensions < 0) {
-      scatteringDomain = isl_set_project_out(isl_set_copy(loopDomain),
-                                             isl_dim_set,
-                                             Stmt->getNumScattering(),
-                                             -missingDimensions);
-    } else
-      scatteringDomain = isl_set_copy(loopDomain);
+  isl_dim *dim = isl_dim_set_alloc(S->getCtx(), S->getNumParams(),
+                                   parallelDimension);
 
-    scatteringDomain = isl_set_set_tuple_name(scatteringDomain, "scattering");
+  // [0, 0, 0, 0] - All zero
+  isl_basic_set *allZeroBS = isl_basic_set_universe(isl_dim_copy(dim));
+  unsigned dimensions = isl_dim_size(dim, isl_dim_set);
 
-    isl_map *scatteringTmp = isl_map_intersect_range(isl_map_copy(scattering),
-                                                     scatteringDomain);
-    scatteringTmp = isl_map_intersect_domain(scatteringTmp,
-                                          isl_set_copy(Stmt->getDomain()));
-
-    // The statement instances executed in parallel.
-    isl_set *parallelDomain = isl_map_domain(isl_map_copy(scatteringTmp));
-
-    // The statement instances executed in sequential order.
-    isl_set *nonParallelDomain =
-      isl_set_universe(isl_set_get_dim(parallelDomain));
-
-    // Set the correct tuple names.
-    const char *iteratorName = isl_map_get_tuple_name(scattering, isl_dim_in);
-    nonParallelDomain = isl_set_set_tuple_name(nonParallelDomain,
-                                               iteratorName);
-    nonParallelDomain = isl_set_subtract(nonParallelDomain,
-                                         isl_set_copy(parallelDomain));
-
-    // The non parallel part of the iteration domain is executed with the
-    // normal scattering, whereas the subset of the iteration domain that
-    // is in the parallel part is executed with a schedule where the parallel
-    // dimension is reversed. In case this yields the same dependences as an
-    // execution in normal execution order, the dimension does not carry any
-    // dependences and execution it in parallel is therefore valid.
-    isl_map *scatteringChanged = isl_map_copy(scattering);
-    scatteringChanged = isl_map_intersect_domain(scatteringChanged,
-                                                 parallelDomain);
-    isl_map *scatteringUnchanged = scattering;
-    scatteringUnchanged = isl_map_intersect_domain(scatteringUnchanged,
-                                                   nonParallelDomain);
-
-    isl_map *reverseMap = getReverseMap(S->getCtx(), S->getNumParams(),
-                                        isl_map_n_out(scatteringChanged),
-                                        parallelDimension);
-
-    scatteringChanged = isl_map_apply_range(scatteringChanged,
-                                            isl_map_copy(reverseMap));
-
-    scattering = isl_map_union(scatteringChanged, scatteringUnchanged);
-
-    isl_union_map_add_map(schedule, scattering);
+  for (int i = 0; i < dimensions; i++) {
+    isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+    isl_int v;
+    isl_int_init(v);
+    isl_int_set_si(v, -1);
+    isl_constraint_set_coefficient(c, isl_dim_set, i, v);
+    allZeroBS = isl_basic_set_add_constraint(allZeroBS, c);
+    isl_int_clear(v);
   }
 
-  isl_union_map *temp_must_dep, *temp_may_dep;
-  isl_union_set *temp_must_no_source, *temp_may_no_source;
+  isl_set *allZero = isl_set_from_basic_set(allZeroBS);
 
-  isl_union_map_compute_flow(isl_union_map_copy(sink),
-                             isl_union_map_copy(must_source),
-                             isl_union_map_copy(may_source), schedule,
-                             &temp_must_dep, &temp_may_dep,
-                             &temp_must_no_source, &temp_may_no_source);
+  // All zero, last unknown.
+  // [0, 0, 0, ?]
+  isl_basic_set *lastUnknownBS = isl_basic_set_universe(isl_dim_copy(dim));
+  dimensions = isl_dim_size(dim, isl_dim_set);
 
-  if (!isl_union_map_is_equal(temp_must_dep, must_dep))
-    return false;
+  for (int i = 0; i < dimensions - 1; i++) {
+    isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+    isl_int v;
+    isl_int_init(v);
+    isl_int_set_si(v, -1);
+    isl_constraint_set_coefficient(c, isl_dim_set, i, v);
+    lastUnknownBS = isl_basic_set_add_constraint(lastUnknownBS, c);
+    isl_int_clear(v);
+  }
 
-  if (!isl_union_map_is_equal(temp_may_dep, may_dep))
-    return false;
+  isl_set *lastUnknown = isl_set_from_basic_set(lastUnknownBS);
 
-  if (!isl_union_set_is_equal(temp_must_no_source, must_no_source))
-    return false;
+  // Valid distance vectors
+  isl_set *validDistances = isl_set_subtract(lastUnknown, allZero);
+  validDistances = isl_set_complement(validDistances);
+  isl_union_set *validDistancesUS = isl_union_set_from_set(validDistances);
 
-  if (!isl_union_set_is_equal(temp_may_no_source, may_no_source))
-    return false;
+  isl_union_set *nonValid = isl_union_set_subtract(distance, validDistancesUS);
 
-  return true;
+  return isl_union_set_is_empty(nonValid);
 }
 
 void Dependences::print(raw_ostream &OS, const Module *) const {
