@@ -784,18 +784,13 @@ public:
     }
     createLoop(Builder, lowerBound, upperBound, Stride, IV, AfterBB,
                IncrementedIV, DT);
+    CharMap[f->iterator] = IV;
     // Update the CharMap used for generating OpenMP code.
     if (parallelCodeGeneration)
       OMPCharMap[f->iterator] = IV;
 
-    // Add loop iv to symbols.
-    CharMap[f->iterator] = IV;
-
     if (f->body)
       codegen(f->body);
-
-    // Loop is finished, so remove its iv from the live symbols.
-    CharMap.erase(f->iterator);
 
     BasicBlock *HeaderBB = *pred_begin(AfterBB);
     BasicBlock *LastBodyBB = Builder->GetInsertBlock();
@@ -946,6 +941,7 @@ public:
       codegenForSequential(f, lowerBound, upperBound);
       // Reset CharMaps.
       OMPCharMap.clear();
+      CharMap.clear();
       ExpGen.setIVS(&CharMap);
       Builder->CreateBr(BB1);
 
@@ -1034,17 +1030,13 @@ public:
     for (int i = 1; i < VECTORSIZE; i++)
       IVS[i] = Builder->CreateAdd(IVS[i-1], StrideValue, "p_vector_iv");
 
+    CharMap[f->iterator] = LB;
 
     isl_set *scatteringDomain = isl_set_from_cloog_domain(f->domain);
-
-    // Add loop iv to symbols.
-    CharMap[f->iterator] = LB;
 
     codegen((const clast_user_stmt *)f->body, &IVS, f->iterator,
             scatteringDomain);
 
-    // Loop is finished, so remove its iv from the live symbols.
-    CharMap.erase(f->iterator);
   }
 
   void codegen(const clast_for *f) {
