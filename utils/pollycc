@@ -37,7 +37,7 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
   # as possible are exposed.
   preoptFile = tmpDir + '/output.preopt.ll'
   preoptPasses = '-basicaa -mem2reg -simplify-libcalls ' \
-                 '-simplifycfg -instcombine -tailcallelim -loopsimplify ' \
+                 '-simplifycfg -instcombine -tailcallelim -loop-simplify ' \
                  '-lcssa -loop-rotate -lcssa -loop-unswitch -instcombine ' \
                  '-loopsimplify -lcssa -indvars -loop-deletion -instcombine ' \
                  '-polly-prepare'
