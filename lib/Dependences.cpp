@@ -261,10 +261,13 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
                                            isl_union_map_copy(schedule));
   scheduleDeps = isl_union_map_apply_domain(scheduleDeps, schedule);
 
-  restrictedDeps = isl_union_map_intersect_domain(
-    isl_union_map_copy(scheduleDeps), isl_union_set_copy(scheduleSubset));
-  restrictedDeps2 = isl_union_map_intersect_range(scheduleDeps, scheduleSubset);
-  restrictedDeps = isl_union_map_union(restrictedDeps, restrictedDeps2);
+
+  // Dependences need to originate and to terminate in the scheduling space
+  // enumerated by this loop.
+  restrictedDeps = isl_union_map_intersect_domain(scheduleDeps,
+    isl_union_set_copy(scheduleSubset));
+  restrictedDeps = isl_union_map_intersect_range(restrictedDeps,
+                                                 scheduleSubset);
 
   isl_union_set *distance = isl_union_map_deltas(restrictedDeps);
 
