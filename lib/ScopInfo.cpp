@@ -276,6 +276,11 @@ isl_set *MemoryAccess::getStride(const isl_set *domainSubset) const {
                                    isl_set_n_dim(scatteringDomain),
                                    difference);
 
+  // Remove all names of the scattering dimensions, as the names may be lost
+  // anyways during the project. This leads to consistent results.
+  scattering = isl_map_set_tuple_name(scattering, isl_dim_in, "");
+  scatteringDomain = isl_set_set_tuple_name(scatteringDomain, "");
+
   isl_map *nextScatt = getEqualAndLarger(isl_set_get_dim(scatteringDomain));
   nextScatt = isl_map_lexmin(nextScatt);
 
