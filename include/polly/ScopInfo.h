@@ -456,9 +456,9 @@ public:
   inline const Region &getRegion() const { return R; }
   inline Region &getRegion() { return R; }
 
-  /// @brief Get the maximum region of this static control part.
+  /// @brief Get the maximum depth of the loop.
   ///
-  /// @return The maximum region of this static control part.
+  /// @return The maximum depth of the loop.
   inline unsigned getMaxLoopDepth() const { return MaxLoopDepth; }
 
   /// @brief Get the scattering dimension number of this Scop.
