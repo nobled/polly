@@ -100,7 +100,10 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
   # Run optimizations to clean up the redundant calculations Polly introduced
   # and to take advantage of non polyhedral optimizations.
   optFile = tmpDir + '/output.opt.ll'
-  commandLine = ['opt', '-O3', '-S', '-o', optFile]
+  commandLine = ['opt', '-S', '-o', optFile]
+
+  if args.optlevel != '0':
+    commandLine.append('-O' + args.optlevel)
 
   if args.fpolly:
     commandLine.append(pollyFile)
@@ -153,11 +156,11 @@ def parseArguments():
                       help='library flags to pass to the linker')
   parser.add_argument('-L', action='append', dest='librarypath', default=[],
                       help='library paths to pass to the linker')
-  parser.add_argument('-O', dest='optlevel', choices='0123s',
+  parser.add_argument('-O', dest='optlevel', choices='0123s', default='3',
                       help='optimization level. (ignored)')
   parser.add_argument('-S', action='store_true',
                       help='compile only; do not link or assemble')
-  parser.add_argument('--emit-llvm', action='store_true', dest='emitllvm',
+  parser.add_argument('-emit-llvm', action='store_true', dest='emitllvm',
                       help='output LLVM-IR instead of assembly if -S is set')
   parser.add_argument('-std', dest='standard', help='The C standard to use',
                       default='gnu89')
@@ -188,11 +191,6 @@ def parseArguments():
             ' '.join(arguments.unknown_args)
   else:
     arguments.unknown_args = []
-
-  if arguments.optlevel:
-    print 'info: -O' + arguments.optlevel + ' flag ignored. pollycc always ' \
-          'uses the highest optimization level. Use plain clang if you need ' \
-          'less optimizations.'
 
   # Post process arguments
   if arguments.ftile:
