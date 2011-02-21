@@ -200,60 +200,166 @@ class Printer:
 
 functions = [
              # Unary properties
+             ("is_empty", BSet, [BSet], c_int),
              ("is_empty", Set, [Set], c_int),
+             ("is_empty", USet, [USet], c_int),
+             ("is_empty", BMap, [BMap], c_int),
              ("is_empty", Map, [Map], c_int),
+             ("is_empty", UMap, [UMap], c_int),
+
     #         ("is_universe", Set, [Set], c_int),
     #         ("is_universe", Map, [Map], c_int),
+
              ("is_single_valued", Map, [Map], c_int),
+
              ("is_bijective", Map, [Map], c_int),
+
+             ("is_wrapping", BSet, [BSet], c_int),
              ("is_wrapping", Set, [Set], c_int),
 
              # Binary properties
+             ("is_equal", BSet, [BSet, BSet], c_int),
              ("is_equal", Set, [Set, Set], c_int),
+             ("is_equal", USet, [USet, USet], c_int),
+             ("is_equal", BMap, [BMap, BMap], c_int),
              ("is_equal", Map, [Map, Map], c_int),
-    #         ("is_disjoint", Set, [Set, Set], c_int),
+             ("is_equal", UMap, [UMap, UMap], c_int),
+
+             # is_disjoint missing
+
+             ("is_subset", BSet, [BSet, BSet], c_int),
              ("is_subset", Set, [Set, Set], c_int),
+             ("is_subset", USet, [USet, USet], c_int),
+             ("is_subset", BMap, [BMap, BMap], c_int),
              ("is_subset", Map, [Map, Map], c_int),
+             ("is_subset", UMap, [UMap, UMap], c_int),
+             ("is_strict_subset", BSet, [BSet, BSet], c_int),
              ("is_strict_subset", Set, [Set, Set], c_int),
-             ("is_strict_subset", Set, [Set, Set], c_int),
+             ("is_strict_subset", USet, [USet, USet], c_int),
+             ("is_strict_subset", BMap, [BMap, BMap], c_int),
+             ("is_strict_subset", Map, [Map, Map], c_int),
+             ("is_strict_subset", UMap, [UMap, UMap], c_int),
 
              # Unary Operations
              ("complement", Set, [Set], Set),
+             ("reverse", BMap, [BMap], BMap),
+             ("reverse", Map, [Map], Map),
+             ("reverse", UMap, [UMap], UMap),
+
+             # Projection missing
+
+             ("identity", Set, [Set], Set),
+             ("identity", USet, [USet], USet),
+
+             ("deltas", BMap, [BMap], BSet),
+             ("deltas", Map, [Map], Set),
+             ("deltas", UMap, [UMap], USet),
+
+             ("coalesce", Set, [Set], Set),
+             ("coalesce", USet, [USet], USet),
+             ("coalesce", Map, [Map], Map),
+             ("coalesce", UMap, [UMap], UMap),
+
              ("detect_equalities", BSet, [BSet], BSet),
              ("detect_equalities", Set, [Set], Set),
              ("detect_equalities", USet, [USet], USet),
              ("detect_equalities", BMap, [BMap], BMap),
              ("detect_equalities", Map, [Map], Map),
              ("detect_equalities", UMap, [UMap], UMap),
-             ("reverse", Map, [Map], Map),
-             ("identity", Set, [Set], Set),
-             ("deltas", Map, [Map], Set),
-             ("coalesce", Set, [Set], Set),
-             ("coalesce", Map, [Map], Map),
+
              ("convex_hull", Set, [Set], Set),
              ("convex_hull", Map, [Map], Map),
+
              ("simple_hull", Set, [Set], Set),
              ("simple_hull", Map, [Map], Map),
+
+             ("affine_hull", BSet, [BSet], BSet),
              ("affine_hull", Set, [Set], BSet),
+             ("affine_hull", USet, [USet], USet),
+             ("affine_hull", BMap, [BMap], BMap),
              ("affine_hull", Map, [Map], BMap),
+             ("affine_hull", UMap, [UMap], UMap),
+
              ("polyhedral_hull", Set, [Set], Set),
+             ("polyhedral_hull", USet, [USet], USet),
              ("polyhedral_hull", Map, [Map], Map),
-             ("intersect", Set, [Set, Set], Set),
-             ("intersect", Map, [Map, Map], Map),
-             ("intersect_domain", Map, [Map, Set], Map),
-             ("intersect_range", Map, [Map, Set], Map),
-             ("union", Set, [Set, Set], Set),
-             ("subtract", Set, [Set, Set], Set),
-             ("apply", Set, [Set, Map], Set),
-             ("gist", Set, [Set], Set),
-             ("lexmin", Set, [Set], Set),
-             ("lexmax", Set, [Set], Set),
+             ("polyhedral_hull", UMap, [UMap], UMap),
+
+             # Power missing
+             # Transitive closure missing
+             # Reaching path lengths missing
+
+             ("wrap", BMap, [BMap], BSet),
+             ("wrap", Map, [Map], Set),
+             ("wrap", UMap, [UMap], USet),
+             ("unwrap", BSet, [BMap], BMap),
+             ("unwrap", Set, [Map], Map),
+             ("unwrap", USet, [UMap], UMap),
+
              ("flatten", Set, [Set], Set),
+             ("flatten", Map, [Map], Map),
+             ("flatten_map", Set, [Set], Map),
+
+             # Dimension manipulation missing
+
+             # Binary Operations
+             ("intersect", BSet, [BSet, BSet], BSet),
+             ("intersect", Set, [Set, Set], Set),
+             ("intersect", USet, [USet, USet], USet),
+             ("intersect", BMap, [BMap, BMap], BMap),
+             ("intersect", Map, [Map, Map], Map),
+             ("intersect", UMap, [UMap, UMap], UMap),
+             ("intersect_domain", BMap, [BMap, BSet], BMap),
+             ("intersect_domain", Map, [Map, Set], Map),
+             ("intersect_domain", UMap, [UMap, USet], UMap),
+             ("intersect_range", BMap, [BMap, BSet], BMap),
+             ("intersect_range", Map, [Map, Set], Map),
+             ("intersect_range", UMap, [UMap, USet], UMap),
+
+             ("union", BSet, [BSet, BSet], Set),
+             ("union", Set, [Set, Set], Set),
+             ("union", USet, [USet, USet], USet),
+             ("union", BMap, [BMap, BMap], Map),
+             ("union", Map, [Map, Map], Map),
+             ("union", UMap, [UMap, UMap], UMap),
+
+             ("subtract", Set, [Set, Set], Set),
+             ("subtract", Map, [Map, Map], Map),
+             ("subtract", USet, [USet, USet], USet),
+             ("subtract", UMap, [UMap, UMap], UMap),
+
+             ("apply", BSet, [BSet, BMap], BSet),
+             ("apply", Set, [Set, Map], Set),
+             ("apply", USet, [USet, UMap], USet),
+             ("apply_domain", BMap, [BMap, BMap], BMap),
              ("apply_domain", Map, [Map, Map], Map),
-             ("apply_range", Map, [Map, Map], Map)
-             
-             
-             
+             ("apply_domain", UMap, [UMap, UMap], UMap),
+             ("apply_range", BMap, [BMap, BMap], BMap)
+             ("apply_range", Map, [Map, Map], Map),
+             ("apply_range", UMap, [UMap, UMap], UMap),
+
+             ("gist", BSet, [BSet, BSet], BSet),
+             ("gist", Set, [Set, Set], Set),
+             ("gist", USet, [USet, USet], USet),
+             ("gist", BMap, [BMap, BMap], BMap),
+             ("gist", Map, [Map, Map], Map),
+             ("gist", UMap, [UMap, UMap], UMap),
+
+             # Lexicographic Optimizations
+             # partial_lexmin missing
+             ("lexmin", BSet, [BSet], BSet),
+             ("lexmin", Set, [Set], Set),
+             ("lexmin", USet, [USet], USet),
+             ("lexmin", BMap, [BMap], BMap),
+             ("lexmin", Map, [Map], Map),
+             ("lexmin", UMap, [UMap], UMap),
+
+             ("lexmax", BSet, [BSet], BSet),
+             ("lexmax", Set, [Set], Set),
+             ("lexmax", USet, [USet], USet),
+             ("lexmax", BMap, [BMap], BMap),
+             ("lexmax", Map, [Map], Map),
+             ("lexmax", UMap, [UMap], UMap)
              ]
 
 def addIslFunction(object, name):
