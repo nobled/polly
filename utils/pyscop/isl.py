@@ -147,6 +147,26 @@ class Map(IslObject):
   def isl_name():
     return "map"
 
+  @staticmethod
+  def lex_lt(dim):
+    dim = isl.isl_dim_copy(dim)
+    return isl.isl_map_lex_lt(dim)
+
+  @staticmethod
+  def lex_le(dim):
+    dim = isl.isl_dim_copy(dim)
+    return isl.isl_map_lex_le(dim)
+
+  @staticmethod
+  def lex_gt(dim):
+    dim = isl.isl_dim_copy(dim)
+    return isl.isl_map_lex_gt(dim)
+
+  @staticmethod
+  def lex_ge(dim):
+    dim = isl.isl_dim_copy(dim)
+    return isl.isl_map_lex_ge(dim)
+
 class UMap(IslObject):
   @staticmethod
   def from_ptr(ptr):
@@ -169,6 +189,30 @@ class Dim(IslObject):
   def isl_name():
     return "dim"
 
+  def initialize_isl_methods(self):
+    if hasattr(self.__class__, "initialized"):
+      return
+
+    self.__class__.initalized = True
+    self.get_isl_method("copy").argtypes = [self.__class__]
+    self.get_isl_method("copy").restype = c_int
+    self.get_isl_method("free").argtypes = [self.__class__]
+    self.get_isl_method("get_ctx").argtypes = [self.__class__]
+    self.get_isl_method("get_ctx").restype = Context.from_ptr 
+
+  def __repr__(self):
+    return str(self)
+
+  def __str__(self):
+
+    dimParam = isl.isl_dim_size(self, 1)
+    dimIn = isl.isl_dim_size(self, 2)
+    dimOut = isl.isl_dim_size(self, 3)
+
+    if dimIn:
+      return "<dim In:%s, Out:%s, Param:%s>" % (dimIn, dimOut, dimParam)
+
+    return "<dim Set:%s, Param:%s>" % (dimOut, dimParam)
 
 class Printer:
   FORMAT_ISL = 0
@@ -365,7 +409,16 @@ functions = [
              ("lexmax", USet, [USet], USet),
              ("lexmax", BMap, [BMap], BMap),
              ("lexmax", Map, [Map], Map),
-             ("lexmax", UMap, [UMap], UMap)
+             ("lexmax", UMap, [UMap], UMap),
+             ]
+keep_functions = [
+             # Unary properties
+             ("get_dim", BSet, [BSet], Dim),
+             ("get_dim", Set, [Set], Dim),
+             ("get_dim", USet, [USet], Dim),
+             ("get_dim", BMap, [BMap], Dim),
+             ("get_dim", Map, [Map], Dim),
+             ("get_dim", UMap, [UMap], Dim)
              ]
 
 def addIslFunction(object, name):
@@ -392,15 +445,45 @@ for (operation, base, operands, ret) in functions:
   islFunction = getattr(isl, functionName)
   if len(operands) == 1:
     islFunction.argtypes = [c_int]
-  elif len(operands) == 2: 
+  elif len(operands) == 2:
     islFunction.argtypes = [c_int, c_int]
 
   if ret == c_int:
     islFunction.restype = ret
   else:
     islFunction.restype = ret.from_ptr
-    
+
   addIslFunction(base, operation)
+
+def addIslFunctionKeep(object, name):
+    functionName = "isl_" + object.isl_name() + "_" + name
+    islFunction = getattr(isl, functionName)
+    if len(islFunction.argtypes) == 1:
+      f = lambda a: islFunctionOneOpKeep(islFunction, a)
+    elif len(islFunction.argtypes) == 2:
+      f = lambda a, b: islFunctionTwoOpKeep(islFunction, a, b)
+    object.__dict__[name] = f
+
+def islFunctionOneOpKeep(islFunction, ops):
+  return islFunction(ops)
+
+def islFunctionTwoOpKeep(islFunction, opOne, opTwo):
+  return islFunction(opOne, opTwo)
+
+for (operation, base, operands, ret) in keep_functions:
+  functionName = "isl_" + base.isl_name() + "_" + operation
+  islFunction = getattr(isl, functionName)
+  if len(operands) == 1:
+    islFunction.argtypes = [c_int]
+  elif len(operands) == 2:
+    islFunction.argtypes = [c_int, c_int]
+
+  if ret == c_int:
+    islFunction.restype = ret
+  else:
+    islFunction.restype = ret.from_ptr
+
+  addIslFunctionKeep(base, operation)
 
 isl.isl_ctx_free.argtypes = [Context]
 isl.isl_basic_set_read_from_str.argtypes = [Context, c_char_p, c_int]
@@ -416,6 +499,12 @@ isl.isl_basic_set_get_ctx.argtypes = [BSet]
 isl.isl_basic_set_get_ctx.restype = Context.from_ptr
 isl.isl_set_get_ctx.argtypes = [Set]
 isl.isl_set_get_ctx.restype = Context.from_ptr
+isl.isl_basic_set_get_dim.argtypes = [BSet]
+isl.isl_basic_set_get_dim.restype = Dim.from_ptr
+isl.isl_set_get_dim.argtypes = [Set]
+isl.isl_set_get_dim.restype = Dim.from_ptr
+isl.isl_union_set_get_dim.argtypes = [USet]
+isl.isl_union_set_get_dim.restype = Dim.from_ptr
 
 isl.isl_basic_map_read_from_str.argtypes = [Context, c_char_p, c_int]
 isl.isl_map_read_from_str.argtypes = [Context, c_char_p, c_int]
@@ -430,6 +519,12 @@ isl.isl_basic_map_get_ctx.argtypes = [BMap]
 isl.isl_basic_map_get_ctx.restype = Context.from_ptr
 isl.isl_map_get_ctx.argtypes = [Map]
 isl.isl_map_get_ctx.restype = Context.from_ptr
+isl.isl_basic_map_get_dim.argtypes = [BMap]
+isl.isl_basic_map_get_dim.restype = Dim.from_ptr
+isl.isl_map_get_dim.argtypes = [Map]
+isl.isl_map_get_dim.restype = Dim.from_ptr
+isl.isl_union_map_get_dim.argtypes = [UMap]
+isl.isl_union_map_get_dim.restype = Dim.from_ptr
 isl.isl_printer_free.argtypes = [Printer]
 isl.isl_printer_to_str.argtypes = [Context]
 isl.isl_printer_print_basic_set.argtypes = [Printer, BSet]
@@ -440,5 +535,16 @@ isl.isl_printer_get_str.argtypes = [Printer]
 isl.isl_printer_get_str.restype = c_char_p
 isl.isl_printer_set_output_format.argtypes = [Printer, c_int]
 isl.isl_printer_set_output_format.restype = c_int
+isl.isl_dim_size.argtypes = [Dim, c_int]
+isl.isl_dim_size.restype = c_int
+
+isl.isl_map_lex_lt.argtypes = [c_int]
+isl.isl_map_lex_lt.restype = Map.from_ptr
+isl.isl_map_lex_le.argtypes = [c_int]
+isl.isl_map_lex_le.restype = Map.from_ptr
+isl.isl_map_lex_gt.argtypes = [c_int]
+isl.isl_map_lex_gt.restype = Map.from_ptr
+isl.isl_map_lex_ge.argtypes = [c_int]
+isl.isl_map_lex_ge.restype = Map.from_ptr
 
 __all__ = ['Set', 'Map', 'Printer', 'Context']
