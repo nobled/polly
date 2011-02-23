@@ -227,13 +227,13 @@ functions = [
 
              # is_disjoint missing
 
-             ("is_subset", BSet, [BSet, BSet], c_int),
+             # ("is_subset", BSet, [BSet, BSet], c_int),
              ("is_subset", Set, [Set, Set], c_int),
              ("is_subset", USet, [USet, USet], c_int),
              ("is_subset", BMap, [BMap, BMap], c_int),
              ("is_subset", Map, [Map, Map], c_int),
              ("is_subset", UMap, [UMap, UMap], c_int),
-             ("is_strict_subset", BSet, [BSet, BSet], c_int),
+             #("is_strict_subset", BSet, [BSet, BSet], c_int),
              ("is_strict_subset", Set, [Set, Set], c_int),
              ("is_strict_subset", USet, [USet, USet], c_int),
              ("is_strict_subset", BMap, [BMap, BMap], c_int),
@@ -334,7 +334,7 @@ functions = [
              ("apply_domain", BMap, [BMap, BMap], BMap),
              ("apply_domain", Map, [Map, Map], Map),
              ("apply_domain", UMap, [UMap, UMap], UMap),
-             ("apply_range", BMap, [BMap, BMap], BMap)
+             ("apply_range", BMap, [BMap, BMap], BMap),
              ("apply_range", Map, [Map, Map], Map),
              ("apply_range", UMap, [UMap, UMap], UMap),
 
