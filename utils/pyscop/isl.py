@@ -248,8 +248,8 @@ functions = [
 
              # Projection missing
 
-             ("identity", Set, [Set], Set),
-             ("identity", USet, [USet], USet),
+             ("identity", Set, [Set], Map),
+             ("identity", USet, [USet], UMap),
 
              ("deltas", BMap, [BMap], BSet),
              ("deltas", Map, [Map], Set),
