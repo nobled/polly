@@ -198,7 +198,7 @@ bool ScopDetection::isValidCFG(BasicBlock &BB, DetectionContext &Context) const
   assert(Br->getNumSuccessors() == 2 && "Unexpected number of successors");
 
   if (ICmpInst *ICmp = dyn_cast<ICmpInst>(Condition)) {
-    // Unsigned comaprisons are not allowed. They trigger overflow problems
+    // Unsigned comparisons are not allowed. They trigger overflow problems
     // in the code generation.
     //
     // TODO: This is not sufficient and just hides bugs. However it does pretty
