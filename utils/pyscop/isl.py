@@ -547,4 +547,25 @@ isl.isl_map_lex_gt.restype = Map.from_ptr
 isl.isl_map_lex_ge.argtypes = [c_int]
 isl.isl_map_lex_ge.restype = Map.from_ptr
 
+isl.isl_union_map_compute_flow.argtypes = [c_int, c_int, c_int, c_int, c_void_p,
+                                           c_void_p, c_void_p, c_void_p]
+
+def dependences(sink, must_source, may_source, schedule):
+  sink = getattr(isl, "isl_" + sink.isl_name() + "_copy")(sink)
+  must_source = getattr(isl, "isl_" + must_source.isl_name() + "_copy")(must_source)
+  may_source = getattr(isl, "isl_" + may_source.isl_name() + "_copy")(may_source)
+  schedule = getattr(isl, "isl_" + schedule.isl_name() + "_copy")(schedule)
+  must_dep = c_int()
+  may_dep = c_int()
+  must_no_source = c_int()
+  may_no_source = c_int()
+  isl.isl_union_map_compute_flow(sink, must_source, may_source, schedule, \
+                                 byref(must_dep), byref(may_dep),
+                                 byref(must_no_source),
+                                 byref(may_no_source))
+
+  return (UMap.from_ptr(must_dep), UMap.from_ptr(may_dep), \
+          USet.from_ptr(must_no_source), USet.from_ptr(may_no_source))
+
+
 __all__ = ['Set', 'Map', 'Printer', 'Context']
