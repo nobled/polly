@@ -410,6 +410,13 @@ functions = [
              ("lexmax", BMap, [BMap], BMap),
              ("lexmax", Map, [Map], Map),
              ("lexmax", UMap, [UMap], UMap),
+
+              # Undocumented
+             ("lex_lt_union_set", USet, [USet, USet], UMap),
+             ("lex_le_union_set", USet, [USet, USet], UMap),
+             ("lex_gt_union_set", USet, [USet, USet], UMap),
+             ("lex_ge_union_set", USet, [USet, USet], UMap),
+
              ]
 keep_functions = [
              # Unary properties
