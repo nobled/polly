@@ -247,6 +247,12 @@ functions = [
              ("reverse", UMap, [UMap], UMap),
 
              # Projection missing
+             ("range", BMap, [BMap], BSet),
+             ("range", Map, [Map], Set),
+             ("range", UMap, [UMap], USet),
+             ("domain", BMap, [BMap], BSet),
+             ("domain", Map, [Map], Set),
+             ("domain", UMap, [UMap], USet),
 
              ("identity", Set, [Set], Map),
              ("identity", USet, [USet], UMap),
