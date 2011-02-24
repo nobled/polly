@@ -184,7 +184,8 @@ def parseArguments():
                       help='compile and assemble, but do not link')
   parser.add_argument('-fpolly', help='enable polly', action='store_true')
   parser.add_argument('-fpluto', help='enable pluto', action='store_true')
-  parser.add_argument('-ftile', help='enable pluto tiling', action='store_true')
+  parser.add_argument('-ftile', '-fpluto-tile',
+                      help='enable pluto tiling', action='store_true')
   parser.add_argument('-fparallel',
                       help='enable openmp code generation (in development',
 		      action='store_true')
