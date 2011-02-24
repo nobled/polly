@@ -57,9 +57,23 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
   # Run the Polly optimizers
   pollyFile = tmpDir + '/output.polly.ll'
 
+  if args.pollyexport:
+    commandLine = ['opt', '-load', polly, '-basicaa'] \
+                  + [preoptFile, '-polly-export-jscop']
+    commandLine = commandLine + ['-disable-output']
+    exit = subprocess.call(commandLine)
+
+    if exit:
+      print 'Polly optimizations failed: This command did not work'
+      print ' '.join(commandLine)
+      sys.exit(1)
+
   if args.fpolly:
     commandLine = ['opt', '-load', polly, '-basicaa'] \
                   + [preoptFile, '-disable-polly-legality']
+
+    if args.pollyimport:
+      commandLine.append('-polly-import-jscop')
 
     if args.fpluto:
       commandLine.append('-polly-optimize')
@@ -174,6 +188,10 @@ def parseArguments():
   parser.add_argument('-fparallel',
                       help='enable openmp code generation (in development',
 		      action='store_true')
+  parser.add_argument('-fpolly-export', dest='pollyexport',
+                      help='Export Polly jscop', action='store_true')
+  parser.add_argument('-fpolly-import', dest='pollyimport',
+                      help='Import Polly jscop', action='store_true')
   parser.add_argument('-d', '--debug', help='print debugging output',
                       action='store_true')
   parser.add_argument('-v', '--version', dest='version', action='store_true',
@@ -195,6 +213,9 @@ def parseArguments():
   # Post process arguments
   if arguments.ftile:
     arguments.fpluto = True
+
+  if arguments.pollyimport:
+    arguments.fpolly = True
 
   if arguments.fpluto:
     arguments.fpolly = True
