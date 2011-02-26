@@ -1299,11 +1299,16 @@ class CodeGeneration : public ScopPass {
     BasicBlock *successorBlock = *succ_begin(R->getEntry());
 
     // Update old PHI nodes to pass LLVM verification.
+    std::vector<PHINode*> PHINodes;
     for (BasicBlock::iterator SI = successorBlock->begin(),
          SE = successorBlock->getFirstNonPHI(); SI != SE; ++SI) {
-      PHINode *PN = static_cast<PHINode *>(&*SI);
-      PN->removeIncomingValue(R->getEntry());
+      PHINode *PN = static_cast<PHINode*>(&*SI);
+      PHINodes.push_back(PN);
     }
+
+    for (std::vector<PHINode*>::iterator PI = PHINodes.begin(),
+         PE = PHINodes.end(); PI != PE; ++PI)
+      (*PI)->removeIncomingValue(R->getEntry());
 
     DT->changeImmediateDominator(AfterScop, Builder.GetInsertBlock());
 
