@@ -70,8 +70,8 @@ struct DOTGraphTraits<ScopDetection*> : public DOTGraphTraits<RegionNode*> {
     return "Scop Graph";
   }
   std::string getNodeLabel(RegionNode *Node, ScopDetection *SD) {
-    return DOTGraphTraits<RegionNode*>::getNodeLabel(Node,
-                                                     SD->getRI()->getTopLevelRegion());
+    return DOTGraphTraits<RegionNode*>
+      ::getNodeLabel(Node, SD->getRI()->getTopLevelRegion());
   }
   // Print the cluster of the subregions. This groups the single basic blocks
   // and adds a different background color for each group.
@@ -124,7 +124,8 @@ char ScopViewer::ID = 0;
 struct ScopOnlyViewer
   : public DOTGraphTraitsViewer<ScopDetection, true> {
   static char ID;
-  ScopOnlyViewer() : DOTGraphTraitsViewer<ScopDetection, true>("scopsonly", ID){}
+  ScopOnlyViewer()
+    : DOTGraphTraitsViewer<ScopDetection, true>("scopsonly", ID){}
 };
 char ScopOnlyViewer::ID = 0;
 
