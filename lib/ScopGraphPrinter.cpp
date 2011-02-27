@@ -69,6 +69,34 @@ struct DOTGraphTraits<ScopDetection*> : public DOTGraphTraits<RegionNode*> {
   static std::string getGraphName(ScopDetection *SD) {
     return "Scop Graph";
   }
+
+  std::string getEdgeAttributes(RegionNode *srcNode,
+    GraphTraits<RegionInfo*>::ChildIteratorType CI, ScopDetection *SD) {
+
+    RegionNode *destNode = *CI;
+
+    if (srcNode->isSubRegion() || destNode->isSubRegion())
+      return "";
+
+    // In case of a backedge, do not use it to define the layout of the nodes.
+    BasicBlock *srcBB = srcNode->getNodeAs<BasicBlock>();
+    BasicBlock *destBB = destNode->getNodeAs<BasicBlock>();
+
+    RegionInfo *RI = SD->getRI();
+    Region *R = RI->getRegionFor(destBB);
+
+    while (R && R->getParent())
+      if (R->getParent()->getEntry() == destBB)
+        R = R->getParent();
+      else
+        break;
+
+    if (R->getEntry() == destBB && R->contains(srcBB))
+      return "constraint=false";
+
+    return "";
+  }
+
   std::string getNodeLabel(RegionNode *Node, ScopDetection *SD) {
     return DOTGraphTraits<RegionNode*>
       ::getNodeLabel(Node, SD->getRI()->getTopLevelRegion());
