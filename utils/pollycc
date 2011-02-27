@@ -57,6 +57,22 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
   # Run the Polly optimizers
   pollyFile = tmpDir + '/output.polly.ll'
 
+  if args.view or args.viewonly:
+    commandLine = ['opt', '-load', polly, '-basicaa'] \
+                  + [preoptFile, '-disable-output']
+
+    if args.view:
+      commandLine.append('-view-scops')
+    else:
+      commandLine.append('-view-scops-only')
+
+    exit = subprocess.call(commandLine)
+
+    if exit:
+      print 'Polly optimizations failed: This command did not work'
+      print ' '.join(commandLine)
+      sys.exit(1)
+
   if args.pollyexport:
     commandLine = ['opt', '-load', polly, '-basicaa'] \
                   + [preoptFile, '-polly-export-jscop']
@@ -184,6 +200,12 @@ def parseArguments():
                       help='compile and assemble, but do not link')
   parser.add_argument('-fpolly', help='enable polly', action='store_true')
   parser.add_argument('-fpluto', help='enable pluto', action='store_true')
+  parser.add_argument('-fview-scops', dest='view',
+                      help='Show the scops with graphviz',
+                      action='store_true')
+  parser.add_argument('-fview-scops-only', dest='viewonly',
+                      help='Show the scops with graphviz (Only Basic Blocks)',
+                      action='store_true')
   parser.add_argument('-ftile', '-fpluto-tile',
                       help='enable pluto tiling', action='store_true')
   parser.add_argument('-fparallel',
@@ -216,6 +238,9 @@ def parseArguments():
     arguments.fpluto = True
 
   if arguments.pollyimport:
+    arguments.fpolly = True
+
+  if arguments.view or arguments.viewonly:
     arguments.fpolly = True
 
   if arguments.fpluto:
