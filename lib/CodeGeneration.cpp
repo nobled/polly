@@ -363,6 +363,10 @@ public:
       Value *opZero = Inst->getOperand(0);
       Value *opOne = Inst->getOperand(1);
 
+      // This is an old instruction that can be ignored.
+      if (!opZero && !opOne)
+        return;
+
       bool isVectorOp = vectorMap.count(opZero) || vectorMap.count(opOne);
 
       if (isVectorOp && vectorDimension > 0)
