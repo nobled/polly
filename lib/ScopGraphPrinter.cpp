@@ -109,12 +109,23 @@ struct DOTGraphTraits<ScopDetection*> : public DOTGraphTraits<RegionNode*> {
       << " {\n";
     O.indent(2 * (depth + 1)) << "label = \"\";\n";
 
-    if (SD->isMaxRegionInScop(*R))
+    if (SD->isMaxRegionInScop(*R)) {
       O.indent(2 * (depth + 1)) << "style = filled;\n";
-    else
+
+      // Set color to green.
+      O.indent(2 * (depth + 1)) << "color = 3";
+    } else {
       O.indent(2 * (depth + 1)) << "style = solid;\n";
-    O.indent(2 * (depth + 1)) << "color = "
-      << ((R->getDepth() * 2 % 12) + 1) << "\n";
+
+      int color = (R->getDepth() * 2 % 12) + 1;
+
+      // We do not want green again.
+      if (color == 3)
+        color = 6;
+
+      O.indent(2 * (depth + 1)) << "color = "
+      << color << "\n";
+    }
 
     for (Region::const_iterator RI = R->begin(), RE = R->end(); RI != RE; ++RI)
       printRegionCluster(SD, *RI, O, depth + 1);
