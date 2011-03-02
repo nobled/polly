@@ -868,14 +868,14 @@ public:
 
     const std::string &Name = SubFunction->getNameStr() + ".omp_struct";
     StructType *structTy = StructType::get(Builder->getContext(),
-                           structMembers);
+                                           structMembers);
     M->addTypeName(Name, structTy);
 
     // Store the parameters into the structure.
-    Value *structData = Builder->CreateAlloca(structTy, 0,
-                             "omp_struct_data");
+    Value *structData = Builder->CreateAlloca(structTy, 0, "omp_struct_data");
     CharMapT::iterator V = CharMap.begin();
     unsigned i = 0;
+
     for (std::vector<const Type*>::iterator I = structMembers.begin(),
          E = structMembers.end(); I != E; I++) {
       Value *Param = V->second;
