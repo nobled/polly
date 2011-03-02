@@ -44,7 +44,7 @@ namespace polly {
     Scop *S;
 
     isl_union_map *must_dep, *may_dep;
-    isl_union_set *must_no_source, *may_no_source;
+    isl_union_map *must_no_source, *may_no_source;
 
     isl_union_map *sink;
     isl_union_map *must_source;

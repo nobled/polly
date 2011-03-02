@@ -77,10 +77,10 @@ bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
     isl_union_map_free(may_dep);
 
   if (must_no_source)
-    isl_union_set_free(must_no_source);
+    isl_union_map_free(must_no_source);
 
   if (may_no_source)
-    isl_union_set_free(may_no_source);
+    isl_union_map_free(may_no_source);
 
   must_dep = may_dep = NULL;
   must_no_source = may_no_source = NULL;
@@ -127,8 +127,8 @@ bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
   // Remove redundant statements.
   must_dep = isl_union_map_coalesce(must_dep);
   may_dep = isl_union_map_coalesce(may_dep);
-  must_no_source = isl_union_set_coalesce(must_no_source);
-  may_no_source = isl_union_set_coalesce(may_no_source);
+  must_no_source = isl_union_map_coalesce(must_no_source);
+  may_no_source = isl_union_map_coalesce(may_no_source);
 
   return false;
 }
@@ -156,7 +156,7 @@ bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
   }
 
   isl_union_map *temp_must_dep, *temp_may_dep;
-  isl_union_set *temp_must_no_source, *temp_may_no_source;
+  isl_union_map *temp_must_no_source, *temp_may_no_source;
 
   DEBUG(
     isl_printer *p = isl_printer_to_str(S->getCtx());
@@ -207,8 +207,8 @@ bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
   // Remove redundant statements.
   temp_must_dep = isl_union_map_coalesce(temp_must_dep);
   temp_may_dep = isl_union_map_coalesce(temp_may_dep);
-  temp_must_no_source = isl_union_set_coalesce(temp_must_no_source);
-  temp_may_no_source = isl_union_set_coalesce(temp_may_no_source);
+  temp_must_no_source = isl_union_map_coalesce(temp_must_no_source);
+  temp_may_no_source = isl_union_map_coalesce(temp_may_no_source);
 
   if (!isl_union_map_is_equal(temp_must_dep, must_dep)) {
     DEBUG(errs().indent(4) << "\nEqual 1 calculated\n");
@@ -222,10 +222,10 @@ bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
 
   DEBUG(errs().indent(4) << "\nEqual 2 calculated\n");
 
-  if (!isl_union_set_is_equal(temp_must_no_source, must_no_source))
+  if (!isl_union_map_is_equal(temp_must_no_source, must_no_source))
     return false;
 
-  if (!isl_union_set_is_equal(temp_may_no_source, may_no_source))
+  if (!isl_union_map_is_equal(temp_may_no_source, may_no_source))
     return false;
 
   return true;
@@ -344,10 +344,10 @@ void Dependences::releaseMemory() {
     isl_union_map_free(may_dep);
 
   if (must_no_source)
-    isl_union_set_free(must_no_source);
+    isl_union_map_free(must_no_source);
 
   if (may_no_source)
-    isl_union_set_free(may_no_source);
+    isl_union_map_free(may_no_source);
 
   must_dep = may_dep = NULL;
   must_no_source = may_no_source = NULL;

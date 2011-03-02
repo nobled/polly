@@ -221,7 +221,7 @@ void MemoryAccess::dump() const {
 //     : i0 = o0, i1 = o1, ..., i(X-1) = o(X-1), iX < oX
 //
 static isl_map *getEqualAndLarger(isl_dim *setDomain) {
-  isl_dim *mapDomain = isl_dim_map(setDomain);
+  isl_dim *mapDomain = isl_dim_map_from_set(setDomain);
   isl_basic_map *bmap = isl_basic_map_universe(mapDomain);
 
   // Set all but the last dimension to be equal for the input and output
