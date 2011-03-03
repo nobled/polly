@@ -915,9 +915,9 @@ public:
       // Fill up basic block HeaderBB.
       Builder.SetInsertPoint(HeaderBB);
       Value *lowerBoundPtr = Builder.CreateAlloca(TD->getIntPtrType(Context), 0,
-                                           "omp.lowerBoundPtr");
+                                                  "omp.lowerBoundPtr");
       Value *upperBoundPtr = Builder.CreateAlloca(TD->getIntPtrType(Context), 0,
-                                            "omp.upperBoundPtr");
+                                                  "omp.upperBoundPtr");
 
       Value *userContext = Builder.CreateBitCast(FN->arg_begin(),
                                                  structData->getType(),
@@ -979,12 +979,14 @@ public:
       // Restore the builder back to previous basic block.
       Builder.SetInsertPoint(PrevBB);
   }
+
   /// @brief Create an OpenMP parallel for loop.
   ///
   /// This loop reflects a loop as if it would have been created by an OpenMP
   /// statement.
   void codegenForOpenMP(const clast_for *f) {
     Module *M = Builder.GetInsertBlock()->getParent()->getParent();
+    const IntegerType *intPtrTy = TD->getIntPtrType(Builder.getContext());
 
     Function *SubFunction = addOpenMPSubfunction(M);
     Value *structData = addOpenMPSubfunctionParms(SubFunction);
@@ -992,23 +994,20 @@ public:
     addOpenMPSubfunctionBody(SubFunction, f, structData);
 
     // Create call for GOMP_parallel_loop_runtime_start.
-    Value *subfunctionParam =
-      Builder.CreateBitCast(structData, Builder.getInt8PtrTy(),
-                   "omp_data");
+    Value *subfunctionParam = Builder.CreateBitCast(structData,
+                                                    Builder.getInt8PtrTy(),
+                                                    "omp_data");
 
     Value *numberOfThreads = Builder.getInt32(0);
-    Value *lowerBound = ExpGen.codegen(f->LB,
-      TD->getIntPtrType(Builder.getContext()));
-    Value *upperBound = ExpGen.codegen(f->UB,
-      TD->getIntPtrType(Builder.getContext()));
+    Value *lowerBound = ExpGen.codegen(f->LB, intPtrTy);
+    Value *upperBound = ExpGen.codegen(f->UB, intPtrTy);
+
     // Add one as the upper bound provided by openmp is a < comparison
     // whereas the codegenForSequential function creates a <= comparison.
-    upperBound = Builder.CreateAdd(upperBound,
-      ConstantInt::get(TD->getIntPtrType(Builder.getContext()), 1));
+    upperBound = Builder.CreateAdd(upperBound, ConstantInt::get(intPtrTy, 1));
     APInt APStride = APInt_from_MPZ(f->stride);
-    const IntegerType *strideType = TD->getIntPtrType(Builder.getContext());
-    Value *stride = ConstantInt::get(strideType,
-                                     APStride.zext(strideType->getBitWidth()));
+    Value *stride = ConstantInt::get(intPtrTy,
+                                     APStride.zext(intPtrTy->getBitWidth()));
 
     SmallVector<Value *, 6> Arguments;
     Arguments.push_back(SubFunction);
@@ -1021,7 +1020,7 @@ public:
     Function *parallelStartFunction =
       M->getFunction("GOMP_parallel_loop_runtime_start");
     Builder.CreateCall(parallelStartFunction, Arguments.begin(),
-                        Arguments.end());
+                       Arguments.end());
 
     // Create call to the subfunction.
     Builder.CreateCall(SubFunction, subfunctionParam);
