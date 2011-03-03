@@ -900,22 +900,28 @@ public:
       BasicBlock *PrevBB = Builder.GetInsertBlock();
 
       // Create basic blocks.
-      BasicBlock *HeaderBB = BasicBlock::Create(Context, "entry", FN);
-      BasicBlock *ExitBB = BasicBlock::Create(Context, "exit", FN);
-      BasicBlock *BB1 = BasicBlock::Create(Context, "bb1", FN);
-      BasicBlock *BB2 = BasicBlock::Create(Context, "bb2", FN);
+      BasicBlock *HeaderBB = BasicBlock::Create(Context, "omp.setup", FN);
+      BasicBlock *ExitBB = BasicBlock::Create(Context, "omp.exit", FN);
+      BasicBlock *checkNextBB = BasicBlock::Create(Context, "omp.checkNext",
+                                                   FN);
+      BasicBlock *loadIVBoundsBB = BasicBlock::Create(Context,
+                                                      "omp.loadIVBounds", FN);
+
       DT->addNewBlock(HeaderBB, PrevBB);
       DT->addNewBlock(ExitBB, HeaderBB);
-      DT->addNewBlock(BB1, HeaderBB);
-      DT->addNewBlock(BB2, HeaderBB);
+      DT->addNewBlock(checkNextBB, HeaderBB);
+      DT->addNewBlock(loadIVBoundsBB, HeaderBB);
 
       // Fill up basic block HeaderBB.
       Builder.SetInsertPoint(HeaderBB);
-      Value *memTmp = Builder.CreateAlloca(TD->getIntPtrType(Context), 0);
-      Value *memTmp1 = Builder.CreateAlloca(TD->getIntPtrType(Context), 0);
+      Value *lowerBoundPtr = Builder.CreateAlloca(TD->getIntPtrType(Context), 0,
+                                           "omp.lowerBoundPtr");
+      Value *upperBoundPtr = Builder.CreateAlloca(TD->getIntPtrType(Context), 0,
+                                            "omp.upperBoundPtr");
 
-      Value *structVal = Builder.CreateBitCast(FN->arg_begin(),
-                                                structData->getType());
+      Value *userContext = Builder.CreateBitCast(FN->arg_begin(),
+                                                 structData->getType(),
+                                                 "omp.userContext");
 
       // Extract the values from the subfunction parameter and update the clast
       // variables to point to the new values.
@@ -924,32 +930,32 @@ public:
 
       for (CharMapT::iterator I = clastVars->begin(), E = clastVars->end();
            I != E; I++) {
-        Value *loadAddr = Builder.CreateStructGEP(structVal, i);
+        Value *loadAddr = Builder.CreateStructGEP(userContext, i);
         clastVarsOMP[I->first] = Builder.CreateLoad(loadAddr);
         i++;
       }
 
-      Builder.CreateBr(BB1);
+      Builder.CreateBr(checkNextBB);
 
-      // Fill up basic block BB1.
-      Builder.SetInsertPoint(BB1);
-      // Create call to GOMP_loop_runtime_next.
+      // Add code to check if another set of iterations will be executed.
+      Builder.SetInsertPoint(checkNextBB);
       Function *runtimeNextFunction = M->getFunction("GOMP_loop_runtime_next");
-      Value *ret1 = Builder.CreateCall2(runtimeNextFunction, memTmp, memTmp1);
-      Value *ret2 = Builder.CreateTrunc(ret1, Builder.getInt1Ty());
-      Value *ret3 = Builder.CreateICmpNE(ret2,
-                            Constant::getNullValue(ret2->getType()));
-      Builder.CreateCondBr(ret3, BB2, ExitBB);
+      Value *ret1 = Builder.CreateCall2(runtimeNextFunction,
+                                        lowerBoundPtr, upperBoundPtr);
+      Value *hasNextSchedule = Builder.CreateTrunc(ret1, Builder.getInt1Ty(),
+                                        "omp.hasNextScheduleBlock");
+      Builder.CreateCondBr(hasNextSchedule, loadIVBoundsBB, ExitBB);
 
-      // Fill up basic block BB2.
-      Builder.SetInsertPoint(BB2);
-      Value *lowerBound = Builder.CreateLoad(memTmp);
-      Value *upperBound = Builder.CreateLoad(memTmp1);
+      // Add code to to load the iv bounds for this set of iterations.
+      Builder.SetInsertPoint(loadIVBoundsBB);
+      Value *lowerBound = Builder.CreateLoad(lowerBoundPtr, "omp.lowerBound");
+      Value *upperBound = Builder.CreateLoad(upperBoundPtr, "omp.upperBound");
 
       // Subtract one as the upper bound provided by openmp is a < comparison
       // whereas the codegenForSequential function creates a <= comparison.
       upperBound = Builder.CreateSub(upperBound,
-        ConstantInt::get(TD->getIntPtrType(Context), 1));
+        ConstantInt::get(TD->getIntPtrType(Context), 1),
+        "omp.upperBoundAdjusted");
 
       // Use clastVarsOMP during code generation of the OpenMP subfunction.
       CharMapT *oldClastVars = clastVars;
@@ -962,14 +968,12 @@ public:
       clastVars = oldClastVars;
       ExpGen.setIVS(oldClastVars);
 
-      Builder.CreateBr(BB1);
+      Builder.CreateBr(checkNextBB);
 
-      // Fill up basic block ExitBB.
+      // Add code to terminate this openmp subfunction.
       Builder.SetInsertPoint(ExitBB);
-      // Create call to GOMP_loop_end_nowait.
       Function *endnowaitFunction = M->getFunction("GOMP_loop_end_nowait");
       Builder.CreateCall(endnowaitFunction);
-      // Add the return instruction.
       Builder.CreateRetVoid();
 
       // Restore the builder back to previous basic block.
