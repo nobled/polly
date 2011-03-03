@@ -839,9 +839,9 @@ public:
       const std::string &Name = F->getNameStr() + ".omp_subfn";
 
       // Prototype for "subfunction".
-      std::vector<const Type*> Arguments(1, Type::getInt8PtrTy(Context));
-      FunctionType *FT = FunctionType::get(Type::getVoidTy(Context),
-                           Arguments, false);
+      std::vector<const Type*> Arguments(1, Builder.getInt8PtrTy());
+      FunctionType *FT = FunctionType::get(Builder.getVoidTy(), Arguments,
+                                           false);
       // Get unique name for the subfunction.
       Function *FN = Function::Create(FT, Function::InternalLinkage,
                                       Name, M);
@@ -861,7 +861,7 @@ public:
     Module *M = Builder.GetInsertBlock()->getParent()->getParent();
     std::vector<const Type*> structMembers;
 
-    // All the parameters required are available in the array clastVars.
+    // All the parameters required are available in clastVars.
     // Store those into the structure.
     for (CharMapT::iterator I = clastVars->begin(), E = clastVars->end();
          I != E; I++) {
