@@ -847,41 +847,46 @@ public:
     return FN;
   }
 
-  /// @brief Create and fill subfunction parameters.
+  /// @brief Add values to the OpenMP structure.
   ///
-  /// Create and fill the structure to store the parameters
-  /// of the OpenMP subfunction.
-  Value *addOpenMPSubfunctionParms(Function *SubFunction) {
+  /// Create the subfunction structure and add the values from the list.
+  Value *addValuesToOpenMPStruct(std::vector<Value*> OMPDataVals,
+                                 Function *SubFunction) {
     Module *M = Builder.GetInsertBlock()->getParent()->getParent();
     std::vector<const Type*> structMembers;
 
-    // All the parameters required are available in clastVars.
-    // Store those into the structure.
-    for (CharMapT::iterator I = clastVars->begin(), E = clastVars->end();
-         I != E; I++) {
-      Value *Param = I->second;
-      structMembers.push_back(Param->getType());
-    }
+    // Create the structure.
+    for (unsigned i = 0; i < OMPDataVals.size(); i++)
+      structMembers.push_back(OMPDataVals[i]->getType());
 
     const std::string &Name = SubFunction->getNameStr() + ".omp.userContext";
     StructType *structTy = StructType::get(Builder.getContext(),
                                            structMembers);
     M->addTypeName(Name, structTy);
 
-    // Store the parameters into the structure.
+    // Store the values into the structure.
     Value *structData = Builder.CreateAlloca(structTy, 0, "omp.userContext");
-    CharMapT::iterator V = clastVars->begin();
-    unsigned i = 0;
-
-    for (std::vector<const Type*>::iterator I = structMembers.begin(),
-         E = structMembers.end(); I != E; I++) {
-      Value *Param = V->second;
+    for (unsigned i = 0; i < OMPDataVals.size(); i++) {
       Value *storeAddr = Builder.CreateStructGEP(structData, i);
-      Builder.CreateStore(Param, storeAddr);
-      V++;
-      i++;
+      Builder.CreateStore(OMPDataVals[i], storeAddr);
     }
+
     return structData;
+  }
+
+  /// @brief Create OpenMP structure values.
+  ///
+  /// Create a list of values that has to be stored into the subfuncition
+  /// structure.
+  std::vector<Value*> createOpenMPStructValues() {
+    std::vector<Value*> OMPDataVals;
+
+    // Push the clast variables available in the clastVars.
+    for (CharMapT::iterator I = clastVars->begin(), E = clastVars->end();
+         I != E; I++)
+     OMPDataVals.push_back(I->second);
+
+    return OMPDataVals;
   }
 
   /// @brief Add body to the subfunction.
@@ -981,7 +986,8 @@ public:
     const IntegerType *intPtrTy = TD->getIntPtrType(Builder.getContext());
 
     Function *SubFunction = addOpenMPSubfunction(M);
-    Value *structData = addOpenMPSubfunctionParms(SubFunction);
+    std::vector<Value *> OMPDataVals = createOpenMPStructValues();
+    Value *structData = addValuesToOpenMPStruct(OMPDataVals, SubFunction);
 
     addOpenMPSubfunctionBody(SubFunction, f, structData);
 
