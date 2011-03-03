@@ -662,6 +662,7 @@ public:
 class ClastStmtCodeGen {
   // The Scop we code generate.
   Scop *S;
+  ScalarEvolution &SE;
 
   DominatorTree *DT;
   Dependences *DP;
@@ -1114,14 +1115,9 @@ public:
     Builder->SetInsertPoint(MergeBB);
   }
 
-  void codegen(const clast_root *r) {
-    parallelCodeGeneration = false;
-  }
-
-public:
   void codegen(const clast_stmt *stmt) {
     if	    (CLAST_STMT_IS_A(stmt, stmt_root))
-      codegen((const clast_root *)stmt);
+      assert(false && "No second root statment expected");
     else if (CLAST_STMT_IS_A(stmt, stmt_ass))
       codegen((const clast_assignment *)stmt);
     else if (CLAST_STMT_IS_A(stmt, stmt_user))
@@ -1137,16 +1133,49 @@ public:
       codegen(stmt->next);
   }
 
-  public:
-  ClastStmtCodeGen(Scop *scop, DominatorTree *dt, Dependences *dp,
-                   TargetData *td, IRBuilder<> *B, CharMapT *parameters) :
-    S(scop), DT(dt), DP(dp), TD(td), Builder(B), clastVars(parameters),
-    ExpGen(Builder, NULL) {
-      ExpGen.setIVS(clastVars);
+  void addParameters(const CloogNames *names) {
+    SCEVExpander Rewriter(SE);
+
+    // Create an instruction that specifies the location where the parameters
+    // are expanded.
+    CastInst::CreateIntegerCast(ConstantInt::getTrue(Builder->getContext()),
+                                  Builder->getInt16Ty(), false, "insertInst",
+                                  Builder->GetInsertBlock());
+
+    int i = 0;
+    for (Scop::param_iterator PI = S->param_begin(), PE = S->param_end();
+         PI != PE; ++PI) {
+      assert(i < names->nb_parameters && "Not enough parameter names");
+
+      const SCEV *Param = *PI;
+      const Type *Ty = Param->getType();
+
+      Instruction *insertLocation = --(Builder->GetInsertBlock()->end());
+      Value *V = Rewriter.expandCodeFor(Param, Ty, insertLocation);
+      (*clastVars)[names->parameters[i]] = V;
+
+      ++i;
+    }
   }
 
-  ~ClastStmtCodeGen() {
+  public:
+  void codegen(const clast_root *r) {
+    clastVars = new CharMapT();
+    addParameters(r->names);
+    ExpGen.setIVS(clastVars);
+
+    parallelCodeGeneration = false;
+
+    const clast_stmt *stmt = (const clast_stmt*) r;
+    if (stmt->next)
+      codegen(stmt->next);
+
+    delete clastVars;
   }
+
+  ClastStmtCodeGen(Scop *scop, ScalarEvolution &se, DominatorTree *dt,
+                   Dependences *dp, TargetData *td, IRBuilder<> *B) :
+    S(scop), SE(se), DT(dt), DP(dp), TD(td), Builder(B), ExpGen(Builder, NULL) {}
 
 };
 }
@@ -1179,34 +1208,6 @@ class CodeGeneration : public ScopPass {
     createSingleExitEdge(R, this);
   }
 
-  CharMapT *addParameters(const CloogNames *names, IRBuilder<> *Builder) {
-
-    CharMapT *parameterMap = new CharMapT();
-
-    SCEVExpander Rewriter(*SE);
-
-    // Create an instruction that specifies the location where the parameters
-    // are expanded.
-    CastInst::CreateIntegerCast(ConstantInt::getTrue(Builder->getContext()),
-                                  Builder->getInt16Ty(), false, "insertInst",
-                                  Builder->GetInsertBlock());
-
-    int i = 0;
-    for (Scop::param_iterator PI = S->param_begin(), PE = S->param_end();
-         PI != PE; ++PI) {
-      assert(i < names->nb_parameters && "Not enough parameter names");
-
-      const SCEV *Param = *PI;
-      const Type *Ty = Param->getType();
-
-      Instruction *insertLocation = --(Builder->GetInsertBlock()->end());
-      Value *V = Rewriter.expandCodeFor(Param, Ty, insertLocation);
-      (*parameterMap)[names->parameters[i]] = V;
-
-      ++i;
-    }
-    return parameterMap;
-  }
 
   // Adding prototypes required if OpenMP is enabled.
   void addOpenMPDefinitions(IRBuilder<> *Builder)
@@ -1299,13 +1300,9 @@ class CodeGeneration : public ScopPass {
     IRBuilder<> Builder(PollyBB);
     DT->addNewBlock(PollyBB, R->getEntry());
 
-    const clast_stmt *clast = C->getClast();
+    const clast_root *clast = (const clast_root *) C->getClast();
 
-    CharMapT *parameterMap = addParameters(((const clast_root*)clast)->names,
-                                           &Builder);
-
-    ClastStmtCodeGen CodeGen(S, DT, DP, TD, &Builder, parameterMap);
-
+    ClastStmtCodeGen CodeGen(S, *SE, DT, DP, TD, &Builder);
 
     if (OpenMP)
       addOpenMPDefinitions(&Builder);
@@ -1316,7 +1313,6 @@ class CodeGeneration : public ScopPass {
     parallelLoops.insert(parallelLoops.begin(),
                          CodeGen.getParallelLoops().begin(),
                          CodeGen.getParallelLoops().end());
-    delete parameterMap;
 
     BasicBlock *AfterScop = *pred_begin(R->getExit());
     Builder.CreateBr(AfterScop);
