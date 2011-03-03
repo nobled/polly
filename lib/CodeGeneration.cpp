@@ -673,15 +673,6 @@ class ClastStmtCodeGen {
   // Map the Values from the old code to their counterparts in the new code.
   ValueMapT ValueMap;
 
-  // Codegenerator for clast expressions.
-  ClastExpCodeGen ExpGen;
-
-  // Do we currently generate parallel code?
-  bool parallelCodeGeneration;
-
-  std::vector<std::string> parallelLoops;
-
-public:
   // clastVars maps from the textual representation of a clast variable to its
   // current *Value. clast variables are scheduling variables, original
   // induction variables or parameters. They are use either in loop bounds or to
@@ -693,6 +684,16 @@ public:
   //
   // {s,t,i,j,n,m} is the set of clast variables in this clast.
   CharMapT *clastVars;
+
+  // Codegenerator for clast expressions.
+  ClastExpCodeGen ExpGen;
+
+  // Do we currently generate parallel code?
+  bool parallelCodeGeneration;
+
+  std::vector<std::string> parallelLoops;
+
+public:
 
   const std::vector<std::string> &getParallelLoops() {
     return parallelLoops;
@@ -1138,14 +1139,13 @@ public:
 
   public:
   ClastStmtCodeGen(Scop *scop, DominatorTree *dt, Dependences *dp,
-                   TargetData *td, IRBuilder<> *B) :
-    S(scop), DT(dt), DP(dp), TD(td), Builder(B), clastVars(new CharMapT()),
+                   TargetData *td, IRBuilder<> *B, CharMapT *parameters) :
+    S(scop), DT(dt), DP(dp), TD(td), Builder(B), clastVars(parameters),
     ExpGen(Builder, NULL) {
       ExpGen.setIVS(clastVars);
   }
 
   ~ClastStmtCodeGen() {
-    delete clastVars;
   }
 
 };
@@ -1179,9 +1179,10 @@ class CodeGeneration : public ScopPass {
     createSingleExitEdge(R, this);
   }
 
-  void addParameters(const CloogNames *names, CharMapT &VariableMap,
-                     IRBuilder<> *Builder) {
-    int i = 0;
+  CharMapT *addParameters(const CloogNames *names, IRBuilder<> *Builder) {
+
+    CharMapT *parameterMap = new CharMapT();
+
     SCEVExpander Rewriter(*SE);
 
     // Create an instruction that specifies the location where the parameters
@@ -1190,20 +1191,21 @@ class CodeGeneration : public ScopPass {
                                   Builder->getInt16Ty(), false, "insertInst",
                                   Builder->GetInsertBlock());
 
+    int i = 0;
     for (Scop::param_iterator PI = S->param_begin(), PE = S->param_end();
          PI != PE; ++PI) {
       assert(i < names->nb_parameters && "Not enough parameter names");
-      Instruction *InsertLocation;
 
       const SCEV *Param = *PI;
       const Type *Ty = Param->getType();
 
-      InsertLocation = --(Builder->GetInsertBlock()->end());
-      Value *V = Rewriter.expandCodeFor(Param, Ty, InsertLocation);
-      VariableMap[names->parameters[i]] = V;
+      Instruction *insertLocation = --(Builder->GetInsertBlock()->end());
+      Value *V = Rewriter.expandCodeFor(Param, Ty, insertLocation);
+      (*parameterMap)[names->parameters[i]] = V;
 
       ++i;
     }
+    return parameterMap;
   }
 
   // Adding prototypes required if OpenMP is enabled.
@@ -1297,12 +1299,13 @@ class CodeGeneration : public ScopPass {
     IRBuilder<> Builder(PollyBB);
     DT->addNewBlock(PollyBB, R->getEntry());
 
-    ClastStmtCodeGen CodeGen(S, DT, DP, TD, &Builder);
-
     const clast_stmt *clast = C->getClast();
 
-    addParameters(((const clast_root*)clast)->names, *CodeGen.clastVars,
-                  &Builder);
+    CharMapT *parameterMap = addParameters(((const clast_root*)clast)->names,
+                                           &Builder);
+
+    ClastStmtCodeGen CodeGen(S, DT, DP, TD, &Builder, parameterMap);
+
 
     if (OpenMP)
       addOpenMPDefinitions(&Builder);
@@ -1313,6 +1316,7 @@ class CodeGeneration : public ScopPass {
     parallelLoops.insert(parallelLoops.begin(),
                          CodeGen.getParallelLoops().begin(),
                          CodeGen.getParallelLoops().end());
+    delete parameterMap;
 
     BasicBlock *AfterScop = *pred_begin(R->getExit());
     Builder.CreateBr(AfterScop);
