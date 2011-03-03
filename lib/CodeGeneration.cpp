@@ -682,13 +682,17 @@ class ClastStmtCodeGen {
   std::vector<std::string> parallelLoops;
 
 public:
-  // Map the textual representation of variables in clast to the actual
-  // Values* created during code generation.  It is used to map every
-  // appearance of such a string in the clast to the value created
-  // because of a loop iv or an assignment.
-  CharMapT CharMap;
-  // Use this while generating OpenMP code.
-  CharMapT OMPCharMap;
+  // clastVars maps from the textual representation of a clast variable to its
+  // current *Value. clast variables are scheduling variables, original
+  // induction variables or parameters. They are use either in loop bounds or to
+  // define the statement instance that is executed.
+  //
+  //   for (s = 0; s < n + 3; ++i)
+  //     for (t = s; t < m; ++j)
+  //       Stmt(i = s + 3 * m, j = t);
+  //
+  // {s,t,i,j,n,m} is the set of clast variables in this clast.
+  CharMapT *clastVars;
 
   const std::vector<std::string> &getParallelLoops() {
     return parallelLoops;
@@ -752,7 +756,7 @@ public:
       int i = 0;
       for (std::vector<Value*>::iterator II = IVS->begin(), IE = IVS->end();
            II != IE; ++II) {
-        CharMap[iterator] = *II;
+        (*clastVars)[iterator] = *II;
         codegenSubstitutions(u->substitutions, Statement, i, &VectorValueMap);
         i++;
       }
@@ -788,18 +792,15 @@ public:
     }
     createLoop(Builder, lowerBound, upperBound, Stride, IV, AfterBB,
                IncrementedIV, DT);
-    // Update the CharMap used for generating OpenMP code.
-    if (parallelCodeGeneration)
-      OMPCharMap[f->iterator] = IV;
 
     // Add loop iv to symbols.
-    CharMap[f->iterator] = IV;
+    (*clastVars)[f->iterator] = IV;
 
     if (f->body)
       codegen(f->body);
 
     // Loop is finished, so remove its iv from the live symbols.
-    CharMap.erase(f->iterator);
+    clastVars->erase(f->iterator);
 
     BasicBlock *HeaderBB = *pred_begin(AfterBB);
     BasicBlock *LastBodyBB = Builder->GetInsertBlock();
@@ -858,9 +859,9 @@ public:
     Module *M = Builder->GetInsertBlock()->getParent()->getParent();
     std::vector<const Type*> structMembers;
 
-    // All the parameters required are available in the array CharMap. Store
-    // those into the structure.
-    for (CharMapT::iterator I = CharMap.begin(), E = CharMap.end();
+    // All the parameters required are available in the array clastVars.
+    // Store those into the structure.
+    for (CharMapT::iterator I = clastVars->begin(), E = clastVars->end();
          I != E; I++) {
       Value *Param = I->second;
       structMembers.push_back(Param->getType());
@@ -873,7 +874,7 @@ public:
 
     // Store the parameters into the structure.
     Value *structData = Builder->CreateAlloca(structTy, 0, "omp_struct_data");
-    CharMapT::iterator V = CharMap.begin();
+    CharMapT::iterator V = clastVars->begin();
     unsigned i = 0;
 
     for (std::vector<const Type*>::iterator I = structMembers.begin(),
@@ -908,21 +909,24 @@ public:
 
       // Fill up basic block HeaderBB.
       Builder->SetInsertPoint(HeaderBB);
-      Value *memTmp = Builder->CreateAlloca(TD->getIntPtrType(Context),
-                                 0, "memtmp");
-      Value *memTmp1 = Builder->CreateAlloca(TD->getIntPtrType(Context),
-                                 0, "memtmp1");
-      // Extract values from the subfunction parameter and load those into
-      // the new CharMap.
+      Value *memTmp = Builder->CreateAlloca(TD->getIntPtrType(Context), 0);
+      Value *memTmp1 = Builder->CreateAlloca(TD->getIntPtrType(Context), 0);
+
       Value *structVal = Builder->CreateBitCast(FN->arg_begin(),
-                           structData->getType());
+                                                structData->getType());
+
+      // Extract the values from the subfunction parameter and update the clast
+      // variables to point to the new values.
+      CharMapT clastVarsOMP;
       unsigned i = 0;
-      for (CharMapT::iterator I = CharMap.begin(), E = CharMap.end();
+
+      for (CharMapT::iterator I = clastVars->begin(), E = clastVars->end();
            I != E; I++) {
         Value *loadAddr = Builder->CreateStructGEP(structVal, i);
-        OMPCharMap[I->first] = Builder->CreateLoad(loadAddr);
+        clastVarsOMP[I->first] = Builder->CreateLoad(loadAddr);
         i++;
       }
+
       Builder->CreateBr(BB1);
 
       // Fill up basic block BB1.
@@ -944,13 +948,18 @@ public:
       // whereas the codegenForSequential function creates a <= comparison.
       upperBound = Builder->CreateSub(upperBound,
         ConstantInt::get(TD->getIntPtrType(Context), 1));
-      // Set CharMap to OMPCharMap.
-      ExpGen.setIVS(&OMPCharMap);
-      // Create body for the parallel loop.
+
+      // Use clastVarsOMP during code generation of the OpenMP subfunction.
+      CharMapT *oldClastVars = clastVars;
+      clastVars = &clastVarsOMP;
+      ExpGen.setIVS(&clastVarsOMP);
+
       codegenForSequential(f, lowerBound, upperBound);
-      // Reset CharMaps.
-      OMPCharMap.clear();
-      ExpGen.setIVS(&CharMap);
+
+      // Restore the old clastVars.
+      clastVars = oldClastVars;
+      ExpGen.setIVS(oldClastVars);
+
       Builder->CreateBr(BB1);
 
       // Fill up basic block ExitBB.
@@ -1042,13 +1051,13 @@ public:
     isl_set *scatteringDomain = isl_set_from_cloog_domain(f->domain);
 
     // Add loop iv to symbols.
-    CharMap[f->iterator] = LB;
+    (*clastVars)[f->iterator] = LB;
 
     codegen((const clast_user_stmt *)f->body, &IVS, f->iterator,
             scatteringDomain);
 
     // Loop is finished, so remove its iv from the live symbols.
-    CharMap.erase(f->iterator);
+    clastVars->erase(f->iterator);
   }
 
   void codegen(const clast_for *f) {
@@ -1130,7 +1139,14 @@ public:
   public:
   ClastStmtCodeGen(Scop *scop, DominatorTree *dt, Dependences *dp,
                    TargetData *td, IRBuilder<> *B) :
-    S(scop), DT(dt), DP(dp), TD(td), Builder(B), ExpGen(Builder, &CharMap) {}
+    S(scop), DT(dt), DP(dp), TD(td), Builder(B), clastVars(new CharMapT()),
+    ExpGen(Builder, NULL) {
+      ExpGen.setIVS(clastVars);
+  }
+
+  ~ClastStmtCodeGen() {
+    delete clastVars;
+  }
 
 };
 }
@@ -1285,7 +1301,8 @@ class CodeGeneration : public ScopPass {
 
     const clast_stmt *clast = C->getClast();
 
-    addParameters(((const clast_root*)clast)->names, CodeGen.CharMap, &Builder);
+    addParameters(((const clast_root*)clast)->names, *CodeGen.clastVars,
+                  &Builder);
 
     if (OpenMP)
       addOpenMPDefinitions(&Builder);
