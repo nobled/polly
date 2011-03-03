@@ -832,8 +832,6 @@ public:
 
   /// @brief Add a new definition of an openmp subfunction.
   Function* addOpenMPSubfunction(Module *M) {
-    LLVMContext &Context = Builder.getContext();
-
     Function *F = Builder.GetInsertBlock()->getParent();
     const std::string &Name = F->getNameStr() + ".omp_subfn";
 
