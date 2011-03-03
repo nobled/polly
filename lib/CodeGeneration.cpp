@@ -889,6 +889,7 @@ public:
                                 Value *structData) {
     Module *M = Builder.GetInsertBlock()->getParent()->getParent();
     LLVMContext &Context = FN->getContext();
+    const IntegerType *intPtrTy = TD->getIntPtrType(Context);
 
     // Store the previous basic block.
     BasicBlock *PrevBB = Builder.GetInsertBlock();
@@ -907,9 +908,9 @@ public:
 
     // Fill up basic block HeaderBB.
     Builder.SetInsertPoint(HeaderBB);
-    Value *lowerBoundPtr = Builder.CreateAlloca(TD->getIntPtrType(Context), 0,
+    Value *lowerBoundPtr = Builder.CreateAlloca(intPtrTy, 0,
                                                 "omp.lowerBoundPtr");
-    Value *upperBoundPtr = Builder.CreateAlloca(TD->getIntPtrType(Context), 0,
+    Value *upperBoundPtr = Builder.CreateAlloca(intPtrTy, 0,
                                                 "omp.upperBoundPtr");
     Value *userContext = Builder.CreateBitCast(FN->arg_begin(),
                                                structData->getType(),
@@ -945,8 +946,7 @@ public:
 
     // Subtract one as the upper bound provided by openmp is a < comparison
     // whereas the codegenForSequential function creates a <= comparison.
-    upperBound = Builder.CreateSub(upperBound,
-                                   ConstantInt::get(TD->getIntPtrType(Context), 1),
+    upperBound = Builder.CreateSub(upperBound, ConstantInt::get(intPtrTy, 1),
                                    "omp.upperBoundAdjusted");
 
     // Use clastVarsOMP during code generation of the OpenMP subfunction.

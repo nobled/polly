@@ -55,9 +55,9 @@ entry:
 
 declare void @llvm.memset.p0i8.i32(i8* nocapture, i8, i32, i32, i1) nounwind
 
-; CHECK: %omp_struct_data = alloca %loop_openmp.omp_subfn.omp_struct
-; CHECK: getelementptr inbounds %loop_openmp.omp_subfn.omp_struct* %omp_struct_data
-; CHECK: %omp_data = bitcast %loop_openmp.omp_subfn.omp_struct* %omp_struct_data to i8*
+; CHECK: %omp.userContext = alloca %loop_openmp.omp_subfn.omp.userContext
+; CHECK: getelementptr inbounds %loop_openmp.omp_subfn.omp.userContext* %omp.userContext
+; CHECK: %omp_data = bitcast %loop_openmp.omp_subfn.omp.userContext* %omp.userContext to i8*
 ; CHECK: @GOMP_parallel_loop_runtime_start(void (i8*)* @loop_openmp.omp_subfn, i8* %omp_data
-; CHECK: @loop_openmp.omp_subfn(i8* %omp_data)
-; CHECK: bitcast i8* %omp_data to %loop_openmp.omp_subfn.omp_struct*
+; CHECK: call void @loop_openmp.omp_subfn(i8* %omp_data)
+; CHECK: %omp.userContext1 = bitcast i8* %omp.userContext to %loop_openmp.omp_subfn.omp.userContext*
