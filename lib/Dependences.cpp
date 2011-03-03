@@ -254,7 +254,7 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
 
   // Calculate distance vector.
   isl_union_set *scheduleSubset;
-  isl_union_map *scheduleDeps, *restrictedDeps, *restrictedDeps2;
+  isl_union_map *scheduleDeps, *restrictedDeps;
   scheduleSubset = isl_union_set_from_set(isl_set_copy(loopDomain));
 
   scheduleDeps = isl_union_map_apply_range(isl_union_map_copy(must_dep),
@@ -278,7 +278,7 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
   isl_basic_set *allZeroBS = isl_basic_set_universe(isl_dim_copy(dim));
   unsigned dimensions = isl_dim_size(dim, isl_dim_set);
 
-  for (int i = 0; i < dimensions; i++) {
+  for (unsigned i = 0; i < dimensions; i++) {
     isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int v;
     isl_int_init(v);
@@ -295,7 +295,7 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
   isl_basic_set *lastUnknownBS = isl_basic_set_universe(isl_dim_copy(dim));
   dimensions = isl_dim_size(dim, isl_dim_set);
 
-  for (int i = 0; i < dimensions - 1; i++) {
+  for (unsigned i = 0; i < dimensions - 1; i++) {
     isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
     isl_int v;
     isl_int_init(v);
