@@ -515,14 +515,14 @@ public:
 
 /// Class to generate LLVM-IR that calculates the value of a clast_expr.
 class ClastExpCodeGen {
-  IRBuilder<> *Builder;
+  IRBuilder<> &Builder;
   const CharMapT *IVS;
 
   Value *codegen(const clast_name *e, const Type *Ty) {
     CharMapT::const_iterator I = IVS->find(e->name);
 
     if (I != IVS->end())
-      return Builder->CreateSExtOrBitCast(I->second, Ty);
+      return Builder.CreateSExtOrBitCast(I->second, Ty);
     else
       llvm_unreachable("Clast name not found");
   }
@@ -530,12 +530,12 @@ class ClastExpCodeGen {
   Value *codegen(const clast_term *e, const Type *Ty) {
     APInt a = APInt_from_MPZ(e->val);
 
-    Value *ConstOne = ConstantInt::get(Builder->getContext(), a);
-    ConstOne = Builder->CreateSExtOrBitCast(ConstOne, Ty);
+    Value *ConstOne = ConstantInt::get(Builder.getContext(), a);
+    ConstOne = Builder.CreateSExtOrBitCast(ConstOne, Ty);
 
     if (e->var) {
       Value *var = codegen(e->var, Ty);
-      return Builder->CreateMul(ConstOne, var);
+      return Builder.CreateMul(ConstOne, var);
     }
 
     return ConstOne;
@@ -546,40 +546,40 @@ class ClastExpCodeGen {
 
     APInt RHS_AP = APInt_from_MPZ(e->RHS);
 
-    Value *RHS = ConstantInt::get(Builder->getContext(), RHS_AP);
-    RHS = Builder->CreateSExtOrBitCast(RHS, Ty);
+    Value *RHS = ConstantInt::get(Builder.getContext(), RHS_AP);
+    RHS = Builder.CreateSExtOrBitCast(RHS, Ty);
 
     switch (e->type) {
     case clast_bin_mod:
-      return Builder->CreateSRem(LHS, RHS);
+      return Builder.CreateSRem(LHS, RHS);
     case clast_bin_fdiv:
       {
         // floord(n,d) ((n < 0) ? (n - d + 1) : n) / d
-        Value *One = ConstantInt::get(Builder->getInt1Ty(), 1);
-        Value *Zero = ConstantInt::get(Builder->getInt1Ty(), 0);
-        One = Builder->CreateZExtOrBitCast(One, Ty);
-        Zero = Builder->CreateZExtOrBitCast(Zero, Ty);
-        Value *Sum1 = Builder->CreateSub(LHS, RHS);
-        Value *Sum2 = Builder->CreateAdd(Sum1, One);
-        Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
-        Value *Dividend = Builder->CreateSelect(isNegative, Sum2, LHS);
-        return Builder->CreateSDiv(Dividend, RHS);
+        Value *One = ConstantInt::get(Builder.getInt1Ty(), 1);
+        Value *Zero = ConstantInt::get(Builder.getInt1Ty(), 0);
+        One = Builder.CreateZExtOrBitCast(One, Ty);
+        Zero = Builder.CreateZExtOrBitCast(Zero, Ty);
+        Value *Sum1 = Builder.CreateSub(LHS, RHS);
+        Value *Sum2 = Builder.CreateAdd(Sum1, One);
+        Value *isNegative = Builder.CreateICmpSLT(LHS, Zero);
+        Value *Dividend = Builder.CreateSelect(isNegative, Sum2, LHS);
+        return Builder.CreateSDiv(Dividend, RHS);
       }
     case clast_bin_cdiv:
       {
         // ceild(n,d) ((n < 0) ? n : (n + d - 1)) / d
-        Value *One = ConstantInt::get(Builder->getInt1Ty(), 1);
-        Value *Zero = ConstantInt::get(Builder->getInt1Ty(), 0);
-        One = Builder->CreateZExtOrBitCast(One, Ty);
-        Zero = Builder->CreateZExtOrBitCast(Zero, Ty);
-        Value *Sum1 = Builder->CreateAdd(LHS, RHS);
-        Value *Sum2 = Builder->CreateSub(Sum1, One);
-        Value *isNegative = Builder->CreateICmpSLT(LHS, Zero);
-        Value *Dividend = Builder->CreateSelect(isNegative, LHS, Sum2);
-        return Builder->CreateSDiv(Dividend, RHS);
+        Value *One = ConstantInt::get(Builder.getInt1Ty(), 1);
+        Value *Zero = ConstantInt::get(Builder.getInt1Ty(), 0);
+        One = Builder.CreateZExtOrBitCast(One, Ty);
+        Zero = Builder.CreateZExtOrBitCast(Zero, Ty);
+        Value *Sum1 = Builder.CreateAdd(LHS, RHS);
+        Value *Sum2 = Builder.CreateSub(Sum1, One);
+        Value *isNegative = Builder.CreateICmpSLT(LHS, Zero);
+        Value *Dividend = Builder.CreateSelect(isNegative, LHS, Sum2);
+        return Builder.CreateSDiv(Dividend, RHS);
       }
     case clast_bin_div:
-      return Builder->CreateSDiv(LHS, RHS);
+      return Builder.CreateSDiv(LHS, RHS);
     default:
       llvm_unreachable("Unknown clast binary expression type");
     };
@@ -598,18 +598,18 @@ class ClastExpCodeGen {
       switch (r->type) {
       case clast_red_min:
         {
-          Value *cmp = Builder->CreateICmpSLT(old, exprValue);
-          old = Builder->CreateSelect(cmp, old, exprValue);
+          Value *cmp = Builder.CreateICmpSLT(old, exprValue);
+          old = Builder.CreateSelect(cmp, old, exprValue);
           break;
         }
       case clast_red_max:
         {
-          Value *cmp = Builder->CreateICmpSGT(old, exprValue);
-          old = Builder->CreateSelect(cmp, old, exprValue);
+          Value *cmp = Builder.CreateICmpSGT(old, exprValue);
+          old = Builder.CreateSelect(cmp, old, exprValue);
           break;
         }
       case clast_red_sum:
-        old = Builder->CreateAdd(old, exprValue);
+        old = Builder.CreateAdd(old, exprValue);
         break;
       default:
         llvm_unreachable("Clast unknown reduction type");
@@ -628,7 +628,7 @@ public:
   // @param IVMAP A Map that translates strings describing the induction
   //              variables to the Values* that represent these variables
   //              on the LLVM side.
-  ClastExpCodeGen(IRBuilder<> *B, CharMapT *IVMap) : Builder(B), IVS(IVMap) {}
+  ClastExpCodeGen(IRBuilder<> &B, CharMapT *IVMap) : Builder(B), IVS(IVMap) {}
 
   // Generates code to calculate a given clast expression.
   //
@@ -669,7 +669,7 @@ class ClastStmtCodeGen {
   TargetData *TD;
 
   // The Builder specifies the current location to code generate at.
-  IRBuilder<> *Builder;
+  IRBuilder<> &Builder;
 
   // Map the Values from the old code to their counterparts in the new code.
   ValueMapT ValueMap;
@@ -710,7 +710,7 @@ public:
                unsigned Dimension, int vectorDim,
                std::vector<ValueMapT> *VectorVMap = 0) {
     Value *RHS = ExpGen.codegen(a->RHS,
-      TD->getIntPtrType(Builder->getContext()));
+      TD->getIntPtrType(Builder.getContext()));
 
     assert(!a->LHS && "Statement assignments do not have left hand side");
     const PHINode *PN;
@@ -764,7 +764,7 @@ public:
       }
     }
 
-    BlockGenerator Generator(*Builder, ValueMap, VectorValueMap, *Statement,
+    BlockGenerator Generator(Builder, ValueMap, VectorValueMap, *Statement,
                              scatteringDomain);
     Generator.copyBB(BB, DT);
   }
@@ -788,11 +788,11 @@ public:
                                 && "Either give both bounds or none");
     if (lowerBound == 0 || upperBound == 0) {
         lowerBound = ExpGen.codegen(f->LB,
-                                    TD->getIntPtrType(Builder->getContext()));
+                                    TD->getIntPtrType(Builder.getContext()));
         upperBound = ExpGen.codegen(f->UB,
-                                    TD->getIntPtrType(Builder->getContext()));
+                                    TD->getIntPtrType(Builder.getContext()));
     }
-    createLoop(Builder, lowerBound, upperBound, Stride, IV, AfterBB,
+    createLoop(&Builder, lowerBound, upperBound, Stride, IV, AfterBB,
                IncrementedIV, DT);
 
     // Add loop iv to symbols.
@@ -805,10 +805,10 @@ public:
     clastVars->erase(f->iterator);
 
     BasicBlock *HeaderBB = *pred_begin(AfterBB);
-    BasicBlock *LastBodyBB = Builder->GetInsertBlock();
-    Builder->CreateBr(HeaderBB);
+    BasicBlock *LastBodyBB = Builder.GetInsertBlock();
+    Builder.CreateBr(HeaderBB);
     IV->addIncoming(IncrementedIV, LastBodyBB);
-    Builder->SetInsertPoint(AfterBB);
+    Builder.SetInsertPoint(AfterBB);
   }
 
   /// @brief Check if a loop is parallel
@@ -832,10 +832,10 @@ public:
 
   /// @brief Add a new definition of an openmp subfunction.
   Function* addOpenMPSubfunction(Module *M) {
-      LLVMContext &Context = Builder->getContext();
+      LLVMContext &Context = Builder.getContext();
 
       // Create name for the subfunction.
-      Function *F = Builder->GetInsertBlock()->getParent();
+      Function *F = Builder.GetInsertBlock()->getParent();
       const std::string &Name = F->getNameStr() + ".omp_subfn";
 
       // Prototype for "subfunction".
@@ -858,7 +858,7 @@ public:
   /// Create and fill the structure to store the parameters
   /// of the OpenMP subfunction.
   Value *addOpenMPSubfunctionParms(Function *SubFunction) {
-    Module *M = Builder->GetInsertBlock()->getParent()->getParent();
+    Module *M = Builder.GetInsertBlock()->getParent()->getParent();
     std::vector<const Type*> structMembers;
 
     // All the parameters required are available in the array clastVars.
@@ -870,20 +870,20 @@ public:
     }
 
     const std::string &Name = SubFunction->getNameStr() + ".omp_struct";
-    StructType *structTy = StructType::get(Builder->getContext(),
+    StructType *structTy = StructType::get(Builder.getContext(),
                                            structMembers);
     M->addTypeName(Name, structTy);
 
     // Store the parameters into the structure.
-    Value *structData = Builder->CreateAlloca(structTy, 0, "omp_struct_data");
+    Value *structData = Builder.CreateAlloca(structTy, 0, "omp_struct_data");
     CharMapT::iterator V = clastVars->begin();
     unsigned i = 0;
 
     for (std::vector<const Type*>::iterator I = structMembers.begin(),
          E = structMembers.end(); I != E; I++) {
       Value *Param = V->second;
-      Value *storeAddr = Builder->CreateStructGEP(structData, i);
-      Builder->CreateStore(Param, storeAddr);
+      Value *storeAddr = Builder.CreateStructGEP(structData, i);
+      Builder.CreateStore(Param, storeAddr);
       V++;
       i++;
     }
@@ -893,11 +893,11 @@ public:
   /// @brief Add body to the subfunction.
   void addOpenMPSubfunctionBody(Function *FN, const clast_for *f,
                Value *structData) {
-      Module *M = Builder->GetInsertBlock()->getParent()->getParent();
+      Module *M = Builder.GetInsertBlock()->getParent()->getParent();
       LLVMContext &Context = FN->getContext();
 
       // Store the previous basic block.
-      BasicBlock *PrevBB = Builder->GetInsertBlock();
+      BasicBlock *PrevBB = Builder.GetInsertBlock();
 
       // Create basic blocks.
       BasicBlock *HeaderBB = BasicBlock::Create(Context, "entry", FN);
@@ -910,11 +910,11 @@ public:
       DT->addNewBlock(BB2, HeaderBB);
 
       // Fill up basic block HeaderBB.
-      Builder->SetInsertPoint(HeaderBB);
-      Value *memTmp = Builder->CreateAlloca(TD->getIntPtrType(Context), 0);
-      Value *memTmp1 = Builder->CreateAlloca(TD->getIntPtrType(Context), 0);
+      Builder.SetInsertPoint(HeaderBB);
+      Value *memTmp = Builder.CreateAlloca(TD->getIntPtrType(Context), 0);
+      Value *memTmp1 = Builder.CreateAlloca(TD->getIntPtrType(Context), 0);
 
-      Value *structVal = Builder->CreateBitCast(FN->arg_begin(),
+      Value *structVal = Builder.CreateBitCast(FN->arg_begin(),
                                                 structData->getType());
 
       // Extract the values from the subfunction parameter and update the clast
@@ -924,31 +924,31 @@ public:
 
       for (CharMapT::iterator I = clastVars->begin(), E = clastVars->end();
            I != E; I++) {
-        Value *loadAddr = Builder->CreateStructGEP(structVal, i);
-        clastVarsOMP[I->first] = Builder->CreateLoad(loadAddr);
+        Value *loadAddr = Builder.CreateStructGEP(structVal, i);
+        clastVarsOMP[I->first] = Builder.CreateLoad(loadAddr);
         i++;
       }
 
-      Builder->CreateBr(BB1);
+      Builder.CreateBr(BB1);
 
       // Fill up basic block BB1.
-      Builder->SetInsertPoint(BB1);
+      Builder.SetInsertPoint(BB1);
       // Create call to GOMP_loop_runtime_next.
       Function *runtimeNextFunction = M->getFunction("GOMP_loop_runtime_next");
-      Value *ret1 = Builder->CreateCall2(runtimeNextFunction, memTmp, memTmp1);
-      Value *ret2 = Builder->CreateTrunc(ret1, Builder->getInt1Ty());
-      Value *ret3 = Builder->CreateICmpNE(ret2,
+      Value *ret1 = Builder.CreateCall2(runtimeNextFunction, memTmp, memTmp1);
+      Value *ret2 = Builder.CreateTrunc(ret1, Builder.getInt1Ty());
+      Value *ret3 = Builder.CreateICmpNE(ret2,
                             Constant::getNullValue(ret2->getType()));
-      Builder->CreateCondBr(ret3, BB2, ExitBB);
+      Builder.CreateCondBr(ret3, BB2, ExitBB);
 
       // Fill up basic block BB2.
-      Builder->SetInsertPoint(BB2);
-      Value *lowerBound = Builder->CreateLoad(memTmp);
-      Value *upperBound = Builder->CreateLoad(memTmp1);
+      Builder.SetInsertPoint(BB2);
+      Value *lowerBound = Builder.CreateLoad(memTmp);
+      Value *upperBound = Builder.CreateLoad(memTmp1);
 
       // Subtract one as the upper bound provided by openmp is a < comparison
       // whereas the codegenForSequential function creates a <= comparison.
-      upperBound = Builder->CreateSub(upperBound,
+      upperBound = Builder.CreateSub(upperBound,
         ConstantInt::get(TD->getIntPtrType(Context), 1));
 
       // Use clastVarsOMP during code generation of the OpenMP subfunction.
@@ -962,25 +962,25 @@ public:
       clastVars = oldClastVars;
       ExpGen.setIVS(oldClastVars);
 
-      Builder->CreateBr(BB1);
+      Builder.CreateBr(BB1);
 
       // Fill up basic block ExitBB.
-      Builder->SetInsertPoint(ExitBB);
+      Builder.SetInsertPoint(ExitBB);
       // Create call to GOMP_loop_end_nowait.
       Function *endnowaitFunction = M->getFunction("GOMP_loop_end_nowait");
-      Builder->CreateCall(endnowaitFunction);
+      Builder.CreateCall(endnowaitFunction);
       // Add the return instruction.
-      Builder->CreateRetVoid();
+      Builder.CreateRetVoid();
 
       // Restore the builder back to previous basic block.
-      Builder->SetInsertPoint(PrevBB);
+      Builder.SetInsertPoint(PrevBB);
   }
   /// @brief Create an OpenMP parallel for loop.
   ///
   /// This loop reflects a loop as if it would have been created by an OpenMP
   /// statement.
   void codegenForOpenMP(const clast_for *f) {
-    Module *M = Builder->GetInsertBlock()->getParent()->getParent();
+    Module *M = Builder.GetInsertBlock()->getParent()->getParent();
 
     Function *SubFunction = addOpenMPSubfunction(M);
     Value *structData = addOpenMPSubfunctionParms(SubFunction);
@@ -989,20 +989,20 @@ public:
 
     // Create call for GOMP_parallel_loop_runtime_start.
     Value *subfunctionParam =
-      Builder->CreateBitCast(structData, Builder->getInt8PtrTy(),
+      Builder.CreateBitCast(structData, Builder.getInt8PtrTy(),
                    "omp_data");
 
-    Value *numberOfThreads = Builder->getInt32(0);
+    Value *numberOfThreads = Builder.getInt32(0);
     Value *lowerBound = ExpGen.codegen(f->LB,
-      TD->getIntPtrType(Builder->getContext()));
+      TD->getIntPtrType(Builder.getContext()));
     Value *upperBound = ExpGen.codegen(f->UB,
-      TD->getIntPtrType(Builder->getContext()));
+      TD->getIntPtrType(Builder.getContext()));
     // Add one as the upper bound provided by openmp is a < comparison
     // whereas the codegenForSequential function creates a <= comparison.
-    upperBound = Builder->CreateAdd(upperBound,
-      ConstantInt::get(TD->getIntPtrType(Builder->getContext()), 1));
+    upperBound = Builder.CreateAdd(upperBound,
+      ConstantInt::get(TD->getIntPtrType(Builder.getContext()), 1));
     APInt APStride = APInt_from_MPZ(f->stride);
-    const IntegerType *strideType = TD->getIntPtrType(Builder->getContext());
+    const IntegerType *strideType = TD->getIntPtrType(Builder.getContext());
     Value *stride = ConstantInt::get(strideType,
                                      APStride.zext(strideType->getBitWidth()));
 
@@ -1016,15 +1016,15 @@ public:
 
     Function *parallelStartFunction =
       M->getFunction("GOMP_parallel_loop_runtime_start");
-    Builder->CreateCall(parallelStartFunction, Arguments.begin(),
+    Builder.CreateCall(parallelStartFunction, Arguments.begin(),
                         Arguments.end());
 
     // Create call to the subfunction.
-    Builder->CreateCall(SubFunction, subfunctionParam);
+    Builder.CreateCall(SubFunction, subfunctionParam);
 
     // Create call for GOMP_parallel_end.
     Function *FN = M->getFunction("GOMP_parallel_end");
-    Builder->CreateCall(FN);
+    Builder.CreateCall(FN);
   }
 
   bool isInnermostLoop(const clast_for *f) {
@@ -1036,7 +1036,7 @@ public:
     DEBUG(dbgs() << "Vectorizing loop '" << f->iterator << "'\n";);
 
     Value *LB = ExpGen.codegen(f->LB,
-      TD->getIntPtrType(Builder->getContext()));
+      TD->getIntPtrType(Builder.getContext()));
 
     APInt Stride = APInt_from_MPZ(f->stride);
     const IntegerType *LoopIVType = dyn_cast<IntegerType>(LB->getType());
@@ -1047,7 +1047,7 @@ public:
     IVS[0] = LB;
 
     for (int i = 1; i < VECTORSIZE; i++)
-      IVS[i] = Builder->CreateAdd(IVS[i-1], StrideValue, "p_vector_iv");
+      IVS[i] = Builder.CreateAdd(IVS[i-1], StrideValue, "p_vector_iv");
 
 
     isl_set *scatteringDomain = isl_set_from_cloog_domain(f->domain);
@@ -1076,9 +1076,9 @@ public:
 
   Value *codegen(const clast_equation *eq) {
     Value *LHS = ExpGen.codegen(eq->LHS,
-      TD->getIntPtrType(Builder->getContext()));
+      TD->getIntPtrType(Builder.getContext()));
     Value *RHS = ExpGen.codegen(eq->RHS,
-      TD->getIntPtrType(Builder->getContext()));
+      TD->getIntPtrType(Builder.getContext()));
     CmpInst::Predicate P;
 
     if (eq->sign == 0)
@@ -1088,31 +1088,31 @@ public:
     else
       P = ICmpInst::ICMP_SLE;
 
-    return Builder->CreateICmp(P, LHS, RHS);
+    return Builder.CreateICmp(P, LHS, RHS);
   }
 
   void codegen(const clast_guard *g) {
-    Function *F = Builder->GetInsertBlock()->getParent();
+    Function *F = Builder.GetInsertBlock()->getParent();
     LLVMContext &Context = F->getContext();
     BasicBlock *ThenBB = BasicBlock::Create(Context, "polly.then", F);
     BasicBlock *MergeBB = BasicBlock::Create(Context, "polly.merge", F);
-    DT->addNewBlock(ThenBB, Builder->GetInsertBlock());
-    DT->addNewBlock(MergeBB, Builder->GetInsertBlock());
+    DT->addNewBlock(ThenBB, Builder.GetInsertBlock());
+    DT->addNewBlock(MergeBB, Builder.GetInsertBlock());
 
     Value *Predicate = codegen(&(g->eq[0]));
 
     for (int i = 1; i < g->n; ++i) {
       Value *TmpPredicate = codegen(&(g->eq[i]));
-      Predicate = Builder->CreateAnd(Predicate, TmpPredicate);
+      Predicate = Builder.CreateAnd(Predicate, TmpPredicate);
     }
 
-    Builder->CreateCondBr(Predicate, ThenBB, MergeBB);
-    Builder->SetInsertPoint(ThenBB);
+    Builder.CreateCondBr(Predicate, ThenBB, MergeBB);
+    Builder.SetInsertPoint(ThenBB);
 
     codegen(g->then);
 
-    Builder->CreateBr(MergeBB);
-    Builder->SetInsertPoint(MergeBB);
+    Builder.CreateBr(MergeBB);
+    Builder.SetInsertPoint(MergeBB);
   }
 
   void codegen(const clast_stmt *stmt) {
@@ -1138,9 +1138,9 @@ public:
 
     // Create an instruction that specifies the location where the parameters
     // are expanded.
-    CastInst::CreateIntegerCast(ConstantInt::getTrue(Builder->getContext()),
-                                  Builder->getInt16Ty(), false, "insertInst",
-                                  Builder->GetInsertBlock());
+    CastInst::CreateIntegerCast(ConstantInt::getTrue(Builder.getContext()),
+                                  Builder.getInt16Ty(), false, "insertInst",
+                                  Builder.GetInsertBlock());
 
     int i = 0;
     for (Scop::param_iterator PI = S->param_begin(), PE = S->param_end();
@@ -1150,7 +1150,7 @@ public:
       const SCEV *Param = *PI;
       const Type *Ty = Param->getType();
 
-      Instruction *insertLocation = --(Builder->GetInsertBlock()->end());
+      Instruction *insertLocation = --(Builder.GetInsertBlock()->end());
       Value *V = Rewriter.expandCodeFor(Param, Ty, insertLocation);
       (*clastVars)[names->parameters[i]] = V;
 
@@ -1174,7 +1174,7 @@ public:
   }
 
   ClastStmtCodeGen(Scop *scop, ScalarEvolution &se, DominatorTree *dt,
-                   Dependences *dp, TargetData *td, IRBuilder<> *B) :
+                   Dependences *dp, TargetData *td, IRBuilder<> &B) :
     S(scop), SE(se), DT(dt), DP(dp), TD(td), Builder(B), ExpGen(Builder, NULL) {}
 
 };
@@ -1210,10 +1210,10 @@ class CodeGeneration : public ScopPass {
 
 
   // Adding prototypes required if OpenMP is enabled.
-  void addOpenMPDefinitions(IRBuilder<> *Builder)
+  void addOpenMPDefinitions(IRBuilder<> &Builder)
   {
-    Module *M = Builder->GetInsertBlock()->getParent()->getParent();
-    LLVMContext &Context = Builder->getContext();
+    Module *M = Builder.GetInsertBlock()->getParent()->getParent();
+    LLVMContext &Context = Builder.getContext();
 
     Function *FN = M->getFunction("GOMP_parallel_end");
     // Check if the definition is already added. Otherwise add it.
@@ -1227,20 +1227,20 @@ class CodeGeneration : public ScopPass {
     // Check if the definition is already added. Otherwise add it.
     if (!M->getFunction("GOMP_parallel_loop_runtime_start")) {
       // Creating type of first argument for GOMP_parallel_start.
-      std::vector<const Type*> Arguments(1, Builder->getInt8PtrTy());
-      FunctionType *FnArgTy = FunctionType::get(Builder->getVoidTy(),
+      std::vector<const Type*> Arguments(1, Builder.getInt8PtrTy());
+      FunctionType *FnArgTy = FunctionType::get(Builder.getVoidTy(),
                                                 Arguments, false);
       PointerType *FnPtrTy = PointerType::getUnqual(FnArgTy);
 
       // Prototype for GOMP_parallel_loop_runtime_start.
       std::vector<const Type*> PsArguments;
       PsArguments.push_back(FnPtrTy);
-      PsArguments.push_back(Builder->getInt8PtrTy());
-      PsArguments.push_back(Builder->getInt32Ty());
+      PsArguments.push_back(Builder.getInt8PtrTy());
+      PsArguments.push_back(Builder.getInt32Ty());
       PsArguments.push_back(TD->getIntPtrType(Context));
       PsArguments.push_back(TD->getIntPtrType(Context));
       PsArguments.push_back(TD->getIntPtrType(Context));
-      FunctionType *PsFT = FunctionType::get(Builder->getVoidTy(),
+      FunctionType *PsFT = FunctionType::get(Builder.getVoidTy(),
                                              PsArguments, false);
       Function::Create(PsFT, Function::ExternalLinkage,
                        "GOMP_parallel_loop_runtime_start", M);
@@ -1254,7 +1254,7 @@ class CodeGeneration : public ScopPass {
         PointerType::getUnqual(TD->getIntPtrType(Context));
       runtimeNextArguments.push_back(intLongPtrTy);
       runtimeNextArguments.push_back(intLongPtrTy);
-      FunctionType *runtimeNextFT = FunctionType::get(Builder->getInt8Ty(),
+      FunctionType *runtimeNextFT = FunctionType::get(Builder.getInt8Ty(),
                                                       runtimeNextArguments,
                                                       false);
       Function::Create(runtimeNextFT, Function::ExternalLinkage,
@@ -1264,7 +1264,7 @@ class CodeGeneration : public ScopPass {
     // Check if the definition is already added. Otherwise add it.
     if (!M->getFunction("GOMP_loop_end_nowait")) {
       // Prototype for "GOMP_loop_end_nowait".
-      FunctionType *FT = FunctionType::get(Builder->getVoidTy(),
+      FunctionType *FT = FunctionType::get(Builder.getVoidTy(),
                                            std::vector<const Type*>(), false);
       Function::Create(FT, Function::ExternalLinkage,
 		       "GOMP_loop_end_nowait", M);
@@ -1302,10 +1302,10 @@ class CodeGeneration : public ScopPass {
 
     const clast_root *clast = (const clast_root *) C->getClast();
 
-    ClastStmtCodeGen CodeGen(S, *SE, DT, DP, TD, &Builder);
+    ClastStmtCodeGen CodeGen(S, *SE, DT, DP, TD, Builder);
 
     if (OpenMP)
-      addOpenMPDefinitions(&Builder);
+      addOpenMPDefinitions(Builder);
 
     CodeGen.codegen(clast);
 
