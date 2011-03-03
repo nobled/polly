@@ -1044,7 +1044,6 @@ public:
     for (int i = 1; i < VECTORSIZE; i++)
       IVS[i] = Builder.CreateAdd(IVS[i-1], StrideValue, "p_vector_iv");
 
-
     isl_set *scatteringDomain = isl_set_from_cloog_domain(f->domain);
 
     // Add loop iv to symbols.
@@ -1209,56 +1208,46 @@ class CodeGeneration : public ScopPass {
   {
     Module *M = Builder.GetInsertBlock()->getParent()->getParent();
     LLVMContext &Context = Builder.getContext();
+    const IntegerType *intPtrTy = TD->getIntPtrType(Context);
 
-    Function *FN = M->getFunction("GOMP_parallel_end");
-    // Check if the definition is already added. Otherwise add it.
-    if (!FN) {
-      // Prototype for "GOMP_parallel_end".
-      FunctionType *FT = FunctionType::get(Type::getVoidTy(Context),
-                                           std::vector<const Type*>(), false);
+    if (!M->getFunction("GOMP_parallel_end")) {
+      FunctionType *FT = FunctionType::get(Type::getVoidTy(Context), false);
       Function::Create(FT, Function::ExternalLinkage, "GOMP_parallel_end", M);
     }
 
-    // Check if the definition is already added. Otherwise add it.
     if (!M->getFunction("GOMP_parallel_loop_runtime_start")) {
-      // Creating type of first argument for GOMP_parallel_start.
+      // Type of first argument.
       std::vector<const Type*> Arguments(1, Builder.getInt8PtrTy());
-      FunctionType *FnArgTy = FunctionType::get(Builder.getVoidTy(),
-                                                Arguments, false);
+      FunctionType *FnArgTy = FunctionType::get(Builder.getVoidTy(), Arguments,
+                                                false);
       PointerType *FnPtrTy = PointerType::getUnqual(FnArgTy);
 
-      // Prototype for GOMP_parallel_loop_runtime_start.
-      std::vector<const Type*> PsArguments;
-      PsArguments.push_back(FnPtrTy);
-      PsArguments.push_back(Builder.getInt8PtrTy());
-      PsArguments.push_back(Builder.getInt32Ty());
-      PsArguments.push_back(TD->getIntPtrType(Context));
-      PsArguments.push_back(TD->getIntPtrType(Context));
-      PsArguments.push_back(TD->getIntPtrType(Context));
-      FunctionType *PsFT = FunctionType::get(Builder.getVoidTy(),
-                                             PsArguments, false);
-      Function::Create(PsFT, Function::ExternalLinkage,
+      std::vector<const Type*> args;
+      args.push_back(FnPtrTy);
+      args.push_back(Builder.getInt8PtrTy());
+      args.push_back(Builder.getInt32Ty());
+      args.push_back(intPtrTy);
+      args.push_back(intPtrTy);
+      args.push_back(intPtrTy);
+
+      FunctionType *type = FunctionType::get(Builder.getVoidTy(), args, false);
+      Function::Create(type, Function::ExternalLinkage,
                        "GOMP_parallel_loop_runtime_start", M);
     }
 
-    // Check if the definition is already added. Otherwise add it.
     if (!M->getFunction("GOMP_loop_runtime_next")) {
-      // Prototype for GOMP_parallel_loop_runtime_start.
-      std::vector<const Type*> runtimeNextArguments;
-      PointerType *intLongPtrTy =
-        PointerType::getUnqual(TD->getIntPtrType(Context));
-      runtimeNextArguments.push_back(intLongPtrTy);
-      runtimeNextArguments.push_back(intLongPtrTy);
-      FunctionType *runtimeNextFT = FunctionType::get(Builder.getInt8Ty(),
-                                                      runtimeNextArguments,
-                                                      false);
-      Function::Create(runtimeNextFT, Function::ExternalLinkage,
-                       "GOMP_loop_runtime_next", M);
-	}
+      PointerType *intLongPtrTy = PointerType::getUnqual(intPtrTy);
 
-    // Check if the definition is already added. Otherwise add it.
+      std::vector<const Type*> args;
+      args.push_back(intLongPtrTy);
+      args.push_back(intLongPtrTy);
+
+      FunctionType *type = FunctionType::get(Builder.getInt8Ty(), args, false);
+      Function::Create(type, Function::ExternalLinkage,
+                       "GOMP_loop_runtime_next", M);
+    }
+
     if (!M->getFunction("GOMP_loop_end_nowait")) {
-      // Prototype for "GOMP_loop_end_nowait".
       FunctionType *FT = FunctionType::get(Builder.getVoidTy(),
                                            std::vector<const Type*>(), false);
       Function::Create(FT, Function::ExternalLinkage,
