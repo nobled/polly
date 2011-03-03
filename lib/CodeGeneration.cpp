@@ -832,25 +832,19 @@ public:
 
   /// @brief Add a new definition of an openmp subfunction.
   Function* addOpenMPSubfunction(Module *M) {
-      LLVMContext &Context = Builder.getContext();
+    LLVMContext &Context = Builder.getContext();
 
-      // Create name for the subfunction.
-      Function *F = Builder.GetInsertBlock()->getParent();
-      const std::string &Name = F->getNameStr() + ".omp_subfn";
+    Function *F = Builder.GetInsertBlock()->getParent();
+    const std::string &Name = F->getNameStr() + ".omp_subfn";
 
-      // Prototype for "subfunction".
-      std::vector<const Type*> Arguments(1, Builder.getInt8PtrTy());
-      FunctionType *FT = FunctionType::get(Builder.getVoidTy(), Arguments,
-                                           false);
-      // Get unique name for the subfunction.
-      Function *FN = Function::Create(FT, Function::InternalLinkage,
-                                      Name, M);
+    std::vector<const Type*> Arguments(1, Builder.getInt8PtrTy());
+    FunctionType *FT = FunctionType::get(Builder.getVoidTy(), Arguments, false);
+    Function *FN = Function::Create(FT, Function::InternalLinkage, Name, M);
 
-      // Set name for the argument
-      Function::arg_iterator AI = FN->arg_begin();
-      AI->setName("omp_data");
+    Function::arg_iterator AI = FN->arg_begin();
+    AI->setName("omp.userContext");
 
-      return FN;
+    return FN;
   }
 
   /// @brief Create and fill subfunction parameters.
@@ -869,13 +863,13 @@ public:
       structMembers.push_back(Param->getType());
     }
 
-    const std::string &Name = SubFunction->getNameStr() + ".omp_struct";
+    const std::string &Name = SubFunction->getNameStr() + ".omp.userContext";
     StructType *structTy = StructType::get(Builder.getContext(),
                                            structMembers);
     M->addTypeName(Name, structTy);
 
     // Store the parameters into the structure.
-    Value *structData = Builder.CreateAlloca(structTy, 0, "omp_struct_data");
+    Value *structData = Builder.CreateAlloca(structTy, 0, "omp.userContext");
     CharMapT::iterator V = clastVars->begin();
     unsigned i = 0;
 
