@@ -676,8 +676,8 @@ class ClastStmtCodeGen {
 
   // clastVars maps from the textual representation of a clast variable to its
   // current *Value. clast variables are scheduling variables, original
-  // induction variables or parameters. They are use either in loop bounds or to
-  // define the statement instance that is executed.
+  // induction variables or parameters. They are used either in loop bounds or
+  // to define the statement instance that is executed.
   //
   //   for (s = 0; s < n + 3; ++i)
   //     for (t = s; t < m; ++j)
