@@ -884,6 +884,16 @@ public:
          I != E; I++)
      OMPDataVals.push_back(I->second);
 
+    // Push the base addresses of memory references.
+    for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+      ScopStmt *Stmt = *SI;
+      for (SmallVector<MemoryAccess*, 8>::iterator I = Stmt->memacc_begin(),
+           E = Stmt->memacc_end(); I != E; ++I) {
+        Value *BaseAddr = const_cast<Value*>((*I)->getBaseAddr());
+        OMPDataVals.push_back((BaseAddr));
+      }
+    }
+
     return OMPDataVals;
   }
 
