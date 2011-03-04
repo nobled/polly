@@ -155,17 +155,17 @@ public:
     return S.getRegion();
   }
 
-  Value* makeVectorOperand(Value *operand, int vectorSize) {
+  Value* makeVectorOperand(Value *operand, int vectorWidth) {
     if (operand->getType()->isVectorTy())
       return operand;
 
-    VectorType *vectorType = VectorType::get(operand->getType(), vectorSize);
+    VectorType *vectorType = VectorType::get(operand->getType(), vectorWidth);
     Value *vector = UndefValue::get(vectorType);
     vector = Builder.CreateInsertElement(vector, operand, Builder.getInt32(0));
 
     std::vector<Constant*> splat;
 
-    for (int i = 0; i < vectorSize; i++)
+    for (int i = 0; i < vectorWidth; i++)
       splat.push_back (Builder.getInt32(0));
 
     Constant *splatVector = ConstantVector::get(splat);
@@ -210,14 +210,14 @@ public:
     return const_cast<Value*>(OldOperand);
   }
 
-#define VECTORSIZE 4
+#define VECTORWIDTH 4
 
-  const Type *getVectorPtrTy(const Value *V, int vectorSize = VECTORSIZE) {
+  const Type *getVectorPtrTy(const Value *V, int vectorWidth) {
     const PointerType *pointerType = dyn_cast<PointerType>(V->getType());
     assert(pointerType && "PointerType expected");
 
     const Type *scalarType = pointerType->getElementType();
-    VectorType *vectorType = VectorType::get(scalarType, vectorSize);
+    VectorType *vectorType = VectorType::get(scalarType, vectorWidth);
 
     return PointerType::getUnqual(vectorType);
   }
@@ -231,7 +231,7 @@ public:
   /// %vec_full = load <4 x double>* %vector_ptr
   ///
   Value *generateStrideOneLoad(const LoadInst *load, ValueMapT &BBMap,
-                               int size = VECTORSIZE) {
+                               int size) {
     const Value *pointer = load->getPointerOperand();
     const Type *vectorPtrType = getVectorPtrTy(pointer, size);
     Value *newPointer = getOperand(pointer, BBMap);
@@ -254,7 +254,7 @@ public:
   ///       double> %splat_one, <4 x i32> zeroinitializer
   ///
   Value *generateStrideZeroLoad(const LoadInst *load, ValueMapT &BBMap,
-                                int size = VECTORSIZE) {
+                                int size) {
     const Value *pointer = load->getPointerOperand();
     const Type *vectorPtrType = getVectorPtrTy(pointer, 1);
     Value *newPointer = getOperand(pointer, BBMap);
@@ -289,7 +289,7 @@ public:
   ///
   Value *generateUnknownStrideLoad(const LoadInst *load,
                                    VectorValueMapT &scalarMaps,
-                                   int size = VECTORSIZE) {
+                                   int size) {
     const Value *pointer = load->getPointerOperand();
     VectorType *vectorType = VectorType::get(
       dyn_cast<PointerType>(pointer->getType())->getElementType(), size);
@@ -318,7 +318,7 @@ public:
 
   /// @brief Load a value (or several values as a vector) from memory.
   void generateLoad(const LoadInst *load, ValueMapT &vectorMap,
-                    VectorValueMapT &scalarMaps) {
+                    VectorValueMapT &scalarMaps, int vectorWidth) {
 
     if (scalarMaps.size() == 1) {
       scalarMaps[0][load] = generateScalarLoad(load, scalarMaps[0]);
@@ -332,18 +332,18 @@ public:
     assert(scatteringDomain && "No scattering domain available");
 
     if (Access.isStrideZero(scatteringDomain))
-      newLoad = generateStrideZeroLoad(load, scalarMaps[0]);
+      newLoad = generateStrideZeroLoad(load, scalarMaps[0], vectorWidth);
     else if (Access.isStrideOne(scatteringDomain))
-      newLoad = generateStrideOneLoad(load, scalarMaps[0]);
+      newLoad = generateStrideOneLoad(load, scalarMaps[0], vectorWidth);
     else
-      newLoad = generateUnknownStrideLoad(load, scalarMaps);
+      newLoad = generateUnknownStrideLoad(load, scalarMaps, vectorWidth);
 
     vectorMap[load] = newLoad;
   }
 
   void copyInstruction(const Instruction *Inst, ValueMapT &BBMap,
                        ValueMapT &vectorMap, VectorValueMapT &scalarMaps,
-                       int vectorDimension) {
+                       int vectorDimension, int vectorWidth) {
     // If this instruction is already in the vectorMap, a vector instruction
     // was already issued, that calculates the values of all dimensions. No
     // need to create any more instructions.
@@ -356,7 +356,7 @@ public:
       return;
 
     if (const LoadInst *load = dyn_cast<LoadInst>(Inst)) {
-      generateLoad(load, vectorMap, scalarMaps);
+      generateLoad(load, vectorMap, scalarMaps, vectorWidth);
       return;
     }
 
@@ -380,8 +380,8 @@ public:
 
       std::string name;
       if (isVectorOp) {
-        newOpZero = makeVectorOperand(newOpZero, VECTORSIZE);
-        newOpOne = makeVectorOperand(newOpOne, VECTORSIZE);
+        newOpZero = makeVectorOperand(newOpZero, vectorWidth);
+        newOpOne = makeVectorOperand(newOpOne, vectorWidth);
         name =  Inst->getNameStr() + "p_vec";
       } else
         name = Inst->getNameStr() + "p_sca";
@@ -411,7 +411,7 @@ public:
         Value *vector = getOperand(store->getValueOperand(), BBMap, &vectorMap);
 
         if (Access.isStrideOne(scatteringDomain)) {
-          const Type *vectorPtrType = getVectorPtrTy(pointer);
+          const Type *vectorPtrType = getVectorPtrTy(pointer, vectorWidth);
           Value *newPointer = getOperand(pointer, BBMap, &vectorMap);
 
           Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
@@ -509,7 +509,7 @@ public:
           VMap = ValueMaps[i];
 
         copyInstruction(II, scalarBlockMap[i], vectorBlockMap,
-                        scalarBlockMap, i);
+                        scalarBlockMap, i, getVectorSize());
       }
   }
 };
@@ -703,8 +703,8 @@ public:
 
   protected:
   void codegen(const clast_assignment *a) {
-    //Value *RHS = ExpGen.codegen(a->RHS);
-    assert(false && "Here is something missing");
+    (*clastVars)[a->LHS] = ExpGen.codegen(a->RHS,
+      TD->getIntPtrType(Builder.getContext()));
   }
 
   void codegen(const clast_assignment *a, ScopStmt *Statement,
@@ -1061,6 +1061,7 @@ public:
   /// @brief Create vector instructions for this loop.
   void codegenForVector(const clast_for *f) {
     DEBUG(dbgs() << "Vectorizing loop '" << f->iterator << "'\n";);
+    int vectorWidth = VECTORWIDTH;
 
     Value *LB = ExpGen.codegen(f->LB,
       TD->getIntPtrType(Builder.getContext()));
@@ -1070,10 +1071,10 @@ public:
      Stride =Stride.zext(LoopIVType->getBitWidth());
     Value *StrideValue = ConstantInt::get(LoopIVType, Stride);
 
-    std::vector<Value*> IVS(VECTORSIZE);
+    std::vector<Value*> IVS(vectorWidth);
     IVS[0] = LB;
 
-    for (int i = 1; i < VECTORSIZE; i++)
+    for (int i = 1; i < vectorWidth; i++)
       IVS[i] = Builder.CreateAdd(IVS[i-1], StrideValue, "p_vector_iv");
 
     isl_set *scatteringDomain = isl_set_from_cloog_domain(f->domain);
