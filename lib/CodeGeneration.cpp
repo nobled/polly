@@ -897,6 +897,22 @@ public:
     return OMPDataVals;
   }
 
+  /// @brief Extract the values from the subfunction parameter.
+  ///
+  /// Extract the values from the subfunction parameter and update the clast
+  /// variables to point to the new values.
+  void extractValuesFromOpenMPStruct(CharMapT *clastVarsOMP,
+                                     Value *userContext) {
+    // Extract the clast variables.
+    unsigned i = 0;
+    for (CharMapT::iterator I = clastVars->begin(), E = clastVars->end();
+         I != E; I++) {
+      Value *loadAddr = Builder.CreateStructGEP(userContext, i);
+      (*clastVarsOMP)[I->first] = Builder.CreateLoad(loadAddr);
+      i++;
+    }
+  }
+
   /// @brief Add body to the subfunction.
   void addOpenMPSubfunctionBody(Function *FN, const clast_for *f,
                                 Value *structData) {
@@ -932,14 +948,7 @@ public:
     // Extract the values from the subfunction parameter and update the clast
     // variables to point to the new values.
     CharMapT clastVarsOMP;
-    unsigned i = 0;
-
-    for (CharMapT::iterator I = clastVars->begin(), E = clastVars->end();
-         I != E; I++) {
-      Value *loadAddr = Builder.CreateStructGEP(userContext, i);
-      clastVarsOMP[I->first] = Builder.CreateLoad(loadAddr);
-      i++;
-    }
+    extractValuesFromOpenMPStruct(&clastVarsOMP, userContext);
 
     Builder.CreateBr(checkNextBB);
 
