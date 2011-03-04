@@ -945,8 +945,6 @@ public:
                                                structData->getType(),
                                                "omp.userContext");
 
-    // Extract the values from the subfunction parameter and update the clast
-    // variables to point to the new values.
     CharMapT clastVarsOMP;
     extractValuesFromOpenMPStruct(&clastVarsOMP, userContext);
 
