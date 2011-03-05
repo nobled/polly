@@ -1058,10 +1058,49 @@ public:
     return CLAST_STMT_IS_A(f->body, stmt_user);
   }
 
+  /// @brief Get the number of loop iterations for this loop.
+  /// @param f The clast for loop to check.
+  int getNumberOfIterations(const clast_for *f) {
+    isl_set *loopDomain = isl_set_copy(isl_set_from_cloog_domain(f->domain));
+    isl_set *tmp = isl_set_copy(loopDomain);
+
+    // Calculate a map similar to the identity map, but with the last input
+    // and output dimension not related.
+    //  [i0, i1, i2, i3] -> [i0, i1, i2, o0]
+    isl_dim *dim = isl_set_get_dim(loopDomain);
+    dim = isl_dim_drop_outputs(dim, isl_set_n_dim(loopDomain) - 2, 1);
+    dim = isl_dim_map_from_set(dim);
+    isl_map *identity = isl_map_identity(dim);
+    identity = isl_map_add_dims(identity, isl_dim_in, 1);
+    identity = isl_map_add_dims(identity, isl_dim_out, 1);
+
+    isl_map *map = isl_map_from_domain_and_range(tmp, loopDomain);
+    map = isl_map_intersect(map, identity);
+
+    isl_map *lexmax = isl_map_lexmax(isl_map_copy(map));
+    isl_map *lexmin = isl_map_lexmin(isl_map_copy(map));
+    isl_map *sub = isl_map_sum(lexmax, isl_map_neg(lexmin));
+
+    isl_set *elements = isl_map_range(sub);
+
+    if (!isl_set_is_singleton(elements))
+      return -1;
+
+    isl_point *p = isl_set_sample_point(elements);
+
+    isl_int v;
+    isl_int_init(v);
+    isl_point_get_coordinate(p, isl_dim_set, isl_set_n_dim(loopDomain) - 1, &v);
+    int numberIterations = isl_int_get_si(v);
+    isl_int_clear(v);
+
+    return (numberIterations) / isl_int_get_si(f->stride) + 1;
+  }
+
   /// @brief Create vector instructions for this loop.
   void codegenForVector(const clast_for *f) {
     DEBUG(dbgs() << "Vectorizing loop '" << f->iterator << "'\n";);
-    int vectorWidth = VECTORWIDTH;
+    int vectorWidth = getNumberOfIterations(f);
 
     Value *LB = ExpGen.codegen(f->LB,
       TD->getIntPtrType(Builder.getContext()));
@@ -1090,7 +1129,8 @@ public:
   }
 
   void codegen(const clast_for *f) {
-    if (Vector && isInnermostLoop(f) && isParallelFor(f)) {
+    if (Vector && isInnermostLoop(f) && isParallelFor(f)
+        && getNumberOfIterations(f) != -1) {
       codegenForVector(f);
     } else if (OpenMP && !parallelCodeGeneration && isParallelFor(f)) {
       parallelCodeGeneration = true;

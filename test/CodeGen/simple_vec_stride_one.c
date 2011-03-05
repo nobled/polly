@@ -2,7 +2,7 @@
 float A[N];
 float B[N];
 
-void simple_vec_const(void) {
+void simple_vec_stride_one(void) {
   int i;
 
   for (i = 0; i < 4; i++)
@@ -10,6 +10,6 @@ void simple_vec_const(void) {
 }
 int main()
 {
-  simple_vec_const();
+  simple_vec_stride_one();
   return A[42];
 }
