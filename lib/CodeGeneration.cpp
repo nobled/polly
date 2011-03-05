@@ -1107,7 +1107,7 @@ public:
 
     APInt Stride = APInt_from_MPZ(f->stride);
     const IntegerType *LoopIVType = dyn_cast<IntegerType>(LB->getType());
-     Stride =Stride.zext(LoopIVType->getBitWidth());
+    Stride =  Stride.zext(LoopIVType->getBitWidth());
     Value *StrideValue = ConstantInt::get(LoopIVType, Stride);
 
     std::vector<Value*> IVS(vectorWidth);
@@ -1130,7 +1130,8 @@ public:
 
   void codegen(const clast_for *f) {
     if (Vector && isInnermostLoop(f) && isParallelFor(f)
-        && getNumberOfIterations(f) != -1) {
+        && (-1 != getNumberOfIterations(f))
+        && (getNumberOfIterations(f) <= 32)) {
       codegenForVector(f);
     } else if (OpenMP && !parallelCodeGeneration && isParallelFor(f)) {
       parallelCodeGeneration = true;

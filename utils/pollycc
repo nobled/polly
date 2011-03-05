@@ -73,17 +73,6 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
       print ' '.join(commandLine)
       sys.exit(1)
 
-  if args.pollyexport:
-    commandLine = ['opt', '-load', polly, '-basicaa'] \
-                  + [preoptFile, '-polly-export-jscop']
-    commandLine = commandLine + ['-disable-output']
-    exit = subprocess.call(commandLine)
-
-    if exit:
-      print 'Polly optimizations failed: This command did not work'
-      print ' '.join(commandLine)
-      sys.exit(1)
-
   if args.fpolly:
     commandLine = ['opt', '-load', polly, '-basicaa'] \
                   + [preoptFile, '-disable-polly-legality']
@@ -99,6 +88,12 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
 
     if args.fparallel:
       commandLine.append('-enable-polly-openmp')
+
+    if args.fvector:
+      commandLine.append('-enable-polly-vector')
+
+    if args.pollyexport:
+      commandLine.append('-polly-export-jscop')
 
     if args.debug:
       debugCommandLine = commandLine + ['-polly-cloog', '-analyze', '-q']
@@ -209,7 +204,10 @@ def parseArguments():
   parser.add_argument('-ftile', '-fpluto-tile',
                       help='enable pluto tiling', action='store_true')
   parser.add_argument('-fparallel',
-                      help='enable openmp code generation (in development',
+                      help='enable openmp code generation (in development)',
+		      action='store_true')
+  parser.add_argument('-fvector',
+                      help='enable SIMD code generation (in development)',
 		      action='store_true')
   parser.add_argument('-fpolly-export', dest='pollyexport',
                       help='Export Polly jscop', action='store_true')

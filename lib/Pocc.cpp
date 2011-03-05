@@ -99,6 +99,7 @@ bool Pocc::runOnScop(Scop &S) {
   arguments.push_back("--candl-dep-isl-simp");
   arguments.push_back("--cloogify-scheds");
   arguments.push_back("--output-scop");
+  arguments.push_back("--pluto-prevector");
   arguments.push_back("--pluto");
 
   if (PlutoTile)
