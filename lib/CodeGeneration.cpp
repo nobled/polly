@@ -71,6 +71,12 @@ AtLeastOnce("enable-polly-atLeastOnce",
        cl::value_desc("OpenMP code generation enabled if true"),
        cl::init(false));
 
+static cl::opt<bool>
+Aligned("enable-polly-aligned",
+       cl::desc("Assumed aligned memory accesses."), cl::Hidden,
+       cl::value_desc("OpenMP code generation enabled if true"),
+       cl::init(false));
+
 static cl::opt<std::string>
 CodegenOnly("polly-codegen-only",
             cl::desc("Codegen only this function"), cl::Hidden,
@@ -237,9 +243,12 @@ public:
     Value *newPointer = getOperand(pointer, BBMap);
     Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
                                              "vector_ptr");
-    Value *VecLoad = Builder.CreateLoad(VectorPtr,
+    LoadInst *VecLoad = Builder.CreateLoad(VectorPtr,
                                         load->getNameStr()
                                         + "_p_vec_full");
+    if (!Aligned)
+      VecLoad->setAlignment(1);
+
     return VecLoad;
   }
 
@@ -416,7 +425,10 @@ public:
 
           Value *VectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
                                                    "vector_ptr");
-          Builder.CreateStore(vector, VectorPtr);
+          StoreInst *Store = Builder.CreateStore(vector, VectorPtr);
+
+          if (!Aligned)
+            Store->setAlignment(1);
         } else {
           for (unsigned i = 0; i < scalarMaps.size(); i++) {
             Value *scalar = Builder.CreateExtractElement(vector,

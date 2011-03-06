@@ -83,6 +83,9 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
     if args.fpluto:
       commandLine.append('-polly-optimize')
 
+    if args.faligned:
+      commandLine.append('-enable-polly-aligned')
+
     if args.ftile:
       commandLine.append('-enable-pluto-tile')
 
@@ -195,6 +198,8 @@ def parseArguments():
                       help='compile and assemble, but do not link')
   parser.add_argument('-fpolly', help='enable polly', action='store_true')
   parser.add_argument('-fpluto', help='enable pluto', action='store_true')
+  parser.add_argument('-faligned', help='Assume aligned vector accesses',
+                      action='store_true')
   parser.add_argument('-fview-scops', dest='view',
                       help='Show the scops with graphviz',
                       action='store_true')
