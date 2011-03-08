@@ -902,6 +902,7 @@ public:
   /// Extract the values from the subfunction parameter and update the clast
   /// variables to point to the new values.
   void extractValuesFromOpenMPStruct(CharMapT *clastVarsOMP,
+                                     std::vector<Value*> OMPDataVals,
                                      Value *userContext) {
     // Extract the clast variables.
     unsigned i = 0;
@@ -911,11 +912,20 @@ public:
       (*clastVarsOMP)[I->first] = Builder.CreateLoad(loadAddr);
       i++;
     }
+
+    // Extract the base addresses of memory references.
+    for (unsigned j = i; j < OMPDataVals.size(); j++) {
+      Value *loadAddr = Builder.CreateStructGEP(userContext, j);
+      Value *baseAddr = OMPDataVals[j];
+      ValueMap[baseAddr] = Builder.CreateLoad(loadAddr);
+    }
+
   }
 
   /// @brief Add body to the subfunction.
   void addOpenMPSubfunctionBody(Function *FN, const clast_for *f,
-                                Value *structData) {
+                                Value *structData,
+                                std::vector<Value*> OMPDataVals) {
     Module *M = Builder.GetInsertBlock()->getParent()->getParent();
     LLVMContext &Context = FN->getContext();
     const IntegerType *intPtrTy = TD->getIntPtrType(Context);
@@ -946,7 +956,7 @@ public:
                                                "omp.userContext");
 
     CharMapT clastVarsOMP;
-    extractValuesFromOpenMPStruct(&clastVarsOMP, userContext);
+    extractValuesFromOpenMPStruct(&clastVarsOMP, OMPDataVals, userContext);
 
     Builder.CreateBr(checkNextBB);
 
@@ -1004,7 +1014,7 @@ public:
     std::vector<Value *> OMPDataVals = createOpenMPStructValues();
     Value *structData = addValuesToOpenMPStruct(OMPDataVals, SubFunction);
 
-    addOpenMPSubfunctionBody(SubFunction, f, structData);
+    addOpenMPSubfunctionBody(SubFunction, f, structData, OMPDataVals);
 
     // Create call for GOMP_parallel_loop_runtime_start.
     Value *subfunctionParam = Builder.CreateBitCast(structData,
