@@ -36,6 +36,7 @@
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Module.h"
+#include "llvm/ADT/SetVector.h"
 
 #define CLOOG_INT_GMP 1
 #include "cloog/cloog.h"
@@ -885,12 +886,15 @@ public:
      OMPDataVals.push_back(I->second);
 
     // Push the base addresses of memory references.
+    SetVector<const Value*> BaseAddressSet;
     for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
       ScopStmt *Stmt = *SI;
       for (SmallVector<MemoryAccess*, 8>::iterator I = Stmt->memacc_begin(),
            E = Stmt->memacc_end(); I != E; ++I) {
         Value *BaseAddr = const_cast<Value*>((*I)->getBaseAddr());
-        OMPDataVals.push_back((BaseAddr));
+	// Check to avoid duplicates.
+        if (!BaseAddressSet.insert(BaseAddr))
+          OMPDataVals.push_back((BaseAddr));
       }
     }
 
