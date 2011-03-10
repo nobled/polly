@@ -849,7 +849,7 @@ public:
   /// @brief Add values to the OpenMP structure.
   ///
   /// Create the subfunction structure and add the values from the list.
-  Value *addValuesToOpenMPStruct(std::vector<Value*> OMPDataVals,
+  Value *addValuesToOpenMPStruct(SetVector<Value*> OMPDataVals,
                                  Function *SubFunction) {
     Module *M = Builder.GetInsertBlock()->getParent()->getParent();
     std::vector<const Type*> structMembers;
@@ -877,24 +877,21 @@ public:
   ///
   /// Create a list of values that has to be stored into the subfuncition
   /// structure.
-  std::vector<Value*> createOpenMPStructValues() {
-    std::vector<Value*> OMPDataVals;
+  SetVector<Value*> createOpenMPStructValues() {
+    SetVector<Value*> OMPDataVals;
 
     // Push the clast variables available in the clastVars.
     for (CharMapT::iterator I = clastVars->begin(), E = clastVars->end();
          I != E; I++)
-     OMPDataVals.push_back(I->second);
+     OMPDataVals.insert(I->second);
 
     // Push the base addresses of memory references.
-    SetVector<const Value*> BaseAddressSet;
     for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
       ScopStmt *Stmt = *SI;
       for (SmallVector<MemoryAccess*, 8>::iterator I = Stmt->memacc_begin(),
            E = Stmt->memacc_end(); I != E; ++I) {
         Value *BaseAddr = const_cast<Value*>((*I)->getBaseAddr());
-	// Check to avoid duplicates.
-        if (!BaseAddressSet.insert(BaseAddr))
-          OMPDataVals.push_back((BaseAddr));
+        OMPDataVals.insert((BaseAddr));
       }
     }
 
@@ -906,7 +903,7 @@ public:
   /// Extract the values from the subfunction parameter and update the clast
   /// variables to point to the new values.
   void extractValuesFromOpenMPStruct(CharMapT *clastVarsOMP,
-                                     std::vector<Value*> OMPDataVals,
+                                     SetVector<Value*> OMPDataVals,
                                      Value *userContext) {
     // Extract the clast variables.
     unsigned i = 0;
@@ -929,7 +926,7 @@ public:
   /// @brief Add body to the subfunction.
   void addOpenMPSubfunctionBody(Function *FN, const clast_for *f,
                                 Value *structData,
-                                std::vector<Value*> OMPDataVals) {
+                                SetVector<Value*> OMPDataVals) {
     Module *M = Builder.GetInsertBlock()->getParent()->getParent();
     LLVMContext &Context = FN->getContext();
     const IntegerType *intPtrTy = TD->getIntPtrType(Context);
@@ -1015,7 +1012,7 @@ public:
     const IntegerType *intPtrTy = TD->getIntPtrType(Builder.getContext());
 
     Function *SubFunction = addOpenMPSubfunction(M);
-    std::vector<Value *> OMPDataVals = createOpenMPStructValues();
+    SetVector<Value*> OMPDataVals = createOpenMPStructValues();
     Value *structData = addValuesToOpenMPStruct(OMPDataVals, SubFunction);
 
     addOpenMPSubfunctionBody(SubFunction, f, structData, OMPDataVals);
