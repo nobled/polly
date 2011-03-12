@@ -72,7 +72,8 @@ STATISTIC(ValidRegion, "Number of regions that a valid part of Scop");
                                            "Number of bad regions for Scop: "\
                                            DESC)
 
-#define STATSCOP(NAME); assert(!Context.Verifying && #NAME); ++Bad##NAME##ForScop;
+#define STATSCOP(NAME); assert(!Context.Verifying && #NAME); \
+                        if (!Context.Verifying) ++Bad##NAME##ForScop;
 
 BADSCOP_STAT(CFG,         "CFG too complex");
 BADSCOP_STAT(IndVar,      "Non canonical induction variable in loop");
