@@ -129,15 +129,19 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
   # Run optimizations to clean up the redundant calculations Polly introduced
   # and to take advantage of non polyhedral optimizations.
   optFile = tmpDir + '/output.opt.ll'
-  commandLine = ['opt', '-S', '-o', optFile]
+  commandLine = ['opt', '-S', '-o', optFile + "tmp"]
+  commandLine2 = ['opt', '-S', '-o', optFile]
 
   if args.optlevel != '0':
     commandLine.append('-O' + args.optlevel)
+    commandLine2.append('-O' + args.optlevel)
 
   if args.fpolly:
     commandLine.append(pollyFile)
   else:
     commandLine.append(preoptFile)
+
+  commandLine2.append(optFile + "tmp");
 
   if args.progress:
     print "- Running normal LLVM -O3 passes"
@@ -149,8 +153,17 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
     print ' '.join(commandLine)
     sys.exit(1)
 
+  exit = subprocess.call(commandLine2)
+
+  if exit:
+    print 'LLVM -O3 optimizations failed: This command did not work'
+    print ' '.join(commandLine)
+    sys.exit(1)
+
+
   if args.emitllvm:
     return optFile
+
 
   # Create assembly file
   assemblyFile = tmpDir + '/output.opt.s'
