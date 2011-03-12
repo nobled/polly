@@ -247,7 +247,7 @@ public:
                                         load->getNameStr()
                                         + "_p_vec_full");
     if (!Aligned)
-      VecLoad->setAlignment(1);
+      VecLoad->setAlignment(8);
 
     return VecLoad;
   }
@@ -269,8 +269,12 @@ public:
     Value *newPointer = getOperand(pointer, BBMap);
     Value *vectorPtr = Builder.CreateBitCast(newPointer, vectorPtrType,
                                              load->getNameStr() + "_p_vec_p");
-    Value *scalarLoad= Builder.CreateLoad(vectorPtr,
+    LoadInst *scalarLoad= Builder.CreateLoad(vectorPtr,
                                           load->getNameStr() + "_p_splat_one");
+
+    if (!Aligned)
+      scalarLoad->setAlignment(8);
+
     std::vector<Constant*> splat;
 
     for (int i = 0; i < size; i++)
@@ -428,7 +432,7 @@ public:
           StoreInst *Store = Builder.CreateStore(vector, VectorPtr);
 
           if (!Aligned)
-            Store->setAlignment(1);
+            Store->setAlignment(8);
         } else {
           for (unsigned i = 0; i < scalarMaps.size(); i++) {
             Value *scalar = Builder.CreateExtractElement(vector,
