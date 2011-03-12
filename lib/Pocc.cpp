@@ -32,6 +32,11 @@
 
 #include "polly/ScopLib.h"
 
+#include "isl/dim.h"
+#include "isl/map.h"
+#include "isl/constraint.h"
+
+
 using namespace llvm;
 using namespace polly;
 
@@ -136,6 +141,88 @@ bool Pocc::runOnScop(Scop &S) {
       << "Do you have a pocc version with Polly support installed?\n";
   else
     fclose(poccFile);
+
+  if (!PlutoPrevector)
+    return false;
+
+  // Find the innermost dimension that is not a constant dimension. This
+  // dimension will be vectorized.
+  unsigned scatterDims = S.getScatterDim();
+  unsigned lastLoop = scatterDims - 1;
+
+  while (lastLoop) {
+    bool isSingleValued = true;
+
+    for (Scop::iterator SI = S.begin(), SE = S.end(); SI != SE; ++SI) {
+      if ((*SI)->isFinalRead())
+        continue;
+
+      isl_map *scat = isl_map_copy((*SI)->getScattering());
+      isl_map *projected = isl_map_project_out(scat, isl_dim_out, lastLoop,
+                                               scatterDims - lastLoop);
+
+      if (!isl_map_is_bijective(projected)) {
+        isSingleValued = false;
+        break;
+      }
+    }
+
+    if (!isSingleValued)
+      break;
+
+    lastLoop--;
+  }
+
+  // Strip mine the innermost loop.
+  for (Scop::iterator SI = S.begin(), SE = S.end(); SI != SE; ++SI) {
+    if ((*SI)->isFinalRead())
+      continue;
+    isl_map *scat = (*SI)->getScattering();
+
+    unsigned scatDims = isl_map_n_out(scat);
+    isl_dim *dim = isl_dim_alloc(S.getCtx(), S.getNumParams(), scatDims,
+                                 scatDims + 1);
+    isl_basic_map *map = isl_basic_map_universe(isl_dim_copy(dim));
+
+    for (int i = 0; i <= lastLoop - 1; i++) {
+      isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+
+      isl_constraint_set_coefficient_si(c, isl_dim_in, i, 1);
+      isl_constraint_set_coefficient_si(c, isl_dim_out, i, -1);
+
+      map = isl_basic_map_add_constraint(map, c);
+    }
+
+    for (int i = lastLoop; i < scatDims; i++) {
+      isl_constraint *c = isl_equality_alloc(isl_dim_copy(dim));
+
+      isl_constraint_set_coefficient_si(c, isl_dim_in, i, 1);
+      isl_constraint_set_coefficient_si(c, isl_dim_out, i + 1, -1);
+
+      map = isl_basic_map_add_constraint(map, c);
+    }
+
+    isl_constraint *c;
+
+    int vectorWidth = 4;
+    c = isl_inequality_alloc(isl_dim_copy(dim));
+    isl_constraint_set_coefficient_si(c, isl_dim_out, lastLoop, -vectorWidth);
+    isl_constraint_set_coefficient_si(c, isl_dim_out, lastLoop + 1, 1);
+    map = isl_basic_map_add_constraint(map, c);
+
+    c = isl_inequality_alloc(isl_dim_copy(dim));
+    isl_constraint_set_coefficient_si(c, isl_dim_out, lastLoop, vectorWidth);
+    isl_constraint_set_coefficient_si(c, isl_dim_out, lastLoop + 1, -1);
+    isl_constraint_set_constant_si(c, vectorWidth - 1);
+    map = isl_basic_map_add_constraint(map, c);
+
+    isl_map *transform = isl_map_from_basic_map(map);
+    transform = isl_map_set_tuple_name(transform, isl_dim_out, "scattering");
+    transform = isl_map_set_tuple_name(transform, isl_dim_in, "scattering");
+
+    scat = isl_map_apply_range(scat, isl_map_copy(transform));
+    (*SI)->setScattering(scat);
+  }
 
   return false;
 }
