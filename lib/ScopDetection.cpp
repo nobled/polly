@@ -293,7 +293,18 @@ bool ScopDetection::isValidMemoryAccess(Instruction &Inst,
                                       Inst.getMetadata(LLVMContext::MD_tbaa));
   if (!AS.isMustAlias()) {
     DEBUG(dbgs() << "Bad pointer alias found:" << *BasePtr << "\nAS:\n" << AS);
-    STATSCOP(Alias);
+
+    // STATSCOP triggers an assertion if we are in verifying mode.
+    // This is generally good to check that we do not change the SCoP after we
+    // run the SCoP detection and consequently to ensure that we can still
+    // represent that SCoP. However, in case of aliasing this does not work.
+    // The independent blocks pass may create memory references which seem to
+    // alias, if -basicaa is not available. They actually do not. As we do not
+    // not know this and we would fail here if we verify it.
+    if (!Context.Verifying) {
+      STATSCOP(Alias);
+    }
+
     return false;
   }
 
