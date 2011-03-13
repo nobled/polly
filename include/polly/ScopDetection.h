@@ -200,6 +200,15 @@ class ScopDetection : public FunctionPass {
   /// @return True if the loop is valid in the region.
   bool isValidLoop(Loop *L, DetectionContext &Context) const;
 
+  /// @brief Check if a function is an OpenMP subfunction.
+  ///
+  /// An OpenMP subfunction is not valid for Scop detection.
+  ///
+  /// @param F The function to check.
+  ///
+  /// @return True if the function is not an OpenMP subfunction.
+  bool isValidFunction(llvm::Function &F);
+
 public:
   static char ID;
   explicit ScopDetection() : FunctionPass(ID) {}

@@ -572,12 +572,24 @@ bool ScopDetection::isValidRegion(DetectionContext &Context) const {
   return true;
 }
 
+bool ScopDetection::isValidFunction(llvm::Function &F) {
+  const std::string &Name = F.getNameStr();
+  size_t found = Name.find(".omp_subfn");
+  if (found != std::string::npos)
+    return false;
+  else
+    return true;
+}
+
 bool ScopDetection::runOnFunction(llvm::Function &F) {
   AA = &getAnalysis<AliasAnalysis>();
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   RI = &getAnalysis<RegionInfo>();
   Region *TopRegion = RI->getTopLevelRegion();
+
+  if(!isValidFunction(F))
+    return false;
 
   findScops(*TopRegion);
   return false;
