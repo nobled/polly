@@ -74,6 +74,12 @@ char Pocc::ID = 0;
 bool Pocc::runOnScop(Scop &S) {
   Dependences *D = &getAnalysis<Dependences>();
 
+  // Only the final read statement in the SCoP. No need to optimize anything.
+  // (In case we would try, Pocc complains that there is no statement in the
+  //  SCoP).
+  if (S.begin() + 1 == S.end())
+    return false;
+
   // Create the scop file.
   sys::Path tempDir = sys::Path::GetTemporaryDirectory();
   sys::Path scopFile = tempDir;
