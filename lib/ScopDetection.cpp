@@ -75,14 +75,15 @@ STATISTIC(ValidRegion, "Number of regions that a valid part of Scop");
 #define STATSCOP(NAME); assert(!Context.Verifying && #NAME); \
                         if (!Context.Verifying) ++Bad##NAME##ForScop;
 
-BADSCOP_STAT(CFG,         "CFG too complex");
-BADSCOP_STAT(IndVar,      "Non canonical induction variable in loop");
-BADSCOP_STAT(LoopBound,   "Loop bounds can not be computed");
-BADSCOP_STAT(FuncCall,    "Function call with side effects appeared");
-BADSCOP_STAT(AffFunc,     "Expression not affine");
-BADSCOP_STAT(Scalar,      "Found scalar dependency");
-BADSCOP_STAT(Alias,       "Found base address alias");
-BADSCOP_STAT(Other,       "Others");
+BADSCOP_STAT(CFG,             "CFG too complex");
+BADSCOP_STAT(IndVar,          "Non canonical induction variable in loop");
+BADSCOP_STAT(LoopBound,       "Loop bounds can not be computed");
+BADSCOP_STAT(FuncCall,        "Function call with side effects appeared");
+BADSCOP_STAT(AffFunc,         "Expression not affine");
+BADSCOP_STAT(Scalar,          "Found scalar dependency");
+BADSCOP_STAT(Alias,           "Found base address alias");
+BADSCOP_STAT(SimpleRegion,  "Region not simple");
+BADSCOP_STAT(Other,           "Others");
 
 //===----------------------------------------------------------------------===//
 // ScopDetection.
@@ -567,6 +568,16 @@ bool ScopDetection::isValidRegion(DetectionContext &Context) const {
 
   if (!isValidExit(Context))
     return false;
+
+  BasicBlock *entry = R.getEntry();
+  if (Loop *L = LI->getLoopFor(entry))
+    if (L->getHeader() == entry && !R.isSimple()) {
+      errs() << "Warning: Run a region simplify pass to increase coverage\n";
+      if (!Context.Verifying) {
+        STATSCOP(SimpleRegion);
+      }
+      return false;
+    }
 
   DEBUG(dbgs() << "OK\n");
   return true;
