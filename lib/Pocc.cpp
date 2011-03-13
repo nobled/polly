@@ -56,6 +56,7 @@ namespace {
   class Pocc : public ScopPass {
     sys::Path plutoStderr;
     sys::Path plutoStdout;
+    std::vector<const char*> arguments;
 
   public:
     static char ID;
@@ -81,6 +82,8 @@ bool Pocc::runOnScop(Scop &S) {
 
   FILE *F = fopen(scopFile.c_str(), "w");
 
+  arguments.clear();
+
   if (!F) {
     errs() << "Cannot open file: " << tempDir.c_str() << "\n";
     errs() << "Skipping export.\n";
@@ -96,7 +99,6 @@ bool Pocc::runOnScop(Scop &S) {
 
   sys::Path pocc = sys::Program::FindProgramByName("pocc");
 
-  std::vector<const char*> arguments;
   arguments.push_back("pocc");
   arguments.push_back("--read-scop");
   arguments.push_back(scopFile.c_str());
@@ -149,7 +151,7 @@ bool Pocc::runOnScop(Scop &S) {
   // Find the innermost dimension that is not a constant dimension. This
   // dimension will be vectorized.
   unsigned scatterDims = S.getScatterDim();
-  unsigned lastLoop = scatterDims - 1;
+  int lastLoop = scatterDims - 1;
 
   while (lastLoop) {
     bool isSingleValued = true;
@@ -180,7 +182,7 @@ bool Pocc::runOnScop(Scop &S) {
       continue;
     isl_map *scat = (*SI)->getScattering();
 
-    unsigned scatDims = isl_map_n_out(scat);
+    int scatDims = isl_map_n_out(scat);
     isl_dim *dim = isl_dim_alloc(S.getCtx(), S.getNumParams(), scatDims,
                                  scatDims + 1);
     isl_basic_map *map = isl_basic_map_universe(isl_dim_copy(dim));
@@ -231,6 +233,15 @@ bool Pocc::runOnScop(Scop &S) {
 void Pocc::printScop(raw_ostream &OS) const {
   OwningPtr<MemoryBuffer> stdoutBuffer;
   OwningPtr<MemoryBuffer> stderrBuffer;
+
+  OS << "Command line: ";
+
+  for (std::vector<const char*>::const_iterator AI = arguments.begin(),
+       AE = arguments.end(); AI != AE; ++AI)
+    if (*AI)
+      OS << " " << *AI;
+
+  OS << "\n";
 
   if (error_code ec = MemoryBuffer::getFile(plutoStdout.c_str(), stdoutBuffer))
     OS << "Could not open pocc stdout file: " + ec.message();
