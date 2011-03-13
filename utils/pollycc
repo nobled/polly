@@ -26,6 +26,10 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
   commandLine = ["clang","-emit-llvm", "-S", file, '-o', llFile,
                  '-std=' + args.standard] + includeFlags + preprocessorFlags \
                  + args.unknown_args
+
+  if args.commands:
+    print ' '.join(commandLine)
+
   exit = subprocess.call(commandLine)
 
   if exit:
@@ -47,6 +51,10 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
 
   commandLine = ['opt', '-load', polly] + preoptPasses.split(' ') \
                 + ['-S', llFile, '-o', preoptFile]
+
+  if args.commands:
+    print ' '.join(commandLine)
+
   exit = subprocess.call(commandLine)
 
   if exit:
@@ -65,6 +73,9 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
       commandLine.append('-view-scops')
     else:
       commandLine.append('-view-scops-only')
+
+    if args.commands:
+      print ' '.join(commandLine)
 
     exit = subprocess.call(commandLine)
 
@@ -118,6 +129,10 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
       print ""
 
     commandLine = commandLine + ['-polly-codegen', '-S', '-o', pollyFile]
+
+    if args.commands:
+      print ' '.join(commandLine)
+
     exit = subprocess.call(commandLine)
 
     if exit:
@@ -232,6 +247,8 @@ def parseArguments():
                       help='Export Polly jscop', action='store_true')
   parser.add_argument('-fpolly-import', dest='pollyimport',
                       help='Import Polly jscop', action='store_true')
+  parser.add_argument('-commands', help='print command lines executed',
+                      action='store_true')
   parser.add_argument('-d', '--debug', help='print debugging output',
                       action='store_true')
   parser.add_argument('-v', '--version', dest='version', action='store_true',
