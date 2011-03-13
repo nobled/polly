@@ -136,10 +136,11 @@ bool Pocc::runOnScop(Scop &S) {
   FILE *poccFile = fopen(newScopFile.c_str(), "r");
   ScopLib newScoplib(&S, poccFile, D);
 
-  if (!newScoplib.updateScattering())
+  if (!newScoplib.updateScattering()) {
     errs() << "Reading an updated scattering from pocc failed. "
       << "Do you have a pocc version with Polly support installed?\n";
-  else
+    return false;
+  } else
     fclose(poccFile);
 
   if (!PlutoPrevector)
