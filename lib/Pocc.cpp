@@ -145,8 +145,13 @@ bool Pocc::runOnScop(Scop &S) {
   ScopLib newScoplib(&S, poccFile, D);
 
   if (!newScoplib.updateScattering()) {
-    errs() << "Reading an updated scattering from pocc failed. "
-      << "Do you have a pocc version with Polly support installed?\n";
+    errs() << "Failure when calculating the optimization with "
+              "the following command: ";
+    for (std::vector<const char*>::const_iterator AI = arguments.begin(),
+         AE = arguments.end(); AI != AE; ++AI)
+      if (*AI)
+        errs() << " " << *AI;
+    errs() << "\n";
     return false;
   } else
     fclose(poccFile);
