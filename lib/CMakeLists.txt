@@ -21,6 +21,7 @@ add_polly_library(LLVMPolly
   IndependentBlocks.cpp
   Interchange.cpp
   Pocc.cpp
+  RegionSimplify.cpp
   ScopPass.cpp
   ScopDetection.cpp
   ScopGraphPrinter.cpp

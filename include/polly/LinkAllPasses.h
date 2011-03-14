@@ -41,6 +41,7 @@ namespace polly {
   Pass *createInterchangePass();
   Pass *createJSONExporterPass();
   Pass *createJSONImporterPass();
+  Pass *createRegionSimplifyPass();
   Pass *createScopInfoPass();
 
 #ifdef OPENSCOP_FOUND
@@ -84,6 +85,7 @@ namespace {
        createInterchangePass();
        createJSONExporterPass();
        createJSONImporterPass();
+       createRegionSimplifyPass();
        createScopInfoPass();
 
 #ifdef OPENSCOP_FOUND

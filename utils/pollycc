@@ -44,7 +44,7 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
                  '-simplifycfg -instcombine -tailcallelim -loop-simplify ' \
                  '-lcssa -loop-rotate -lcssa -loop-unswitch -instcombine ' \
                  '-loop-simplify -lcssa -indvars -loop-deletion -instcombine ' \
-                 '-polly-prepare'
+                 '-polly-prepare -polly-region-simplify -indvars'
 
   if args.progress:
     print "- Preoptimizing to expose optimization opportunities"
