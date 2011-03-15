@@ -40,6 +40,7 @@ namespace polly {
 
   class CloogInfo : public ScopPass {
     Cloog *C;
+    Scop *scop;
 
   public:
     static char ID;

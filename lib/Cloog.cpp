@@ -27,6 +27,7 @@
 #include "polly/ScopInfo.h"
 
 #include "llvm/Assembly/Writer.h"
+#include "llvm/Module.h"
 
 #include "cloog/isl/domain.h"
 
@@ -268,12 +269,18 @@ bool CloogInfo::runOnScop(Scop &S) {
   if (C)
     delete C;
 
+  scop = &S;
+
   C = new Cloog(&S);
 
   return false;
 }
 
 void CloogInfo::printScop(raw_ostream &OS) const {
+  Function *function = scop->getRegion().getEntry()->getParent();
+
+  OS << function->getNameStr() << "():\n";
+
   C->pprint(OS);
 }
 
