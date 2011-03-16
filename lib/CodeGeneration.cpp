@@ -1071,7 +1071,16 @@ public:
   }
 
   bool isInnermostLoop(const clast_for *f) {
-    return CLAST_STMT_IS_A(f->body, stmt_user);
+    const clast_stmt *stmt = f->body;
+
+    while (stmt) {
+      if (!CLAST_STMT_IS_A(stmt, stmt_user))
+        return false;
+
+      stmt = stmt->next;
+    }
+
+    return true;
   }
 
   /// @brief Get the number of loop iterations for this loop.
@@ -1137,8 +1146,13 @@ public:
     // Add loop iv to symbols.
     (*clastVars)[f->iterator] = LB;
 
-    codegen((const clast_user_stmt *)f->body, &IVS, f->iterator,
-            scatteringDomain);
+    const clast_stmt *stmt = f->body;
+
+    while (stmt) {
+      codegen((const clast_user_stmt *)stmt, &IVS, f->iterator,
+              scatteringDomain);
+      stmt = stmt->next;
+    }
 
     // Loop is finished, so remove its iv from the live symbols.
     clastVars->erase(f->iterator);
