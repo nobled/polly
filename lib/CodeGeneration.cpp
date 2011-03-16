@@ -1161,7 +1161,7 @@ public:
   void codegen(const clast_for *f) {
     if (Vector && isInnermostLoop(f) && isParallelFor(f)
         && (-1 != getNumberOfIterations(f))
-        && (getNumberOfIterations(f) <= 32)) {
+        && (getNumberOfIterations(f) <= 16)) {
       codegenForVector(f);
     } else if (OpenMP && !parallelCodeGeneration && isParallelFor(f)) {
       parallelCodeGeneration = true;
