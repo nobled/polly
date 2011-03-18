@@ -1215,7 +1215,7 @@ public:
 
   void codegen(const clast_stmt *stmt) {
     if	    (CLAST_STMT_IS_A(stmt, stmt_root))
-      assert(false && "No second root statment expected");
+      assert(false && "No second root statement expected");
     else if (CLAST_STMT_IS_A(stmt, stmt_ass))
       codegen((const clast_assignment *)stmt);
     else if (CLAST_STMT_IS_A(stmt, stmt_user))
