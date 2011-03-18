@@ -47,6 +47,7 @@ Dependences::Dependences() : ScopPass(ID) {
   must_dep = may_dep = NULL;
   must_no_source = may_no_source = NULL;
   sink = must_source = may_source = NULL;
+  war_dep = waw_dep = NULL;
 }
 
 bool Dependences::runOnScop(Scop &S) {
@@ -78,8 +79,16 @@ bool Dependences::runOnScop(Scop &S) {
   if (may_no_source)
     isl_union_map_free(may_no_source);
 
+  if (war_dep)
+    isl_union_map_free(war_dep);
+
+  if (waw_dep)
+    isl_union_map_free(waw_dep);
+
   must_dep = may_dep = NULL;
   must_no_source = may_no_source = NULL;
+
+  war_dep = waw_dep = NULL;
 
   for (Scop::iterator SI = S.begin(), SE = S.end(); SI != SE; ++SI) {
     ScopStmt *Stmt = *SI;
@@ -116,15 +125,23 @@ bool Dependences::runOnScop(Scop &S) {
 
   isl_union_map_compute_flow(isl_union_map_copy(sink),
                               isl_union_map_copy(must_source),
-                              isl_union_map_copy(may_source), schedule,
+                              isl_union_map_copy(may_source),
+                              isl_union_map_copy(schedule),
                               &must_dep, &may_dep, &must_no_source,
                               &may_no_source);
+
+  isl_union_map_compute_flow(isl_union_map_copy(must_source),
+                             isl_union_map_copy(must_source),
+                             isl_union_map_copy(sink), schedule,
+                             &waw_dep, &war_dep, NULL, NULL);
 
   // Remove redundant statements.
   must_dep = isl_union_map_coalesce(must_dep);
   may_dep = isl_union_map_coalesce(may_dep);
   must_no_source = isl_union_map_coalesce(must_no_source);
   may_no_source = isl_union_map_coalesce(may_no_source);
+  waw_dep = isl_union_map_coalesce(waw_dep);
+  war_dep = isl_union_map_coalesce(war_dep);
 
   return false;
 }
@@ -236,21 +253,48 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
   // Calculate distance vector.
   isl_union_set *scheduleSubset;
   isl_union_map *scheduleDeps, *restrictedDeps;
+  isl_union_map *scheduleDeps_war, *restrictedDeps_war;
+  isl_union_map *scheduleDeps_waw, *restrictedDeps_waw;
+
   scheduleSubset = isl_union_set_from_set(isl_set_copy(loopDomain));
 
   scheduleDeps = isl_union_map_apply_range(isl_union_map_copy(must_dep),
                                            isl_union_map_copy(schedule));
-  scheduleDeps = isl_union_map_apply_domain(scheduleDeps, schedule);
+  scheduleDeps = isl_union_map_apply_domain(scheduleDeps,
+                                            isl_union_map_copy(schedule));
 
+  scheduleDeps_war = isl_union_map_apply_range(isl_union_map_copy(war_dep),
+                                               isl_union_map_copy(schedule));
+  scheduleDeps_war = isl_union_map_apply_domain(scheduleDeps_war,
+                                                isl_union_map_copy(schedule));
+
+  scheduleDeps_waw = isl_union_map_apply_range(isl_union_map_copy(waw_dep),
+                                               isl_union_map_copy(schedule));
+  scheduleDeps_waw = isl_union_map_apply_domain(scheduleDeps_waw,
+                                                isl_union_map_copy(schedule));
 
   // Dependences need to originate and to terminate in the scheduling space
   // enumerated by this loop.
   restrictedDeps = isl_union_map_intersect_domain(scheduleDeps,
     isl_union_set_copy(scheduleSubset));
   restrictedDeps = isl_union_map_intersect_range(restrictedDeps,
-                                                 scheduleSubset);
+    isl_union_set_copy(scheduleSubset));
 
   isl_union_set *distance = isl_union_map_deltas(restrictedDeps);
+
+  restrictedDeps_war = isl_union_map_intersect_domain(scheduleDeps_war,
+    isl_union_set_copy(scheduleSubset));
+  restrictedDeps_war = isl_union_map_intersect_range(restrictedDeps_war,
+    isl_union_set_copy(scheduleSubset));
+
+  isl_union_set *distance_war = isl_union_map_deltas(restrictedDeps_war);
+
+  restrictedDeps_waw = isl_union_map_intersect_domain(scheduleDeps_waw,
+    isl_union_set_copy(scheduleSubset));
+  restrictedDeps_waw = isl_union_map_intersect_range(restrictedDeps_waw,
+    isl_union_set_copy(scheduleSubset));
+
+  isl_union_set *distance_waw = isl_union_map_deltas(restrictedDeps_waw);
 
   isl_dim *dim = isl_dim_set_alloc(S->getCtx(), S->getNumParams(),
                                    parallelDimension);
@@ -293,9 +337,18 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
   validDistances = isl_set_complement(validDistances);
   isl_union_set *validDistancesUS = isl_union_set_from_set(validDistances);
 
-  isl_union_set *nonValid = isl_union_set_subtract(distance, validDistancesUS);
+  isl_union_set *nonValid = isl_union_set_subtract(distance,
+    isl_union_set_copy(validDistancesUS));
 
-  return isl_union_set_is_empty(nonValid);
+  isl_union_set *nonValid_war = isl_union_set_subtract(distance_war,
+    isl_union_set_copy(validDistancesUS));
+
+  isl_union_set *nonValid_waw = isl_union_set_subtract(distance_waw,
+                                                       validDistancesUS);
+
+  return isl_union_set_is_empty(nonValid)
+    && isl_union_set_is_empty(nonValid_war)
+    && isl_union_set_is_empty(nonValid_waw);
 }
 
 void Dependences::printScop(raw_ostream &OS) const {
@@ -325,8 +378,15 @@ void Dependences::releaseMemory() {
   if (may_no_source)
     isl_union_map_free(may_no_source);
 
+  if (war_dep)
+    isl_union_map_free(war_dep);
+
+  if (waw_dep)
+    isl_union_map_free(waw_dep);
+
   must_dep = may_dep = NULL;
   must_no_source = may_no_source = NULL;
+  war_dep = waw_dep = NULL;
 
   if (sink)
     isl_union_map_free(sink);
