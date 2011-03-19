@@ -13,7 +13,7 @@ define void @simple_vec_large_width() nounwind {
   %indvar = phi i64 [ %indvar.next, %4 ], [ 0, %0 ]
   %scevgep = getelementptr [1024 x float]* @B, i64 0, i64 %indvar
   %scevgep1 = getelementptr [1024 x float]* @A, i64 0, i64 %indvar
-  %exitcond = icmp ne i64 %indvar, 20
+  %exitcond = icmp ne i64 %indvar, 15
   br i1 %exitcond, label %2, label %5
 
 ; <label>:2                                       ; preds = %1
@@ -36,6 +36,6 @@ define i32 @main() nounwind {
   ret i32 %2
 }
 
-; CHECK: bitcast float* {{.*}} to <20 x float>*
-; CHECK: load <20 x float>*
-; CHECK: store <20 x float> %_p_vec_full, <20 x float>*
+; CHECK: bitcast float* {{.*}} to <15 x float>*
+; CHECK: load <15 x float>*
+; CHECK: store <15 x float> %_p_vec_full, <15 x float>*
