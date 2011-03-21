@@ -33,8 +33,8 @@ class ScopPass : public RegionPass {
 protected:
   explicit ScopPass(char &ID) : RegionPass(ID), S(0) {}
 
-  /// runOnMachineFunction - This method must be overloaded to perform the
-  /// desired machine code transformation or analysis.
+  /// runOnScop - This method must be overloaded to perform the
+  /// desired Polyhedral transformation or analysis.
   ///
   virtual bool runOnScop(Scop &S) = 0;
 
