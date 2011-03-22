@@ -159,29 +159,18 @@ bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
   isl_union_map *temp_must_no_source, *temp_may_no_source;
 
   DEBUG(
-    isl_printer *p = isl_printer_to_str(S->getCtx());
-
     errs().indent(4) << "Sink :=\n";
-    isl_printer_print_union_map(p, sink);
-    errs().indent(8) << isl_printer_get_str(p) << ";\n";
-    isl_printer_flush(p);
+    errs().indent(8) << stringFromIslObj(sink) << ";\n";
 
     errs().indent(4) << "MustSource :=\n";
-    isl_printer_print_union_map(p, must_source);
-    errs().indent(8) << isl_printer_get_str(p) << ";\n";
-    isl_printer_flush(p);
+    errs().indent(8) << stringFromIslObj(must_source) << ";\n";
 
     errs().indent(4) << "MaySource :=\n";
-    isl_printer_print_union_map(p, may_source);
-    errs().indent(8) << isl_printer_get_str(p) << ";\n";
-    isl_printer_flush(p);
+    errs().indent(8) << stringFromIslObj(may_source) << ";\n";
 
     errs().indent(4) << "Schedule :=\n";
-    isl_printer_print_union_map(p, schedule);
-    errs().indent(8) << isl_printer_get_str(p) << ";\n";
-    isl_printer_flush(p);
-
-    isl_printer_free(p));
+    errs().indent(8) << stringFromIslObj(schedule) << ";\n";
+  );
 
   isl_union_map_compute_flow(isl_union_map_copy(sink),
                               isl_union_map_copy(must_source),
@@ -191,18 +180,12 @@ bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
 
   DEBUG(errs().indent(4) << "\nDependences calculated\n");
   DEBUG(
-    isl_printer *p = isl_printer_to_str(S->getCtx());
-
     errs().indent(4) << "TempMustDep:=\n";
-    isl_printer_print_union_map(p, temp_must_dep);
-    errs().indent(8) << isl_printer_get_str(p) << ";\n";
-    isl_printer_flush(p);
+    errs().indent(8) << stringFromIslObj(temp_must_dep) << ";\n";
 
     errs().indent(4) << "MustDep:=\n";
-    isl_printer_print_union_map(p, must_dep);
-    errs().indent(8) << isl_printer_get_str(p) << ";\n";
-    isl_printer_flush(p);
-    isl_printer_free(p));
+    errs().indent(8) << stringFromIslObj(must_dep) << ";\n";
+  );
 
   // Remove redundant statements.
   temp_must_dep = isl_union_map_coalesce(temp_must_dep);
