@@ -42,19 +42,15 @@ static cl::opt<bool>
        cl::desc("Disable polly legality check"), cl::Hidden,
        cl::init(false));
 
-Dependences::Dependences() : RegionPass(ID), S(0) {
+//===----------------------------------------------------------------------===//
+Dependences::Dependences() : ScopPass(ID) {
   must_dep = may_dep = NULL;
   must_no_source = may_no_source = NULL;
   sink = must_source = may_source = NULL;
 }
 
-bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
-  S = getAnalysis<ScopInfo>().getScop();
-
-  if (!S)
-    return false;
-
-  isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
+bool Dependences::runOnScop(Scop &S) {
+  isl_dim *dim = isl_dim_alloc(S.getCtx(), S.getNumParams(), 0, 0);
 
   if (sink)
     isl_union_map_free(sink);
@@ -85,7 +81,7 @@ bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
   must_dep = may_dep = NULL;
   must_no_source = may_no_source = NULL;
 
-  for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+  for (Scop::iterator SI = S.begin(), SE = S.end(); SI != SE; ++SI) {
     ScopStmt *Stmt = *SI;
 
     for (ScopStmt::memacc_iterator MI = Stmt->memacc_begin(),
@@ -134,15 +130,16 @@ bool Dependences::runOnRegion(Region *R, RGPassManager &RGM) {
 }
 
 bool Dependences::isValidScattering(StatementToIslMapTy *NewScattering) {
+  Scop &S = getCurScop();
 
   if (LegalityCheckDisabled)
     return true;
 
-  isl_dim *dim = isl_dim_alloc(S->getCtx(), S->getNumParams(), 0, 0);
+  isl_dim *dim = isl_dim_alloc(S.getCtx(), S.getNumParams(), 0, 0);
 
   isl_union_map *schedule = isl_union_map_empty(dim);
 
-  for (Scop::iterator SI = S->begin(), SE = S->end(); SI != SE; ++SI) {
+  for (Scop::iterator SI = S.begin(), SE = S.end(); SI != SE; ++SI) {
     ScopStmt *Stmt = *SI;
 
     isl_map *scattering;
@@ -233,6 +230,7 @@ isl_union_map* getCombinedScheduleForDim(Scop *scop, unsigned dimLevel) {
 
 bool Dependences::isParallelDimension(isl_set *loopDomain,
                                       unsigned parallelDimension) {
+  Scop *S = &getCurScop();
   isl_union_map *schedule = getCombinedScheduleForDim(S, parallelDimension);
 
   // Calculate distance vector.
@@ -300,10 +298,7 @@ bool Dependences::isParallelDimension(isl_set *loopDomain,
   return isl_union_set_is_empty(nonValid);
 }
 
-void Dependences::print(raw_ostream &OS, const Module *) const {
-  if (!S)
-    return;
-
+void Dependences::printScop(raw_ostream &OS) const {
   OS.indent(4) << "Must dependences:\n";
   OS.indent(8) << stringFromIslObj(must_dep) << "\n";
 
@@ -318,8 +313,6 @@ void Dependences::print(raw_ostream &OS, const Module *) const {
 }
 
 void Dependences::releaseMemory() {
-  S = 0;
-
   if (must_dep)
     isl_union_map_free(must_dep);
 
@@ -348,8 +341,7 @@ void Dependences::releaseMemory() {
 }
 
 void Dependences::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<ScopInfo>();
-  AU.setPreservesAll();
+  ScopPass::getAnalysisUsage(AU);
 }
 
 char Dependences::ID = 0;

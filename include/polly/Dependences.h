@@ -23,7 +23,7 @@
 #ifndef POLLY_DEPENDENCES_H
 #define POLLY_DEPENDENCES_H
 
-#include "llvm/Analysis/RegionPass.h"
+#include "polly/ScopPass.h"
 
 #include <map>
 
@@ -39,9 +39,7 @@ namespace polly {
   class Scop;
   class ScopStmt;
 
-  class Dependences : public RegionPass {
-
-    Scop *S;
+  class Dependences : public ScopPass {
 
     isl_union_map *must_dep, *may_dep;
     isl_union_map *must_no_source, *may_no_source;
@@ -68,8 +66,8 @@ namespace polly {
     ///              valid for the scattering domain subset given.
     bool isParallelDimension(isl_set *loopDomain, unsigned parallelDimension);
 
-    bool runOnRegion(Region *R, RGPassManager &RGM);
-    void print(raw_ostream &OS, const Module *) const;
+    bool runOnScop(Scop &S);
+    void printScop(raw_ostream &OS) const;
     virtual void releaseMemory();
     virtual void getAnalysisUsage(AnalysisUsage &AU) const;
   };
