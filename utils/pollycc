@@ -214,7 +214,7 @@ def parseArguments():
   parser.add_argument('-L', action='append', dest='librarypath', default=[],
                       help='library paths to pass to the linker')
   parser.add_argument('-O', dest='optlevel', choices='0123s', default='3',
-                      help='optimization level. (ignored)')
+                      help='optimization level.')
   parser.add_argument('-S', action='store_true',
                       help='compile only; do not link or assemble')
   parser.add_argument('-emit-llvm', action='store_true', dest='emitllvm',
