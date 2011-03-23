@@ -1,3 +1,5 @@
+add_subdirectory(Support)
+
 set(MODULE TRUE)
 set(LLVM_NO_RTTI 1)
 
@@ -12,6 +14,10 @@ if (SCOPLIB_FOUND)
       Exchange/ScopLibExporter.cpp
       Exchange/ScopLibImporter.cpp)
 endif (SCOPLIB_FOUND)
+
+set(LLVM_USED_LIBS
+  PollySupport
+  )
 
 add_polly_library(LLVMPolly
   Cloog.cpp
@@ -28,14 +34,15 @@ add_polly_library(LLVMPolly
   ScopGraphPrinter.cpp
   ScopInfo.cpp
   TempScopInfo.cpp
-  Support/GICHelper.cpp
-  Support/AffSCEVItTester.cpp
-  Support/ScopHelper.cpp
   json.c
   json_helper.c
   Exchange/JSONExporter.cpp
   ${POLLY_EXCHANGE_FILES}
   ${POLLY_SCOPLIB_FILES}
+  )
+
+add_dependencies(LLVMPolly
+  PollySupport
   )
 
 set_target_properties(LLVMPolly
