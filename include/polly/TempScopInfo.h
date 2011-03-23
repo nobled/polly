@@ -16,6 +16,7 @@
 #ifndef POLLY_TEMP_SCOP_EXTRACTION_H
 #define POLLY_TEMP_SCOP_EXTRACTION_H
 
+#include "polly/MayAliasSet.h"
 #include "polly/ScopDetection.h"
 
 #include "llvm/Analysis/RegionPass.h"
@@ -28,6 +29,8 @@ namespace llvm {
 using namespace llvm;
 
 namespace polly {
+class MayAliasSetInfo;
+
 //===---------------------------------------------------------------------===//
 /// @brief Affine function represent in llvm SCEV expressions.
 ///
@@ -123,6 +126,11 @@ public:
   void dump() const;
 };
 
+static inline raw_ostream& operator<<(raw_ostream &OS, const SCEVAffFunc &SAF){
+  SAF.print(OS);
+  return OS;
+}
+
 class Comparison {
 
   SCEVAffFunc *LHS;
@@ -181,6 +189,9 @@ class TempScop {
 
   // Access function of bbs.
   const AccFuncMapType &AccFuncMap;
+  
+  // The alias information about this SCoP.
+  MayAliasSetInfo *MayASInfo;
 
   // Basic blocks detected as reductions
   std::set<BasicBlock*> Reductions;
@@ -190,8 +201,10 @@ class TempScop {
   explicit TempScop(Region &r, LoopBoundMapType &loopBounds,
                     BBCondMapType &BBCmps, AccFuncMapType &accFuncMap)
     : R(r), MaxLoopDepth(0), LoopBounds(loopBounds), BBConds(BBCmps),
-    AccFuncMap(accFuncMap) {}
+    AccFuncMap(accFuncMap), MayASInfo(new MayAliasSetInfo()) {}
+
 public:
+  ~TempScop();
 
   bool is_Reduction(BasicBlock &BB) { return Reductions.count(&BB) != 0; }
 
@@ -282,6 +295,9 @@ class TempScopInfo : public FunctionPass {
 
   // LoopInfo for information about loops
   LoopInfo *LI;
+
+  // The AliasAnalysis to build AliasSetTracker.
+  AliasAnalysis *AA;
 
   // Valid Regions for Scop
   ScopDetection *SD;

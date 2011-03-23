@@ -20,6 +20,7 @@
 #include "polly/Support/GICHelper.h"
 #include "polly/Support/ScopHelper.h"
 
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/RegionIterator.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Assembly/Writer.h"
@@ -127,9 +128,11 @@ inline raw_ostream &operator<<(raw_ostream &OS, const BBCond &Cond) {
   return OS;
 }
 
-
 //===----------------------------------------------------------------------===//
 // TempScop implementation
+TempScop::~TempScop() {
+  if (MayASInfo) delete MayASInfo;
+}
 
 void TempScop::print(raw_ostream &OS, ScalarEvolution *SE, LoopInfo *LI) const {
   OS << "Scop: " << R.getNameStr() << "\tParameters: (";
@@ -170,8 +173,20 @@ void TempScop::printDetail(llvm::raw_ostream &OS, ScalarEvolution *SE,
         OS.indent(ind) << "BB: " << BB->getName() << "{\n";
 
         for (AccFuncSetType::const_iterator FI = AccFunc->begin(),
-             FE = AccFunc->end(); FI != FE; ++FI)
-          OS.indent(ind + 2) << (*FI).first << '\n';
+             FE = AccFunc->end(); FI != FE; ++FI) {
+          const SCEVAffFunc &AF = FI->first;
+          const Value *Ptr = AF.getBaseAddr();
+
+          OS.indent(ind + 2) << AF << "  Refs: ";
+          for (MayAliasSetInfo::const_alias_iterator
+               MI = MayASInfo->alias_begin(Ptr), ME = MayASInfo->alias_end(Ptr);
+               MI != ME; ++MI) {
+            MI->second->print(OS);
+            OS << ", ";
+          }
+          
+          OS << '\n';
+        }
 
         if (Reductions.count(BB))
           OS.indent(ind + 2) << "Reduction\n";
@@ -441,6 +456,9 @@ TempScop *TempScopInfo::buildTempScop(Region &R) {
   }
 
   buildLoopBounds(*TScop);
+
+  // Build the MayAliasSets.
+  TScop->MayASInfo->buildMayAliasSets(*TScop, *AA);
   return TScop;
 }
 
@@ -461,6 +479,7 @@ bool TempScopInfo::runOnFunction(Function &F) {
   SE = &getAnalysis<ScalarEvolution>();
   LI = &getAnalysis<LoopInfo>();
   SD = &getAnalysis<ScopDetection>();
+  AA = &getAnalysis<AliasAnalysis>();
   TD = &getAnalysis<TargetData>();
 
   for (ScopDetection::iterator I = SD->begin(), E = SD->end(); I != E; ++I) {
@@ -479,6 +498,7 @@ void TempScopInfo::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequiredTransitive<ScalarEvolution>();
   AU.addRequiredTransitive<ScopDetection>();
   AU.addRequiredID(IndependentBlocksID);
+  AU.addRequired<AliasAnalysis>();
   AU.setPreservesAll();
 }
 
