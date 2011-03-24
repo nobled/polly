@@ -20,6 +20,7 @@ add_polly_library(LLVMPolly
   Dependences.cpp
   IndependentBlocks.cpp
   Interchange.cpp
+  MayAliasSet.cpp
   Pocc.cpp
   RegionSimplify.cpp
   ScopPass.cpp
