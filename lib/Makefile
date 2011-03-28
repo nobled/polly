@@ -18,6 +18,9 @@ CPP.Flags += $(POLLY_INC)
 DIRS += Exchange
 USEDLIBS += pollyexchange.a
 
+DIRS += Analysis
+USEDLIBS += pollyanalysis.a
+
 # TODO: Export symbols for RTTI or EH?
 
 #
@@ -26,6 +29,17 @@ USEDLIBS += pollyexchange.a
 include $(LEVEL)/Makefile.common
 
 LIBS += $(POLLY_LD) $(POLLY_LIB)
+
+$(LibDir)/libpollyanalysis.a : $(LibDir)/.dir $(PROJ_OBJ_DIR)/Analysis/$(BuildMode)/.dir \
+                               $(PROJ_SRC_DIR)/Analysis/*
+	$(Verb) if [ -d $(PROJ_SRC_DIR)/Analysis ]; then\
+    if ([ ! -f Analysis/Makefile ] || \
+        command test Analysis/Makefile -ot $(PROJ_SRC_DIR)/Analysis/Makefile ); then \
+      $(MKDIR) Analysis; \
+      $(CP) $(PROJ_SRC_DIR)/Analysis/Makefile Analysis/Makefile; \
+    fi; \
+    ($(MAKE) -C Analysis $@ ) || exit 1; \
+  fi
 
 $(LibDir)/libpollyexchange.a : $(LibDir)/.dir $(PROJ_OBJ_DIR)/Exchange/$(BuildMode)/.dir \
                                $(PROJ_SRC_DIR)/Exchange/*

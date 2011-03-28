@@ -1,3 +1,4 @@
+add_subdirectory(Analysis)
 add_subdirectory(Support)
 
 set(MODULE TRUE)
@@ -16,6 +17,7 @@ if (SCOPLIB_FOUND)
 endif (SCOPLIB_FOUND)
 
 set(LLVM_USED_LIBS
+  PollyAnalysis
   PollySupport
   )
 
@@ -23,17 +25,11 @@ add_polly_library(LLVMPolly
   Cloog.cpp
   CodePreparation.cpp
   CodeGeneration.cpp
-  Dependences.cpp
   IndependentBlocks.cpp
   Interchange.cpp
   MayAliasSet.cpp
   Pocc.cpp
   RegionSimplify.cpp
-  ScopPass.cpp
-  ScopDetection.cpp
-  ScopGraphPrinter.cpp
-  ScopInfo.cpp
-  TempScopInfo.cpp
   json.c
   json_helper.c
   Exchange/JSONExporter.cpp
@@ -42,6 +38,7 @@ add_polly_library(LLVMPolly
   )
 
 add_dependencies(LLVMPolly
+  PollyAnalysis
   PollySupport
   )
 

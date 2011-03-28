@@ -556,7 +556,7 @@ PACKAGE_STRING='Polly 0.01'
 PACKAGE_BUGREPORT='polly-dev@googlegroups.com'
 PACKAGE_URL=''
 
-ac_unique_file=""lib/ScopInfo.cpp""
+ac_unique_file=""lib/Analysis/ScopInfo.cpp""
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
 scoplib_rpath

@@ -20,7 +20,7 @@ dnl use some autoconf macros only available in 2.59.
 AC_PREREQ(2.59)
 
 dnl Verify that the source directory is valid
-AC_CONFIG_SRCDIR(["lib/ScopInfo.cpp"])
+AC_CONFIG_SRCDIR(["lib/Analysis/ScopInfo.cpp"])
 
 dnl Configure a common Makefile
 AC_CONFIG_FILES(Makefile.config)
