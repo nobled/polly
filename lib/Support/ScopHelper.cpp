@@ -237,7 +237,7 @@ BasicBlock *polly::createSingleEntryEdge(Region *R, Pass *P) {
   for (BasicBlock::iterator PI = BB->begin(); isa<PHINode>(PI); ++PI) {
     PHINode *PN = cast<PHINode>(PI);
     PHINode *NPN =
-      PHINode::Create(PN->getType(), PN->getName()+".ph", newBB->begin());
+      PHINode::Create(PN->getType(), 2, PN->getName()+".ph", newBB->begin());
 
     for (pred_iterator PI = pred_begin(BB), PE = pred_end(BB); PI != PE; ++PI) {
       if (R->contains(*PI)) {

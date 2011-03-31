@@ -120,7 +120,7 @@ static void createLoop(IRBuilder<> *Builder, Value *LB, Value *UB, APInt Stride,
   assert(LoopIVType && "UB is not integer?");
 
   // IV
-  IV = Builder->CreatePHI(LoopIVType, "polly.loopiv");
+  IV = Builder->CreatePHI(UB->getType(), 2, "polly.loopiv");
   IV->addIncoming(LB, PreheaderBB);
 
   // IV increment.
