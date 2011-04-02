@@ -50,6 +50,11 @@ PlutoPrevector("enable-pluto-prevector",
                cl::desc("Enable pluto prevectorization for polly"), cl::Hidden,
                cl::value_desc("Pluto prevectorization enabled if true"),
                cl::init(false));
+static cl::opt<std::string>
+PlutoFuse("pluto-fuse",
+           cl::desc(""), cl::Hidden,
+           cl::value_desc("Set fuse mode of Pluto"),
+           cl::init("maxfuse"));
 
 namespace {
 
@@ -115,6 +120,9 @@ bool Pocc::runOnScop(Scop &S) {
   arguments.push_back("--pluto");
   arguments.push_back("--pluto-bounds");
   arguments.push_back("10");
+  arguments.push_back("--pluto-fuse");
+
+  arguments.push_back(PlutoFuse.c_str());
 
   if (PlutoTile)
     arguments.push_back("--pluto-tile");

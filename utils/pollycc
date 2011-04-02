@@ -100,6 +100,10 @@ def createAssemblyFile(tmpDir, file, number, args, polly):
     if args.ftile:
       commandLine.append('-enable-pluto-tile')
 
+    if args.pluto_fuse:
+      commandLine.append('-pluto-fuse')
+      commandLine.append(args.pluto_fuse)
+
     if args.fparallel:
       commandLine.append('-enable-polly-openmp')
 
@@ -227,6 +231,7 @@ def parseArguments():
                       help='compile and assemble, but do not link')
   parser.add_argument('-fpolly', help='enable polly', action='store_true')
   parser.add_argument('-fpluto', help='enable pluto', action='store_true')
+  parser.add_argument('-fpluto-fuse', dest='pluto_fuse', help='enable pluto')
   parser.add_argument('-faligned', help='Assume aligned vector accesses',
                       action='store_true')
   parser.add_argument('-fview-scops', dest='view',
