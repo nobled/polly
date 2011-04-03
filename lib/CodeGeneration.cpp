@@ -216,8 +216,6 @@ public:
     return const_cast<Value*>(OldOperand);
   }
 
-#define VECTORWIDTH 4
-
   const Type *getVectorPtrTy(const Value *V, int vectorWidth) {
     const PointerType *pointerType = dyn_cast<PointerType>(V->getType());
     assert(pointerType && "PointerType expected");
