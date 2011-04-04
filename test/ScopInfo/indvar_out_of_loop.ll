@@ -1,5 +1,5 @@
-; RUN: %opt -indvars -polly-analyze-ir  -analyze %s | FileCheck %s
-; RUN: %opt -polly-analyze-ir  -analyze %s | FileCheck %s
+; RUN: opt %loadPolly %defaultOpts -indvars -polly-analyze-ir  -analyze %s | FileCheck %s
+; RUN: opt %loadPolly %defaultOpts -polly-analyze-ir  -analyze %s | FileCheck %s
 ; XFAIL: *
 
 ;void f(long a[], long N) {
