@@ -82,7 +82,7 @@ BADSCOP_STAT(FuncCall,        "Function call with side effects appeared");
 BADSCOP_STAT(AffFunc,         "Expression not affine");
 BADSCOP_STAT(Scalar,          "Found scalar dependency");
 BADSCOP_STAT(Alias,           "Found base address alias");
-BADSCOP_STAT(SimpleRegion,  "Region not simple");
+BADSCOP_STAT(SimpleRegion,    "Region not simple");
 BADSCOP_STAT(Other,           "Others");
 
 //===----------------------------------------------------------------------===//
