@@ -74,5 +74,6 @@ return:                                           ; preds = %bb6, %bb6.us, %bb7.
   ret void
 }
 
-; CHECK: for region: 'entry.split => return' in function 'scop_func':
+; CHECK:      Printing analysis 'Execute Cloog code generation' for region: 'bb.nph.us => return' in function 'scop_func':
+; CHECK-NEXT: scop_func():
 

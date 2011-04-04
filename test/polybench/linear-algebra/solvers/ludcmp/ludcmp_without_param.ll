@@ -223,5 +223,5 @@ return:                                           ; preds = %bb24
   ret void
 }
 
-; CHECK: for region: 'bb5.preheader => return' in function 'scop_func':
+; CHECK: Valid Region for Scop: bb.nph38 => return
 

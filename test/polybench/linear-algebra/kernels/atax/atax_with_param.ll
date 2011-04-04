@@ -72,4 +72,5 @@ return:                                           ; preds = %bb9, %bb10.preheade
   ret void
 }
 
-; CHECK: for region: 'entry.split => return' in function 'scop_func':
+; CHECK:      Printing analysis 'Execute Cloog code generation' for region: 'bb10.preheader => return' in function 'scop_func':
+; CHECK-NEXT: scop_func():
