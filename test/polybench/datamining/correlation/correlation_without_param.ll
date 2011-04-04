@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly %defaultOpts  -O3 -loop-simplify -indvars -polly-analyze-ir  -print-top-scop-only -analyze %s | FileCheck %s
+; RUN: opt %loadPolly %defaultOpts  %polybenchOpts -polly-analyze-ir  -print-top-scop-only -analyze %s | FileCheck %s
 
 ; * The two sequential loops are not detected.
 ; * In the first loop is a function call blocking if from being handled.
