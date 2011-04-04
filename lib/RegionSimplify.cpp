@@ -142,7 +142,7 @@ void RegionSimplify::createSingleExitEdge(Region *R) {
   BasicBlock *newExit =  SplitBlockPredecessors(oldExit,
                                                 Preds.data(), Preds.size(),
                                                 ".single_exit", this);
-  RegionInfo *RI = &getAnalysis<RegionInfo> ();
+  RegionInfo *RI = &getAnalysis<RegionInfo>();
 
   // We do not need to update entry nodes because this split happens inside
   // this region and it affects only this region and all of its children.
@@ -155,16 +155,16 @@ void RegionSimplify::createSingleExitEdge(Region *R) {
     RQ.push_back(*RI);
 
   while (!RQ.empty()){
-   R = RQ.back();
-   RQ.pop_back();
+    R = RQ.back();
+    RQ.pop_back();
 
-   if (R->getExit() != oldExit)
-     continue;
+    if (R->getExit() != oldExit)
+      continue;
 
-   for (Region::const_iterator RI = R->begin(), RE = R->end(); RI!=RE; ++RI)
-     RQ.push_back(*RI);
+    for (Region::const_iterator RI = R->begin(), RE = R->end(); RI!=RE; ++RI)
+      RQ.push_back(*RI);
 
-   R->replaceExit(newExit);
+    R->replaceExit(newExit);
   }
 
 }
