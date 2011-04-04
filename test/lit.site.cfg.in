@@ -20,6 +20,7 @@ except KeyError,e:
 config.substitutions.append(('%loadPolly', '-load '
                              + config.llvm_libs_dir + '/LLVMPolly.so '))
 config.substitutions.append(('%defaultOpts', ' -basicaa  -scev-aa '))							 
+config.substitutions.append(('%polybenchOpts', ' -O3 -loop-simplify -indvars -polly-prepare '))
 
 # Let the main config do the real work.
 lit.load_config(config, "@POLLY_SOURCE_DIR@/test/lit.cfg")
